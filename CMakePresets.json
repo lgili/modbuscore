@@ -1,0 +1,63 @@
+{
+    "version": 8,
+    "configurePresets": [
+        {
+            "name": "config-base",
+            "hidden": true,
+            "displayName": "GCC 13.2.0 x86_64-w64-mingw32 (ucrt64)",
+            "description": "Using compilers: C = C:\\msys64\\ucrt64\\bin\\gcc.exe, CXX = C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${presetName}",
+                "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "debug",
+            "displayName": "Config Debug",
+            "description": "Sets debug build type and cortex arch",
+            "inherits": "config-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Config Release",
+            "description": "Sets release build type",
+            "inherits": "debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "build-base",
+            "hidden": true,
+            "configurePreset": "debug"
+        },
+        {
+            "name": "debug",
+            "displayName": "Build Debug",
+            "inherits": "build-base"
+        },
+        {
+            "name": "release",
+            "displayName": "Build Release",
+            "inherits": "build-base",
+            "configurePreset": "release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "fsm",
+            "description": "",
+            "displayName": "",
+            "configurePreset": "debug"
+        }
+    ]
+}
