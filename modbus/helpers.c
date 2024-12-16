@@ -106,3 +106,104 @@ uint8_t calculate_checksum(const uint8_t *p_serial_data)
 
     return checksum;
 }
+
+/**
+ * @brief Function to perform selection sort.
+ *
+ * @param modbus_variables Array of holding registers.
+ * @param lenght Lenght of data to be sorted.
+ */
+void selection_sort(variable_modbus_t modbus_variables[], int lenght) {
+    for (int i = 0; i < lenght - 1; i++) {
+        int min_idx = i;
+
+        // Find the minimum element in the remaining
+        // unsorted array
+        for (int j = i + 1; j < lenght; j++) {
+            if (modbus_variables[j].address < modbus_variables[min_idx].address) {
+                min_idx = j;
+            }
+        }
+
+        // Swap the found minimum element with the first
+        // element
+        variable_modbus_t temp = modbus_variables[min_idx];
+        modbus_variables[min_idx] = modbus_variables[i];
+        modbus_variables[i] = temp;
+    }
+}
+
+/**
+ * @brief An iterative binary search function..
+ *
+ * @param modbus_variables Array of holding registers.
+ * @param low   Lowest index of array.
+ * @param high  Highest index of array.
+ * @param value Value to search.
+ * @return int  If is successfully return the index of array, otherwise, returns -1.
+ */
+int binary_search(variable_modbus_t modbus_variables[], uint16_t low, uint16_t high, uint16_t value)
+{
+    while (low <= high) {
+        uint16_t mid = low + (high - low) / 2;
+
+        // Check if x is present at mid
+        if (modbus_variables[mid].address == value)
+            return mid;
+
+        // If x greater, ignore left half
+        if (modbus_variables[mid].address < value)
+            low = mid + 1;
+
+        // If x is smaller, ignore right half
+        else
+            high = mid - 1;
+    }
+
+    // If we reach here, then element was not present
+    return -1;
+}
+
+/******************************************************************************
+ * Parsing Functions
+ ******************************************************************************/
+
+/**
+ * @brief Reads an 8-bit unsigned integer from the buffer.
+ *
+ * @param buffer      Pointer to the buffer.
+ * @param index       Pointer to the current index in the buffer.
+ * @param buffer_size Size of the buffer.
+ * @param value       Pointer to store the read value.
+ * @return True if successful, false if buffer overrun.
+ */
+inline bool read_uint8(const uint8_t *buffer, uint16_t *index, uint16_t buffer_size, uint8_t *value)
+{
+    if (*index >= buffer_size)
+    {
+        return false;
+    }
+    *value = buffer[(*index)++];
+    return true;
+}
+
+/**
+ * @brief Reads a 16-bit unsigned integer from the buffer.
+ *
+ * @param buffer      Pointer to the buffer.
+ * @param index       Pointer to the current index in the buffer.
+ * @param buffer_size Size of the buffer.
+ * @param value       Pointer to store the read value.
+ * @return True if successful, false if buffer overrun.
+ */
+inline bool read_uint16(const uint8_t *buffer, uint16_t *index, uint16_t buffer_size, uint16_t *value)
+{
+    if ((*index + 1U) >= buffer_size)
+    {
+        return false;
+    }
+    uint8_t data_high = buffer[(*index)++];
+    uint8_t data_low = buffer[(*index)++];
+    *value = (data_high << 8U) | data_low;
+    return true;
+}

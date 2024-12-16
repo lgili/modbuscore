@@ -32,6 +32,10 @@
 /******************************************************************************
 *  DEFINES
 ******************************************************************************/
+#define MODBUS_BROADCAST_ADDRESS 0x00
+#define MODBUS_BOOTLOADER_ADDRESS 0xA5
+#define TIME_TO_START_MODBUS_MS 10000
+
 #define MODBUS_DEVICE_IDENTIFICATION_STRING_LENGTH 10
 
 #define MODBUS_SEND_BUFFER_SIZE    (64)
@@ -94,131 +98,6 @@
 *  TYPES
 ******************************************************************************/
 extern uint16_t g_modbus_time;
-/** 
-* @brief Modbus FSM state: Idle 
-* 
-* This state represents the idle condition of the Modbus FSM, where it is waiting for an event to occur. 
-* In this state, the FSM will transition to the `MODBUS_STATE_RECEIVING` state when a byte is received. 
-*/ 
-extern const fsm_state_t modbus_state_idle;   
-
-/** 
-* @brief Modbus FSM state: Receiving 
-* 
-* This state represents the process of receiving Modbus data.:
-*/ 
-extern const fsm_state_t modbus_state_receiving;   
-
-/** 
-* @brief Modbus FSM state: Parsing Address 
-* 
-* This state parse the income data to get the address of the slave that should respond to master:
-*/ 
-extern const fsm_state_t modbus_state_parsing_address; 
-
-/** 
-* @brief Modbus FSM state: Parsing Function 
-* 
-* This state parse the income data to get the function that master is asking:
-*/ 
-extern const fsm_state_t modbus_state_parsing_function; 
-
-/** 
-* @brief Modbus FSM state: Processing 
-* 
-* This state handles the processing of the received Modbus frame.
-*/ 
-extern const fsm_state_t modbus_state_processing;  
-
-/** 
-* @brief Modbus FSM state: Validate Frame 
-* 
-* This state runs the CRC on the received frame to validate.
-*/ 
-extern const fsm_state_t modbus_state_validating_frame; 
-
-/** 
-* @brief Modbus FSM state: Building Response 
-* 
-* This state build a response to master, based on data received.
-*/
-extern const fsm_state_t modbus_state_building_response; 
-
-/** 
-* @brief Modbus FSM state: Put Data on Buffer 
-* 
-* This state put data on buffer to be send.
-*/
-extern const fsm_state_t modbus_state_putting_data_on_buffer; 
-
-/** 
-* @brief Modbus FSM state: Calculating CRC 
-* 
-* This state calculate a CRC for the data that will be sent.
-*/
-extern const fsm_state_t modbus_state_calculating_crc; 
-
-/** 
-* @brief Modbus FSM state: Sending 
-* 
-* This state handles sending a response or data after processing. Currently not declared here, but it can be used
-* to handle data transmission to the master. 
-*/ 
-extern const fsm_state_t modbus_state_sending;   
-
-/** 
-* @brief Modbus FSM state: Error 
-* 
-* This state represents an error condition in the Modbus FSM. It can recover and transition back to idle 
-* when a new byte is received. 
-*/ 
-extern const fsm_state_t modbus_state_error; 
-
-
-/**
- * @brief Modbus FSM States
- *
- * This enum represents the possible states of the Modbus finite state machine.
- */
-typedef enum {
-    MODBUS_STATE_IDLE,              /**< FSM is idle, waiting for a new event. */
-    MODBUS_STATE_RECEIVING,         /**< FSM is receiving data from the Modbus frame. */
-    MODBUS_STATE_PARSING_ADDRESS,   /**< FSM is parsing slave address. */
-    MODBUS_STATE_PARSING_FUNCTION,  /**< FSM is parsing function code. */
-    MODBUS_STATE_PROCESSING,        /**< FSM is processing the received Modbus frame. */
-    MODBUS_STATE_VALIDATING_FRAME,  /**< FSM is validating the received Modbus frame. */
-    MODBUS_STATE_BUILDING_RESPONSE, /**< FSM is building a response to the master. */
-    MODBUS_STATE_PUTTING_DATA_ON_BUFFER, /**< FSM is putting data on buffer to send. */
-    MODBUS_STATE_CALCULATING_CRC,   /**< FSM is calculating response CRC. */
-    MODBUS_STATE_SENDING,           /**< FSM is sending a response or Modbus frame. */
-    MODBUS_STATE_ERROR,             /**< FSM has encountered an error state. */
-    MODBUS_STATE_BOOTLOADER         /**< FSM is in bootloader mode. */
-} modbus_state_t;
-
-/**
- * @brief Modbus FSM Events
- *
- * This enum defines the possible events that trigger state transitions
- * in the Modbus finite state machine.
- */
-typedef enum {
-    MODBUS_EVENT_RX_BYTE_RECEIVED,      /**< A byte was received and should be processed. */
-    MODBUS_EVENT_PARSE_ADDRESS,         /**< Parse slave address. */
-    MODBUS_EVENT_PARSE_FUNCTION,        /**< Parse function code. */
-    MODBUS_EVENT_PROCESS_FRAME,         /**< Process received frame. */
-    MODBUS_EVENT_VALIDATE_FRAME,        /**< Validate received frame. */
-    MODBUS_EVENT_BUILD_RESPONSE,        /**< Build response. */
-    MODBUS_EVENT_BROADCAST_DONT_ANSWER, /**< Broadcast menssage */
-    MODBUS_EVENT_PUT_DATA_ON_BUFFER,    /**< Put data on TX buffer */
-    MODBUS_EVENT_CALCULATE_CRC,         /**< Calculate CRC value to send. */
-    MODBUS_EVENT_SEND_RESPONSE,         /**< The response is ready to send via UART. */
-    MODBUS_EVENT_TX_COMPLETE,           /**< The transmission of a response is complete. */
-    MODBUS_EVENT_ERROR_DETECTED,        /**< An error was detected in Modbus communication. */
-    MODBUS_EVENT_ERROR_WRONG_BAUDRATE,  /**< The baud rate is incorrectly configured in UART. */
-    MODBUS_EVENT_TIMEOUT,               /**< A timeout occurred during Modbus communication. */
-    MODBUS_EVENT_BOOTLOADER,            /**< In bootloader mode. */
-    MODBUS_EVENT_RESTART_FROM_ERROR     /**< Restart the FSM from an error state. */
-} modbus_event_t;
 
 
 
@@ -251,6 +130,8 @@ typedef enum nmbs_transport {
     NMBS_TRANSPORT_TCP = 2,
 } modbus_transport;
 
+
+
 /**
  * Modbus platform configuration struct.
  * Passed to modbus_server_create() and modbus_client_create().
@@ -276,11 +157,16 @@ typedef enum nmbs_transport {
  */
 typedef struct modbus_platform_conf {
     modbus_transport transport; /*!< Transport type */
-    int32_t (*read)(uint8_t* buf, uint16_t count, int32_t byte_timeout_ms, void* arg);          /*!< Bytes read transport function pointer */
-    int32_t (*write)(const uint8_t* buf, uint16_t count, int32_t byte_timeout_ms, void* arg);   /*!< Bytes write transport function pointer */
-    uint16_t (*crc_calc)(const uint8_t* data, uint32_t length, void* arg);                      /*!< CRC calculation function pointer. Optional */
-    // start timer
-    // check timer
+    int32_t (*read)(uint8_t* buf, uint16_t count);          /*!< Bytes read transport function pointer */
+    int32_t (*write)(const uint8_t* buf, uint16_t count);   /*!< Bytes write transport function pointer */
+    uint16_t (*crc_calc)(const uint8_t* data, uint32_t length);                      /*!< CRC calculation function pointer. Optional */
+    uint16_t (*get_reference_msec)(void);
+    uint16_t (*measure_time_msec)(uint16_t);
+    uint16_t (*change_baudrate)(uint16_t);
+    void (*restart_uart)(void);    
+    uint8_t (*write_gpio)(uint8_t gpio, uint8_t value);
+    uint8_t (*parse_bootloader_request)(uint8_t *buffer, uint16_t *buffer_size);
+
     void* arg;                       /*!< User data, will be passed to functions above */
 } modbus_platform_conf;
 
@@ -393,6 +279,14 @@ typedef struct {
 /******************************************************************************
 * FUNCTIONS
 ******************************************************************************/
+void set_mode_as_transmiter(modbus_context_t *modbus);
+void set_mode_as_receiver(modbus_context_t *modbus);
+void modbus_reset_message(modbus_context_t *modbus);
+void modbus_send_error_response(modbus_context_t *modbus);
+
+void modbus_send(modbus_context_t *modbus, const uint8_t *send_data, uint8_t send_data_len);
+void uart_send(modbus_context_t *modbus, const uint8_t *send_data, uint8_t send_data_len);
+
 // modbus_error_t modbus_server_create(modbus_context_t* modbus, uint16_t* address_rtu, uint16_t* baudrate);
 // modbus_error_t add_info_to_device(modbus_context_t *modbus, const char* value, uint8_t lenght);
 
