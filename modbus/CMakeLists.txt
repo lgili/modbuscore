@@ -1,7 +1,7 @@
 # Set SOURCES variable
 set(SOURCES
   src/utils.c
-  # src/fsm.c
+  src/fsm.c
   # src/modbus_client.c
   # src/modbus_core.c
   # src/modbus_server.c
