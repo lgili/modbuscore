@@ -2,8 +2,8 @@
 set(SOURCES
   src/utils.c
   src/fsm.c
+  src/core.c
   # src/modbus_client.c
-  # src/modbus_core.c
   # src/modbus_server.c
 )
 
