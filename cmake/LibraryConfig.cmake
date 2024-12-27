@@ -5,6 +5,7 @@ add_library(${LIBRARY_NAME}
   ${HEADERS_PRIVATE}
   )
 
+
 # Alias:
 #   - Foo::foo alias of foo
 add_library(${PROJECT_NAME}::${LIBRARY_NAME} ALIAS ${LIBRARY_NAME})
@@ -26,9 +27,9 @@ target_compile_definitions(${LIBRARY_NAME} PUBLIC
 #   - header location in project: ${CMAKE_CURRENT_BINARY_DIR}/generated_headers
 target_include_directories(
   ${LIBRARY_NAME} PUBLIC
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
-    "$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>"
-    "$<INSTALL_INTERFACE:.>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    # "$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>"
+    "$<INSTALL_INTERFACE:include>"
 )
 
 # Targets:
