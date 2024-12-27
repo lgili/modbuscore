@@ -1,0 +1,38 @@
+/**
+ * @file modbus.h
+ * @brief Single public header for the Modbus library.
+ *
+ * This header consolidates all the necessary includes for using the Modbus library.
+ * Users only need to include this file in their application.
+ *
+ * Internally, it includes:
+ * - modbus_conf.h: configuration and macros
+ * - fsm.h: finite state machine framework
+ * - modbus_crc.h: CRC calculation
+ * - modbus_utils.h: utility functions (sorting, safe reads, etc.)
+ * - modbus_transport.h: transport abstraction interface
+ * - modbus_core.h: core functions for Modbus RTU frames and parsing
+ * - modbus_master.h: Master (Client) API
+ * - modbus_server.h: Server (Slave) API
+ *
+ * Author:
+ * Date: 2024-12-20
+ */
+
+#ifndef MODBUS_H
+#define MODBUS_H
+
+/* Include configuration first */
+#include <modbus/conf.h>
+
+/* Include the rest of the library headers */
+#include <modbus/base.h>
+#include <modbus/transport.h>
+#include <modbus/utils.h>
+#include <modbus/fsm.h>
+#include <modbus/core.h>
+// #include <modbus/client.h>
+// #include <modbus/server.h>
+
+
+#endif /* MODBUS_H */

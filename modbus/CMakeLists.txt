@@ -1,24 +1,31 @@
 # Set SOURCES variable
 set(SOURCES
-  fsm.c
-  modbus.c 
-  modbus_client.c
-  modbus_server.c  
-  helpers.c
+  src/utils.c
+  # src/fsm.c
+  # src/modbus_client.c
+  # src/modbus_core.c
+  # src/modbus_server.c
 )
 
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
 set(HEADERS_PUBLIC  
-  modbus.h 
-  modbus_client.h
-  modbus_server.h  
+  include/modbus/modbus.h
+  include/modbus/conf.h
+  include/modbus/transport.h
+  include/modbus/base.h
+  include/modbus/utils.h
+  include/modbus/fsm.h
+  include/modbus/core.h
+  # include/modbus/client.h
+  # include/modbus/server.h
+  
 )
 
-# Set HEADERS_PRIVATE variable, if needed.
-# (these private headers won't be included in the library)
-set(HEADERS_PRIVATE
-  helpers.h 
-  fsm.h
+# Set HEADERS_PRIVATE variable (private headers won't be exposed)
+set(HEADERS_PRIVATE  
+  
 )
 
+# Include LibraryConfig.cmake
 include(${PROJECT_SOURCE_DIR}/cmake/LibraryConfig.cmake)
+
