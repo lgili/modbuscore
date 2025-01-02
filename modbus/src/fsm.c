@@ -2,18 +2,67 @@
  * @file fsm.c
  * @brief Finite State Machine (FSM) framework implementation.
  *
- * This file implements the functions declared in fsm.h. It provides a simple
+ * This file implements the functions declared in `fsm.h`. It provides a simple
  * event-driven finite state machine framework where events are queued, and the
- * state machine processes these events to possibly trigger state transitions.
+ * state machine processes these events to potentially trigger state transitions.
  * Actions and guard conditions can be defined for each transition.
  *
  * The FSM is designed to be non-blocking and can be integrated into a main loop
  * or a cooperative multitasking environment. This makes it suitable for use
  * in embedded systems, including those implementing communication protocols
- * such as Modbus.
+ * such as Modbus Client and Server.
  *
- * @author  Luiz Carlos Gili
- * @date    2024-12-20
+ * **Key Features:**
+ * - Initialization of the FSM with an initial state and optional user data.
+ * - Handling and queuing of events in a thread-safe manner.
+ * - Processing of events to execute state transitions based on defined transitions.
+ * - Execution of actions associated with transitions.
+ * - Support for guard conditions to control transition eligibility.
+ *
+ * **Usage Example:**
+ * @code
+ * // Define action and guard callbacks
+ * void on_enter_state(fsm_t *fsm) { 
+ *     // Action to perform upon entering a new state
+ * }
+ * 
+ * bool guard_condition(fsm_t *fsm) { 
+ *     // Condition to allow transition
+ *     return true; 
+ * }
+ *
+ * // Define transitions for the IDLE state
+ * static const fsm_transition_t state_idle_transitions[] = {
+ *     FSM_TRANSITION(EVENT_START, state_running, on_enter_state, guard_condition)
+ * };
+ *
+ * // Define the IDLE state
+ * static const fsm_state_t state_idle = FSM_STATE("IDLE", 0, state_idle_transitions, NULL);
+ *
+ * // Define transitions for the RUNNING state
+ * static const fsm_transition_t state_running_transitions[] = {
+ *     FSM_TRANSITION(EVENT_STOP, state_idle, on_exit_state, NULL)
+ * };
+ *
+ * // Define the RUNNING state
+ * static const fsm_state_t state_running = FSM_STATE("RUNNING", 1, state_running_transitions, on_run_action);
+ *
+ * // Initialize and use the FSM
+ * fsm_t my_fsm;
+ * fsm_init(&my_fsm, &state_idle, NULL);
+ * fsm_handle_event(&my_fsm, EVENT_START);
+ * fsm_run(&my_fsm);  // Processes EVENT_START and transitions to RUNNING state.
+ * @endcode
+ *
+ * @note
+ * - Ensure that states are defined before they are referenced in transitions.
+ * - The FSM framework is designed to be thread-safe; however, ensure that
+ *   event handling and state transitions are managed appropriately in concurrent environments.
+ * 
+ * @see fsm.h
+ *
+ * @ingroup FSM
+ * @{
  */
 
 #include <modbus/fsm.h>
@@ -22,10 +71,25 @@
 /**
  * @brief Initializes the finite state machine (FSM).
  *
- * Sets the initial state, user data, and clears the event queue.
+ * Sets the initial state, associates optional user data, and clears the event queue.
+ * This function must be called before using the FSM to ensure it starts in a known state.
+ *
+ * @param[in,out] fsm           Pointer to the FSM instance to initialize.
+ * @param[in]     initial_state Pointer to the initial state of the FSM.
+ * @param[in]     user_data     Pointer to user-defined data (can be `NULL`).
+ *
+ * @warning
+ * - Both `fsm` and `initial_state` must not be `NULL`. If either is `NULL`, the function returns immediately without initializing.
+ *
+ * @example
+ * ```c
+ * fsm_t my_fsm;
+ * fsm_init(&my_fsm, &state_idle, &app_context);
+ * ```
  */
 void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data) {
     if (!fsm || !initial_state) {
+        // Optionally, log an error or handle the invalid arguments appropriately
         return; // Invalid arguments
     }
     fsm->current_state = initial_state;
@@ -37,10 +101,25 @@ void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data) {
 /**
  * @brief Adds an event to the FSM's event queue.
  *
- * If the queue is full, the event is discarded.
+ * This function queues an event to be processed by the FSM. If the event queue is full,
+ * the new event is discarded to prevent overflow. It is safe to call this function
+ * from both interrupt service routines (ISRs) and the main loop.
+ *
+ * @param[in,out] fsm   Pointer to the FSM instance.
+ * @param[in]     event Event to handle.
+ *
+ * @warning
+ * - If the event queue is full, the new event will be discarded. Consider increasing
+ *   `FSM_EVENT_QUEUE_SIZE` if event loss is unacceptable.
+ *
+ * @example
+ * ```c
+ * fsm_handle_event(&my_fsm, EVENT_START);
+ * ```
  */
 void fsm_handle_event(fsm_t *fsm, uint8_t event) {
     if (!fsm) {
+        // Optionally, log an error or handle the invalid FSM pointer
         return;
     }
     uint8_t next_tail = (uint8_t)((fsm->event_queue.tail + 1U) % FSM_EVENT_QUEUE_SIZE);
@@ -49,15 +128,34 @@ void fsm_handle_event(fsm_t *fsm, uint8_t event) {
         fsm->event_queue.tail = next_tail;
     } 
     // If the queue is full, the event is simply not queued.
+    // Optionally, implement logging or error handling for discarded events.
 }
 
 /**
  * @brief Processes any pending events from the queue and executes state transitions if needed.
  *
- * If no events are available, it executes the current state's default action (if any).
+ * This function should be called regularly (e.g., in the main loop). It retrieves events
+ * from the queue and checks transitions in the current state. If a matching transition
+ * is found and its guard returns `true`, it executes the action and changes state.
+ * If no event matches or no event is pending, it executes the state's default action (if any).
+ *
+ * @param[in,out] fsm Pointer to the FSM instance.
+ *
+ * @warning
+ * - Ensure that `fsm_init` has been called before using `fsm_run`.
+ * - This function is non-blocking and should be integrated into an iterative loop.
+ *
+ * @example
+ * ```c
+ * while (1) {
+ *     fsm_run(&my_fsm);
+ *     // Other application code
+ * }
+ * ```
  */
 void fsm_run(fsm_t *fsm) {
     if (!fsm || !fsm->current_state) {
+        // Optionally, log an error or handle the invalid FSM state
         return;
     }
 
@@ -83,9 +181,9 @@ void fsm_run(fsm_t *fsm) {
     for (uint8_t i = 0; i < num_transitions; i++) {
         const fsm_transition_t *transition = &transitions[i];
         if (transition->event == event) {
-            // Check guard
+            // Check guard condition
             if (transition->guard == NULL || transition->guard(fsm)) {
-                // Execute action if any
+                // Execute action if defined
                 if (transition->action) {
                     transition->action(fsm);
                 }
@@ -97,14 +195,13 @@ void fsm_run(fsm_t *fsm) {
         }
     }
 
-    // If event not processed, we can ignore it or handle "unknown event" scenario here.
-    // Currently, we do nothing special for unrecognized events.
+    // If the event was not processed (no matching transition), it is ignored.
+    // Optionally, handle unprocessed events here (e.g., logging or error handling).
 
-    // After handling this event, if no transitions occurred or no matching event,
-    // consider calling default action. This decision depends on the desired behavior.
-    // Typically, default_action is called only if no events are pending,
-    // so we won't call it here unless no transitions matched and no more events are queued.
+    // After handling this event, if no transitions occurred and no more events are queued,
+    // execute the default action if defined.
     if (!event_processed && fsm->event_queue.head == fsm->event_queue.tail && fsm->current_state->default_action) {
         fsm->current_state->default_action(fsm);
     }
 }
+

@@ -1,26 +1,49 @@
 /**
  * @file modbus_utils.c
- * @brief Utility functions for Modbus protocol operations.
+ * @brief Implementation of utility functions for Modbus protocol operations.
  *
- * This file implements the helper functions declared in modbus_utils.h.
+ * This source file implements the helper functions declared in `modbus_utils.h`.
  * It provides safe reading from buffers, as well as sorting and searching
- * functionalities for arrays of Modbus variables.
+ * functionalities for arrays of Modbus variables. Additionally, it includes
+ * functions to calculate CRC-16 checksums, essential for ensuring data integrity
+ * in Modbus communications.
  *
- * @author  
- * @date    2024-12-20
+ * **Key Features:**
+ * - Safe reading of 8-bit and 16-bit unsigned integers from buffers.
+ * - Sorting and searching utilities for arrays of `variable_modbus_t`.
+ * - CRC-16 calculation using both bit-by-bit and table-driven approaches.
+ *
+ * **Notes:**
+ * - Ensure that the CRC lookup table is correctly initialized before using `modbus_crc_with_table()`.
+ * - The selection sort algorithm used in `modbus_selection_sort()` has a time complexity of O(n²).
+ *   For larger datasets, consider implementing a more efficient sorting algorithm.
+ *
+ * @author
+ * Luiz Carlos Gili
+ * 
+ * @date
+ * 2024-12-20
+ *
+ * @ingroup ModbusUtils
+ * @{
  */
 
 #include <modbus/utils.h>
+#include <stddef.h>
 
 #ifndef CRC_POLYNOMIAL
-#define CRC_POLYNOMIAL 0xA001U
+#define CRC_POLYNOMIAL 0xA001U /**< CRC polynomial used for Modbus CRC-16 calculation */
 #endif
 
 /**
  * @brief Precomputed CRC lookup table for Modbus.
  *
- * This table is used by the modbus_crc_with_table() function to quickly compute
- * the CRC for each byte of data.
+ * This table is used by the `modbus_crc_with_table()` function to quickly compute
+ * the CRC for each byte of data. It enhances the efficiency of CRC calculations
+ * compared to bit-by-bit methods.
+ *
+ * @note
+ * - Ensure that the table remains unchanged to maintain CRC calculation accuracy.
  */
 static const uint16_t crc_table[256] = {
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
@@ -57,29 +80,110 @@ static const uint16_t crc_table[256] = {
     0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040
 };
 
-
+/**
+ * @brief Safely reads an 8-bit unsigned integer from a buffer.
+ *
+ * This function checks if there is enough space in the buffer before reading
+ * an 8-bit value. If reading would exceed the buffer size, it returns `false`.
+ *
+ * @param[in]  buffer       Pointer to the data buffer.
+ * @param[in,out] index     Pointer to the current read index in the buffer. It is incremented by one on success.
+ * @param[in]  buffer_size  Size of the buffer in bytes.
+ * @param[out] value        Pointer to the variable where the read value will be stored.
+ *
+ * @return `true` if the value was successfully read, `false` if not enough data.
+ *
+ * @example
+ * ```c
+ * uint8_t data[] = {0x12, 0x34};
+ * uint16_t idx = 0;
+ * uint8_t val;
+ * if (modbus_read_uint8(data, &idx, 2, &val)) {
+ *     // val = 0x12
+ * }
+ * ```
+ */
 bool modbus_read_uint8(const uint8_t *buffer, uint16_t *index, uint16_t buffer_size, uint8_t *value)
 {
+    if (!buffer || !index || !value) {
+        return false; // Invalid arguments
+    }
+
     if (*index >= buffer_size) {
-        return false;
+        return false; // Not enough data to read
     }
     *value = buffer[(*index)++];
     return true;
 }
 
+/**
+ * @brief Safely reads a 16-bit unsigned integer from a buffer (big-endian).
+ *
+ * This function checks if there is enough space in the buffer before reading
+ * a 16-bit value. It reads two bytes from the buffer and combines them into
+ * a 16-bit value, interpreting the first read byte as the high-order byte.
+ *
+ * @param[in]  buffer       Pointer to the data buffer.
+ * @param[in,out] index     Pointer to the current read index in the buffer. It is incremented by two on success.
+ * @param[in]  buffer_size  Size of the buffer in bytes.
+ * @param[out] value        Pointer to the variable where the read 16-bit value will be stored.
+ *
+ * @return `true` if the value was successfully read, `false` if not enough data.
+ *
+ * @example
+ * ```c
+ * uint8_t data[] = {0x12, 0x34};
+ * uint16_t idx = 0;
+ * uint16_t val;
+ * if (modbus_read_uint16(data, &idx, 2, &val)) {
+ *     // val = 0x1234
+ * }
+ * ```
+ */
 bool modbus_read_uint16(const uint8_t *buffer, uint16_t *index, uint16_t buffer_size, uint16_t *value)
 {
+    if (!buffer || !index || !value) {
+        return false; // Invalid arguments
+    }
+
     if ((*index + 1U) >= buffer_size) {
-        return false;
+        return false; // Not enough data to read
     }
     uint8_t data_high = buffer[(*index)++];
     uint8_t data_low  = buffer[(*index)++];
-    *value = (uint16_t)((data_high << 8U) | data_low);
+    *value = ((uint16_t)data_high << 8U) | (uint16_t)data_low;
     return true;
 }
 
+/**
+ * @brief Sorts an array of Modbus variables by their address using selection sort.
+ *
+ * This function organizes the array of `variable_modbus_t` in ascending order
+ * based on the `address` field. Selection sort is used due to its simplicity.
+ *
+ * @param[in,out] modbus_variables Array of Modbus variables to sort.
+ * @param[in] length               Number of elements in the array.
+ *
+ * @note
+ * - Selection sort has a time complexity of O(n²). For larger datasets, consider implementing a more efficient sorting algorithm like quicksort or mergesort.
+ *
+ * @example
+ * ```c
+ * variable_modbus_t vars[3] = {
+ *     {.address = 3},
+ *     {.address = 1},
+ *     {.address = 2}
+ * };
+ * modbus_selection_sort(vars, 3);
+ * // vars now sorted by address: 1, 2, 3
+ * ```
+ */
 void modbus_selection_sort(variable_modbus_t modbus_variables[], int length)
 {
+    if (!modbus_variables || length <= 1) {
+        return; // No need to sort
+    }
+
     for (int i = 0; i < (length - 1); i++) {
         int min_idx = i;
         // Find the minimum element in the unsorted part of the array
@@ -97,26 +201,84 @@ void modbus_selection_sort(variable_modbus_t modbus_variables[], int length)
     }
 }
 
+/**
+ * @brief Performs a binary search on an array of Modbus variables sorted by address.
+ *
+ * Given a sorted array of `variable_modbus_t` (sorted by `address`), this function
+ * searches for a given address using binary search. It returns the index of the matching
+ * variable or -1 if the address is not found.
+ *
+ * @param[in] modbus_variables Sorted array of Modbus variables.
+ * @param[in] low              Lowest index of the search range.
+ * @param[in] high             Highest index of the search range.
+ * @param[in] value            Address value to search for.
+ *
+ * @return The index of the variable with the matching address, or -1 if not found.
+ *
+ * @example
+ * ```c
+ * variable_modbus_t vars[3] = {
+ *     {.address = 1},
+ *     {.address = 2},
+ *     {.address = 3}
+ * };
+ * int index = modbus_binary_search(vars, 0, 2, 2);
+ * // index = 1
+ * ```
+ */
 int modbus_binary_search(variable_modbus_t modbus_variables[], uint16_t low, uint16_t high, uint16_t value)
 {
+    if (!modbus_variables || low > high) {
+        return -1; // Invalid parameters
+    }
+
     while (low <= high) {
-        uint16_t mid = (uint16_t)(low + (high - low) / 2);
+        uint16_t mid = low + (high - low) / 2U;
 
         if (modbus_variables[mid].address == value) {
             return (int)mid;
         }
         else if (modbus_variables[mid].address < value) {
-            low = (uint16_t)(mid + 1U);
+            low = mid + 1U;
         }
         else {
-            high = (uint16_t)(mid - 1U);
+            if (mid == 0) { // Prevent underflow
+                break;
+            }
+            high = mid - 1U;
         }
     }
     return -1; // Not found
 }
 
+/**
+ * @brief Calculates the Modbus CRC-16 using a bit-by-bit algorithm.
+ *
+ * This function iterates over each byte in the given data buffer and updates the
+ * CRC value accordingly. While less efficient than a table-driven approach, it
+ * is straightforward and does not require a precomputed table.
+ *
+ * @param[in] data   Pointer to the data buffer for which to calculate CRC.
+ * @param[in] length Number of bytes in the data buffer.
+ *
+ * @return The calculated CRC-16 value.
+ *
+ * @note
+ * - Bit-by-bit CRC calculation is simple but may be slower for large data buffers.
+ *
+ * @example
+ * ```c
+ * uint8_t frame[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02};
+ * uint16_t crc = modbus_calculate_crc(frame, 6);
+ * // crc = 0xC5C9 (example value)
+ * ```
+ */
 uint16_t modbus_calculate_crc(const uint8_t *data, uint16_t length)
 {
+    if (!data) {
+        return 0xFFFFU; // Default CRC for invalid data
+    }
+
     uint16_t crc = 0xFFFFU;
     for (uint16_t i = 0; i < length; i++) {
         crc ^= (uint16_t)data[i];
@@ -132,8 +294,34 @@ uint16_t modbus_calculate_crc(const uint8_t *data, uint16_t length)
     return crc;
 }
 
+/**
+ * @brief Calculates the Modbus CRC-16 using a lookup table.
+ *
+ * This function uses a precomputed lookup table to calculate the Modbus CRC-16
+ * more efficiently. It is generally faster than the bit-by-bit approach.
+ *
+ * @param[in] data   Pointer to the data buffer for which to calculate CRC.
+ * @param[in] length Number of bytes in the data buffer.
+ *
+ * @return The calculated CRC-16 value.
+ *
+ * @note
+ * - Lookup table CRC calculation is faster but requires additional memory for the table.
+ * - Ensure that the CRC table is correctly initialized before using this function.
+ *
+ * @example
+ * ```c
+ * uint8_t frame[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02};
+ * uint16_t crc = modbus_crc_with_table(frame, 6);
+ * // crc = 0xC5C9 (example value)
+ * ```
+ */
 uint16_t modbus_crc_with_table(const uint8_t *data, uint16_t length)
 {
+    if (!data) {
+        return 0xFFFFU; // Default CRC for invalid data
+    }
+
     uint16_t crc = 0xFFFFU;
     for (uint16_t i = 0; i < length; i++) {
         uint8_t index = (uint8_t)(crc ^ data[i]);
@@ -142,3 +330,4 @@ uint16_t modbus_crc_with_table(const uint8_t *data, uint16_t length)
     return crc;
 }
 
+/** @} */

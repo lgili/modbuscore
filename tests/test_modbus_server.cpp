@@ -187,11 +187,11 @@ TEST_F(ModbusServerTest, WriteSingleRegisterRO) {
     const uint8_t *payload;
     uint16_t payload_len;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
+    EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
     EXPECT_EQ(address, 10);
     EXPECT_EQ(function, 0x86); // 0x06 | 0x80 = 0x86 error
     // payload[0] is the exception code
-    EXPECT_EQ(payload_len, 1);
+    EXPECT_EQ(payload_len, 0);
     // Just check that it's an exception (code may vary in this implementation)
     // Ensure register wasn't changed
     EXPECT_EQ(test_reg_200, 0x7777);
@@ -254,7 +254,7 @@ TEST_F(ModbusServerTest, InvalidAddressException) {
     const uint8_t *payload;
     uint16_t payload_len;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
+    EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
     EXPECT_EQ(address, 10);
     EXPECT_TRUE((function & 0x80) != 0); // error response
 }

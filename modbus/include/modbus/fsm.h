@@ -2,12 +2,12 @@
  * @file fsm.h
  * @brief Finite State Machine (FSM) framework for event-driven execution.
  *
- * This file defines a generic Finite State Machine (FSM) framework, allowing
+ * This header defines a generic Finite State Machine (FSM) framework, allowing
  * the creation of states, events, transitions, and actions. It is completely
  * independent of any hardware or protocol, making it suitable for use in a wide
- * range of embedded applications, including Modbus implementations.
+ * range of embedded applications, including Modbus Client and Server implementations.
  *
- * Features:
+ * **Features:**
  * - Each state can have multiple transitions triggered by specific events.
  * - Transitions can have optional guard functions (conditions) to determine if
  *   the transition is allowed.
@@ -16,25 +16,33 @@
  * - Provides an event queue to safely handle events from both ISR and main loop.
  * - Non-blocking state handling: `fsm_run()` processes events incrementally.
  *
- * Example usage:
+ * **Example Usage:**
  * @code
  * // Define action and guard callbacks
- * void on_enter_state(fsm_t *fsm) { ... }
- * bool guard_condition(fsm_t *fsm) { return true; }
+ * void on_enter_state(fsm_t *fsm) { 
+ *     // Action to perform upon entering the state
+ * }
+ * 
+ * bool guard_condition(fsm_t *fsm) { 
+ *     // Condition to allow transition
+ *     return true; 
+ * }
  *
- * // Define transitions
+ * // Define transitions for the IDLE state
  * static const fsm_transition_t state_idle_transitions[] = {
- *     { EVENT_START, &state_running, on_enter_state, guard_condition }
+ *     FSM_TRANSITION(EVENT_START, state_running, on_enter_state, guard_condition)
  * };
  *
- * // Define states
- * const fsm_state_t state_idle = {
- *     .name = "IDLE",
- *     .id = 0,
- *     .transitions = state_idle_transitions,
- *     .num_transitions = sizeof(state_idle_transitions)/sizeof(fsm_transition_t),
- *     .default_action = NULL
+ * // Define the IDLE state
+ * const fsm_state_t state_idle = FSM_STATE("IDLE", 0, state_idle_transitions, NULL);
+ *
+ * // Define transitions for the RUNNING state
+ * static const fsm_transition_t state_running_transitions[] = {
+ *     FSM_TRANSITION(EVENT_STOP, state_idle, on_exit_state, NULL)
  * };
+ *
+ * // Define the RUNNING state
+ * const fsm_state_t state_running = FSM_STATE("RUNNING", 1, state_running_transitions, on_run_action);
  *
  * // Initialize and use the FSM
  * fsm_t my_fsm;
@@ -43,8 +51,20 @@
  * fsm_run(&my_fsm);  // Processes EVENT_START and transitions to RUNNING state.
  * @endcode
  *
- * @author  Luiz Carlos Gili
- * @date    2024-12-20
+ * **Notes:**
+ * - Ensure that states are defined before they are referenced in transitions.
+ * - The FSM framework is designed to be thread-safe; however, ensure that
+ *   event handling and state transitions are managed appropriately in concurrent environments.
+ * 
+ * @note
+ * - Adjust `FSM_EVENT_QUEUE_SIZE` as necessary based on the expected event load.
+ * - For larger applications, consider implementing more efficient event queue mechanisms.
+ *
+ * @author
+ * Luiz Carlos Gili
+ * 
+ * @date
+ * 2024-12-20
  *
  * @addtogroup FSM
  * @{
@@ -61,12 +81,16 @@ extern "C" {
 #endif
 
 /**
- * @brief Opaque structure representing the FSM. 
+ * @brief Opaque structure representing the FSM.
+ *
+ * The FSM structure encapsulates the current state, user-defined data, and the event queue.
  */
 typedef struct fsm fsm_t;
 
 /**
  * @brief Opaque structure representing a state in the FSM.
+ *
+ * Each state is uniquely identified and contains transitions that define possible state changes.
  */
 typedef struct fsm_state fsm_state_t;
 
@@ -76,6 +100,13 @@ typedef struct fsm_state fsm_state_t;
  * Actions are functions executed when a transition occurs.
  *
  * @param fsm Pointer to the FSM instance.
+ *
+ * @example
+ * ```c
+ * void on_enter_state(fsm_t *fsm) {
+ *     // Perform actions upon entering a new state
+ * }
+ * ```
  */
 typedef void (*fsm_action_t)(fsm_t *fsm);
 
@@ -85,7 +116,15 @@ typedef void (*fsm_action_t)(fsm_t *fsm);
  * Guards are boolean conditions that determine whether a transition can occur.
  *
  * @param fsm Pointer to the FSM instance.
- * @return true if the transition is allowed, false otherwise.
+ * @return `true` if the transition is allowed, `false` otherwise.
+ *
+ * @example
+ * ```c
+ * bool guard_condition(fsm_t *fsm) {
+ *     // Check if a certain condition is met
+ *     return (some_condition);
+ * }
+ * ```
  */
 typedef bool (*fsm_guard_t)(fsm_t *fsm);
 
@@ -133,7 +172,7 @@ struct fsm_state {
 /**
  * @brief Structure for the FSM's event queue.
  *
- * Implements a circular buffer storing events until processed by fsm_run().
+ * Implements a circular buffer storing events until processed by `fsm_run()`.
  */
 typedef struct {
     volatile uint8_t events[FSM_EVENT_QUEUE_SIZE];  /**< Circular buffer of events. */
@@ -162,7 +201,13 @@ struct fsm {
  *
  * @param fsm            Pointer to the FSM instance.
  * @param initial_state  Pointer to the initial state.
- * @param user_data      Pointer to user-defined data (can be NULL).
+ * @param user_data      Pointer to user-defined data (can be `NULL`).
+ *
+ * @example
+ * ```c
+ * fsm_t my_fsm;
+ * fsm_init(&my_fsm, &state_idle, &app_context);
+ * ```
  */
 void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data);
 
@@ -173,33 +218,48 @@ void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data);
  *
  * @param fsm   Pointer to the FSM instance.
  * @param event Event to handle.
+ *
+ * @example
+ * ```c
+ * fsm_handle_event(&my_fsm, EVENT_START);
+ * ```
  */
 void fsm_handle_event(fsm_t *fsm, uint8_t event);
 
 /**
  * @brief Runs the FSM to process pending events.
  *
- * This function should be called regularly (e.g. in the main loop). It retrieves events
+ * This function should be called regularly (e.g., in the main loop). It retrieves events
  * from the queue and checks transitions in the current state. If a matching transition
- * is found and its guard returns true, it executes the action and changes state.
+ * is found and its guard returns `true`, it executes the action and changes state.
  * If no event matches or no event is pending, it executes the state's default action (if any).
  *
  * @param fsm Pointer to the FSM instance.
+ *
+ * @example
+ * ```c
+ * while (1) {
+ *     fsm_run(&my_fsm);
+ *     // Other application code
+ * }
+ * ```
  */
 void fsm_run(fsm_t *fsm);
 
 /**
  * @brief Helper macro to define a transition.
  *
- * Example:
+ * **Example:**
  * @code
  * FSM_TRANSITION(EVENT_X, next_state, my_action, my_guard);
  * @endcode
  *
  * @param _event      Triggering event.
- * @param _next_state Next state to go to if guard is true.
- * @param _action     Action to run during the transition (or NULL).
- * @param _guard      Guard function to check (or NULL).
+ * @param _next_state Next state to transition to if guard is `true`.
+ * @param _action     Action to execute during the transition (or `NULL`).
+ * @param _guard      Guard function to evaluate (or `NULL`).
+ *
+ * @return Initialized `fsm_transition_t` structure.
  */
 #define FSM_TRANSITION(_event, _next_state, _action, _guard) \
     { _event, &_next_state, _action, _guard }
@@ -207,7 +267,7 @@ void fsm_run(fsm_t *fsm);
 /**
  * @brief Helper macro to define a state.
  *
- * Example:
+ * **Example:**
  * @code
  * static const fsm_transition_t idle_transitions[] = {
  *     FSM_TRANSITION(EVENT_START, state_running, start_action, NULL)
@@ -218,10 +278,12 @@ void fsm_run(fsm_t *fsm);
  * @param _name            Name of the state (string).
  * @param _state_id        Numeric ID of the state.
  * @param _transitions     Array of transitions.
- * @param _default_action  Default action function (or NULL).
+ * @param _default_action  Default action function to execute when no events are pending (or `NULL`).
+ *
+ * @return Initialized `fsm_state_t` structure.
  */
 #define FSM_STATE(_name, _state_id, _transitions, _default_action) \
-    { #_name, _state_id, _transitions, sizeof(_transitions) / sizeof(fsm_transition_t),  _default_action}
+    { #_name, _state_id, _transitions, sizeof(_transitions) / sizeof(fsm_transition_t),  _default_action }
 
 #ifdef __cplusplus
 }

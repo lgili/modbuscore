@@ -32,7 +32,7 @@
 #include <modbus/fsm.h>
 #include <modbus/core.h>
 #include <modbus/server.h>
-// #include <modbus/client.h>
+#include <modbus/client.h>
 
 
 #endif /* MODBUS_H */

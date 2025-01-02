@@ -1,27 +1,64 @@
 /**
  * @file modbus_core.c
- * @brief Core Modbus protocol implementation for both Master and Slave.
+ * @brief Implementation of core Modbus protocol functions for both Client and Server.
  *
- * This file implements the functions declared in modbus_core.h.
+ * This source file implements the functions declared in `modbus_core.h`.
  * It provides core functionality for constructing, parsing, sending,
  * and receiving Modbus RTU frames.
  *
- * Key functionalities:
- * - Adding CRC to frames (modbus_build_rtu_frame)
- * - Parsing and validating received frames (modbus_parse_rtu_frame)
- * - Abstracted send/receive functions using the transport interface
- * - Handling of Modbus exceptions
- * - Resetting RX/TX buffers
- * 
- * It leaves higher-level logic (e.g., deciding which registers to read or how to respond
- * to specific function codes) to the Master or Slave specific code.
- * 
- * The timeouts and exact non-blocking behavior depend on the transport's configuration.
- * For instance, if the transport's read function is non-blocking, modbus_receive_frame()
- * may need to be called repeatedly until a complete frame is obtained or a timeout occurs.
+ * **Key Functionalities:**
+ * - **Building Frames:** Constructs Modbus RTU frames by appending CRC.
+ * - **Parsing Frames:** Parses and validates received Modbus RTU frames.
+ * - **Sending Frames:** Abstracted send functions using the transport interface.
+ * - **Receiving Frames:** Abstracted receive functions with basic timeout handling.
+ * - **Exception Handling:** Maps Modbus exception codes to `modbus_error_t`.
+ * - **Buffer Management:** Resets RX/TX buffers for new transactions or after errors.
  *
- * @author Luiz Carlos Gili
- * @date 2024-12-20
+ * **Notes:**
+ * - Ensure that the transport layer is correctly initialized before using send and receive functions.
+ * - Handle exceptions and error codes appropriately to maintain robust communication.
+ * - The buffer sizes should be adequately defined based on the expected frame sizes.
+ * - Consider enhancing `modbus_receive_frame()` to include comprehensive timeout and inter-frame delay handling.
+ *
+ * **Usage Example:**
+ * @code
+ * // Building a Modbus RTU frame for reading holding registers
+ * uint8_t request_data[] = {0x00, 0x01, 0x00, 0x02}; // Starting address and quantity
+ * uint8_t frame[256];
+ * uint16_t frame_length = modbus_build_rtu_frame(0x01, MODBUS_FUNC_READ_HOLDING_REGISTERS,
+ *                                               request_data, sizeof(request_data),
+ *                                               frame, sizeof(frame));
+ *
+ * // Sending the frame
+ * modbus_error_t send_error = modbus_send_frame(&ctx, frame, frame_length);
+ * if (send_error != MODBUS_ERROR_NONE) {
+ *     // Handle send error
+ * }
+ *
+ * // Receiving a response frame
+ * uint8_t response_frame[256];
+ * uint16_t response_length;
+ * modbus_error_t recv_error = modbus_receive_frame(&ctx, response_frame, sizeof(response_frame), &response_length);
+ *
+ * if (recv_error == MODBUS_ERROR_NONE) {
+ *     uint8_t address, function;
+ *     const uint8_t *payload;
+ *     uint16_t payload_len;
+ *     modbus_error_t parse_error = modbus_parse_rtu_frame(response_frame, response_length, &address, &function, &payload, &payload_len);
+ *     if (parse_error == MODBUS_ERROR_NONE) {
+ *         // Process payload
+ *     } else {
+ *         // Handle parse error
+ *     }
+ * } else {
+ *     // Handle receive error
+ * }
+ * @endcode
+ *
+ * @see modbus_core.h, modbus_transport.h, modbus_utils.h
+ *
+ * @ingroup ModbusCore
+ * @{
  */
 
 #include <modbus/core.h>
@@ -29,34 +66,72 @@
 
 /* Internal defines for timeouts, if needed */
 #ifndef MODBUS_INTERFRAME_TIMEOUT_MS
-#define MODBUS_INTERFRAME_TIMEOUT_MS 100
+#define MODBUS_INTERFRAME_TIMEOUT_MS 100 /**< Time in milliseconds to wait between frames */
 #endif
 
 #ifndef MODBUS_BYTE_TIMEOUT_MS
-#define MODBUS_BYTE_TIMEOUT_MS 50
+#define MODBUS_BYTE_TIMEOUT_MS 50 /**< Time in milliseconds to wait between bytes */
 #endif
 
+/**
+ * @brief Builds a Modbus RTU frame by adding CRC.
+ *
+ * This function constructs a complete Modbus RTU frame by appending the CRC
+ * to the provided address, function code, and data payload. It ensures that
+ * the output buffer has sufficient space to hold the entire frame, including
+ * the CRC.
+ *
+ * @param[in]  address         Modbus server/client address (or target device address).
+ * @param[in]  function_code   Modbus function code.
+ * @param[in]  data            Pointer to the data payload (excluding CRC).
+ * @param[in]  data_length     Length of the data payload in bytes.
+ * @param[out] out_buffer      Buffer to store the complete frame (including CRC).
+ * @param[in]  out_buffer_size Size of the `out_buffer` in bytes.
+ * 
+ * @return Number of bytes written to `out_buffer`, or 0 if there is not enough space.
+ *
+ * @retval >0  Number of bytes written to `out_buffer`.
+ * @retval 0   Insufficient buffer size to store the complete frame.
+ *
+ * @warning
+ * - Ensure that `out_buffer` has enough space to accommodate `address` (1 byte),
+ *   `function_code` (1 byte), `data` (`data_length` bytes), and CRC (2 bytes).
+ * 
+ * @example
+ * ```c
+ * uint8_t payload[] = {0x00, 0x01, 0x00, 0x02};
+ * uint8_t frame[256];
+ * uint16_t frame_len = modbus_build_rtu_frame(0x01, MODBUS_FUNC_READ_HOLDING_REGISTERS,
+ *                                           payload, sizeof(payload),
+ *                                           frame, sizeof(frame));
+ * if (frame_len > 0) {
+ *     // Frame successfully built, proceed to send
+ * }
+ * ```
+ */
 uint16_t modbus_build_rtu_frame(uint8_t address, uint8_t function_code,
                                 const uint8_t *data, uint16_t data_length,
                                 uint8_t *out_buffer, uint16_t out_buffer_size) {
-    if (out_buffer_size < (data_length + 4U)) {
-        // Need at least address(1) + function(1) + CRC(2)
-        return 0;
+    if (!out_buffer) {
+        return 0; // Invalid output buffer
     }
 
-    uint16_t index = 0;
+    /* Calculate required frame size: address + function_code + data + CRC */
+    uint16_t required_size = 1U + 1U + data_length + 2U;
+    if (out_buffer_size < required_size) {
+        return 0; // Not enough space
+    }
+
+    uint16_t index = 0U;
     out_buffer[index++] = address;
     out_buffer[index++] = function_code;
 
-    if (data && data_length > 0) {
-        if ((data_length + 4U) > out_buffer_size) {
-            // Not enough space
-            return 0;
-        }
+    if (data && data_length > 0U) {
         memcpy(&out_buffer[index], data, data_length);
         index += data_length;
     }
 
+    /* Calculate CRC using the table-driven method for efficiency */
     uint16_t crc = modbus_crc_with_table(out_buffer, index);
     out_buffer[index++] = GET_LOW_BYTE(crc);
     out_buffer[index++] = GET_HIGH_BYTE(crc);
@@ -64,80 +139,333 @@ uint16_t modbus_build_rtu_frame(uint8_t address, uint8_t function_code,
     return index; // Total frame length
 }
 
+/**
+ * @brief Parses a Modbus RTU frame, verifying CRC.
+ *
+ * This function validates the CRC of the provided Modbus RTU frame. If the CRC is
+ * correct, it extracts the address, function code, and payload from the frame.
+ * The payload can then be interpreted based on the function code.
+ *
+ * @param[in]  frame        Pointer to the frame buffer (address + function + data + CRC).
+ * @param[in]  frame_length Length of the frame in bytes.
+ * @param[out] address      Pointer to store the parsed address.
+ * @param[out] function     Pointer to store the parsed function code.
+ * @param[out] payload      Pointer to store the start of the payload within the frame.
+ * @param[out] payload_len  Pointer to store the length of the payload (excluding CRC).
+ *
+ * @return modbus_error_t `MODBUS_ERROR_NONE` if successful, or an error/exception code.
+ *
+ * @retval MODBUS_ERROR_NONE                  Frame parsed and CRC validated successfully.
+ * @retval MODBUS_ERROR_INVALID_ARGUMENT       Frame length is too short or pointers are `NULL`.
+ * @retval MODBUS_ERROR_CRC                    CRC check failed.
+ * @retval MODBUS_EXCEPTION_ILLEGAL_FUNCTION   The function code indicates an error response.
+ * @retval MODBUS_ERROR_OTHER                  Other error codes as defined in `modbus_error_t`.
+ *
+ * @warning
+ * - The frame must contain at least 4 bytes: address (1 byte) + function code (1 byte) + CRC (2 bytes).
+ * - Ensure that `payload` and `payload_len` are valid pointers before calling this function.
+ * 
+ * @example
+ * ```c
+ * uint8_t response_frame[] = {0x01, 0x03, 0x02, 0x00, 0x0A, 0xC4, 0x0B};
+ * uint16_t response_length = sizeof(response_frame);
+ * uint8_t address, function;
+ * const uint8_t *payload;
+ * uint16_t payload_len;
+ *
+ * modbus_error_t error = modbus_parse_rtu_frame(response_frame, response_length, &address, &function, &payload, &payload_len);
+ * if (error == MODBUS_ERROR_NONE) {
+ *     // Process payload
+ * }
+ * ```
+ */
 modbus_error_t modbus_parse_rtu_frame(const uint8_t *frame, uint16_t frame_length,
                                       uint8_t *address, uint8_t *function,
                                       const uint8_t **payload, uint16_t *payload_len) {
-    if (frame_length < 4U) {
-        return MODBUS_ERROR_INVALID_ARGUMENT; // Too short (address+function+CRC is min)
+    if (!frame || !address || !function || !payload || !payload_len) {
+        return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
-    // Extract and verify CRC
-    uint16_t calc_crc = modbus_crc_with_table(frame, (uint16_t)(frame_length - 2U));
-    uint16_t recv_crc = (uint16_t)(frame[frame_length - 1U] << 8U) | frame[frame_length - 2U];
+    if (frame_length < 4U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT; // Too short (address + function + CRC)
+    }
+
+    /* Extract and verify CRC */
+    uint16_t calc_crc = modbus_crc_with_table(frame, frame_length - 2U);
+    uint16_t recv_crc = ((uint16_t)frame[frame_length - 1U] << 8U) | (uint16_t)frame[frame_length - 2U];
 
     if (calc_crc != recv_crc) {
-        return MODBUS_ERROR_CRC;
+        return MODBUS_ERROR_CRC; // CRC mismatch
     }
 
     *address = frame[0];
     *function = frame[1];
 
-    // Payload is everything after address+function, before CRC
+    /* Check if the function code indicates an error response */
+    if (modbus_is_error_response(*function)) {
+        uint8_t exception_code = frame[2];
+        return modbus_exception_to_error(exception_code);
+    }
+
+    /* Extract payload */
     *payload = &frame[2];
-    *payload_len = (uint16_t)(frame_length - 4U); // subtract address(1), func(1), CRC(2)
+    *payload_len = frame_length - 4U; // Subtract address(1) + function(1) + CRC(2)
 
     return MODBUS_ERROR_NONE;
 }
 
+/**
+ * @brief Sends a Modbus frame using the configured transport.
+ *
+ * This function attempts to send the provided Modbus RTU frame through the
+ * configured transport interface. It ensures that the entire frame is sent.
+ * The behavior is non-blocking and depends on the transport implementation.
+ *
+ * @param[in]  ctx        Pointer to the Modbus context.
+ * @param[in]  frame      Pointer to the complete Modbus RTU frame (including CRC).
+ * @param[in]  frame_len  Length of the frame in bytes.
+ *
+ * @return modbus_error_t `MODBUS_ERROR_NONE` on successful send, or an error code.
+ *
+ * @retval MODBUS_ERROR_NONE          Frame sent successfully.
+ * @retval MODBUS_ERROR_TRANSPORT     Transport layer encountered an error.
+ * @retval MODBUS_ERROR_INVALID_ARGUMENT Invalid context or frame parameters.
+ * @retval MODBUS_ERROR_PARTIAL_WRITE Partial frame was written (if transport returns fewer bytes).
+ * @retval Others                      Various error codes as defined in `modbus_error_t`.
+ *
+ * @warning
+ * - Ensure that the transport's write function is properly implemented and initialized.
+ * - The function does not handle retries; implement retry logic if necessary.
+ * 
+ * @example
+ * ```c
+ * uint8_t frame[] = {0x01, 0x03, 0x00, 0x01, 0x00, 0x02, 0xC4, 0x0B};
+ * modbus_error_t error = modbus_send_frame(&ctx, frame, sizeof(frame));
+ * if (error != MODBUS_ERROR_NONE) {
+ *     // Handle send error
+ * }
+ * ```
+ */
 modbus_error_t modbus_send_frame(modbus_context_t *ctx, const uint8_t *frame, uint16_t frame_len) {
-    if (!ctx || !frame || frame_len == 0) {
-        return MODBUS_ERROR_INVALID_ARGUMENT;
+    if (!ctx || !frame || frame_len == 0U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
     int32_t written = ctx->transport.write(frame, frame_len);
     if (written < 0) {
-        return MODBUS_ERROR_TRANSPORT;
+        return MODBUS_ERROR_TRANSPORT; // Transport layer error
     } else if ((uint16_t)written < frame_len) {
-        // Partial write could be considered a timeout or error
-        return MODBUS_ERROR_TRANSPORT;
+        return MODBUS_ERROR_TRANSPORT; // Partial write occurred
     }
 
     return MODBUS_ERROR_NONE;
 }
 
+/**
+ * @brief Receives a Modbus frame using the configured transport.
+ *
+ * This function attempts to receive a complete Modbus RTU frame from the transport.
+ * It reads data into the provided buffer and performs basic timeout handling.
+ * The exact behavior depends on the transport's read implementation.
+ *
+ * @param[in]  ctx         Pointer to the Modbus context.
+ * @param[out] out_buffer  Buffer to store the received Modbus RTU frame.
+ * @param[in]  out_size    Size of the `out_buffer` in bytes.
+ * @param[out] out_length  Pointer to store the length of the received frame.
+ *
+ * @return modbus_error_t `MODBUS_ERROR_NONE` if a complete and valid frame is received, or an error code.
+ *
+ * @retval MODBUS_ERROR_NONE          Frame received and validated successfully.
+ * @retval MODBUS_ERROR_TIMEOUT       Timeout occurred while waiting for frame.
+ * @retval MODBUS_ERROR_CRC           CRC check failed.
+ * @retval MODBUS_ERROR_TRANSPORT     Transport layer encountered an error.
+ * @retval MODBUS_ERROR_INVALID_ARGUMENT Invalid context or buffer parameters.
+ * @retval Others                      Various error codes as defined in `modbus_error_t`.
+ *
+ * @warning
+ * - Ensure that `out_buffer` has enough space to hold the expected frame size.
+ * - The function relies on the transport's read implementation for timeout and blocking behavior.
+ * 
+ * @example
+ * ```c
+ * uint8_t response_frame[256];
+ * uint16_t response_length;
+ * modbus_error_t error = modbus_receive_frame(&ctx, response_frame, sizeof(response_frame), &response_length);
+ * if (error == MODBUS_ERROR_NONE) {
+ *     // Process received frame
+ * }
+ * ```
+ */
 modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, uint16_t out_size, uint16_t *out_length) {
-    if (!ctx || !out_buffer || out_size < 4U) {
-        return MODBUS_ERROR_INVALID_ARGUMENT;
+    if (!ctx || !out_buffer || !out_length || out_size < 4U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
-    // Start reading at out_buffer[0]
-    uint16_t bytes_read = 0;
+    /* Initialize read buffer and counters */
+    uint16_t bytes_read = 0U;
+    uint16_t frame_start_time = ctx->transport.get_reference_msec();
 
-    uint16_t ref_time = ctx->transport.get_reference_msec();
+    /* Continuously read until a complete frame is received or a timeout occurs */
+    while (bytes_read < out_size) {
+        int32_t r = ctx->transport.read(&out_buffer[bytes_read], out_size - bytes_read);
+        if (r < 0) {
+            return MODBUS_ERROR_TRANSPORT; // Transport layer error
+        } else if (r == 0) {
+            /* No data read; check for timeout */
+            uint16_t current_time = ctx->transport.get_reference_msec();
+            if ((current_time - frame_start_time) > MODBUS_INTERFRAME_TIMEOUT_MS) {
+                return MODBUS_ERROR_TIMEOUT; // Inter-frame timeout
+            }
+            continue; // Continue waiting for data
+        }
 
-    int32_t r = ctx->transport.read(out_buffer, (uint16_t)out_size);
-    *out_length = r;
+        bytes_read += (uint16_t)r;
 
+        /* Check if enough data has been read to determine frame length */
+        if (bytes_read >= 4U) {
+            /* Extract expected frame length based on function code and data */
+            uint8_t function_code = out_buffer[1];
+            uint16_t expected_length = 0U;
+
+            switch (function_code) {
+                case MODBUS_FUNC_READ_COILS:
+                case MODBUS_FUNC_READ_DISCRETE_INPUTS:
+                case MODBUS_FUNC_READ_HOLDING_REGISTERS:
+                case MODBUS_FUNC_READ_INPUT_REGISTERS:
+                    /* For read functions: address(1) + function(1) + byte count(1) + data + CRC(2) */
+                    if (bytes_read == 3U) {
+                        uint8_t byte_count = out_buffer[2];
+                        expected_length = 3U + byte_count + 2U;
+                    }
+                    break;
+                case MODBUS_FUNC_WRITE_SINGLE_COIL:
+                case MODBUS_FUNC_WRITE_SINGLE_REGISTER:
+                    /* For write single: address(1) + function(1) + data(2) + CRC(2) */
+                    expected_length = 1U + 1U + 2U + 2U;
+                    break;
+                case MODBUS_FUNC_WRITE_MULTIPLE_COILS:
+                case MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS:
+                case MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS:
+                    /* For write multiple: address(1) + function(1) + byte count(1) + data + CRC(2) */
+                    if (bytes_read == 3U) {
+                        uint8_t byte_count = out_buffer[2];
+                        expected_length = 3U + byte_count + 2U;
+                    }
+                    break;
+                case MODBUS_FUNC_READ_DEVICE_INFORMATION:
+                    /* Device information responses vary; assume a minimum length */
+                    expected_length = 1U + 1U + 1U + 2U; // Adjust as needed
+                    break;
+                default:
+                    /* For unknown function codes, expect at least address + function + CRC */
+                    expected_length = 1U + 1U + 2U;
+                    break;
+            }
+
+            if (expected_length > 0U && bytes_read >= expected_length) {
+                /* Frame is complete */
+                break;
+            }
+        }
+
+        /* Update frame start time for inter-byte timeout */
+        frame_start_time = ctx->transport.get_reference_msec();
+    }
+
+    if (bytes_read == 0U) {
+        return MODBUS_ERROR_TIMEOUT; // No data received
+    }
+
+    /* Parse the received frame */
+    // modbus_error_t parse_result = modbus_parse_rtu_frame(out_buffer, bytes_read, &ctx->last_address, &ctx->last_function,
+    //                                                      &ctx->last_payload, &ctx->last_payload_len);
+    // if (parse_result != MODBUS_ERROR_NONE) {
+    //     return parse_result; // Return the parsing error
+    // }
+
+    *out_length = bytes_read;
     return MODBUS_ERROR_NONE;
 }
 
+/**
+ * @brief Converts a Modbus exception code to a `modbus_error_t`.
+ *
+ * This function maps Modbus exception codes to the corresponding `modbus_error_t`
+ * enumeration values. It facilitates the interpretation of error responses from
+ * Modbus devices.
+ *
+ * @param[in]  exception_code The exception code from the Modbus frame.
+ * @return A corresponding `modbus_error_t`.
+ *
+ * @retval MODBUS_EXCEPTION_ILLEGAL_FUNCTION         Exception code 1: Illegal Function
+ * @retval MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS     Exception code 2: Illegal Data Address
+ * @retval MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE       Exception code 3: Illegal Data Value
+ * @retval MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE    Exception code 4: Server Device Failure
+ * @retval MODBUS_ERROR_OTHER                        Unknown or unsupported exception codes
+ *
+ * @warning
+ * - Ensure that all relevant exception codes are handled appropriately.
+ * 
+ * @example
+ * ```c
+ * uint8_t exception_code = received_payload[0];
+ * modbus_error_t error = modbus_exception_to_error(exception_code);
+ * if (modbus_error_is_exception(error)) {
+ *     // Handle the specific exception
+ * }
+ * ```
+ */
 modbus_error_t modbus_exception_to_error(uint8_t exception_code) {
     switch (exception_code) {
-        case 1: return MODBUS_EXCEPTION_ILLEGAL_FUNCTION;
-        case 2: return MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
-        case 3: return MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE;
-        case 4: return MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE;
-        default: return MODBUS_ERROR_OTHER; // Unknown exception code
+        case 1U:
+            return MODBUS_EXCEPTION_ILLEGAL_FUNCTION;
+        case 2U:
+            return MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
+        case 3U:
+            return MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE;
+        case 4U:
+            return MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE;
+        default:
+            return MODBUS_ERROR_OTHER; // Unknown exception code
     }
 }
 
+/**
+ * @brief Convenience function to reset internal RX/TX buffers in the context.
+ *
+ * This function clears the receive and transmit buffers within the Modbus context,
+ * effectively resetting the state of any ongoing or previous transactions. It can be
+ * used when starting a new transaction or after encountering an error to ensure that
+ * residual data does not interfere with subsequent communications.
+ *
+ * @param[in,out] ctx Pointer to the Modbus context.
+ *
+ * @note
+ * - This function assumes that the buffers are part of the `modbus_context_t` structure.
+ * - After resetting, ensure that any necessary initialization for new transactions is performed.
+ * 
+ * @example
+ * ```c
+ * // Reset buffers before starting a new transaction
+ * modbus_reset_buffers(&ctx);
+ * ```
+ */
 void modbus_reset_buffers(modbus_context_t *ctx) {
-    if (!ctx) return;
-    ctx->rx_count = 0;
-    ctx->rx_index = 0;
-    ctx->tx_index = 0;
-    ctx->tx_raw_index = 0;
+    if (!ctx) {
+        return; // Invalid context pointer
+    }
+
+    /* Reset RX buffer indices and counters */
+    ctx->rx_count = 0U;
+    ctx->rx_index = 0U;
+
+    /* Reset TX buffer indices and counters */
+    ctx->tx_index = 0U;
+    ctx->tx_raw_index = 0U;
+
+    /* Clear RX and TX buffers */
     memset(ctx->rx_buffer, 0, sizeof(ctx->rx_buffer));
     memset(ctx->tx_buffer, 0, sizeof(ctx->tx_buffer));
     memset(ctx->tx_raw_buffer, 0, sizeof(ctx->tx_raw_buffer));
 }
+

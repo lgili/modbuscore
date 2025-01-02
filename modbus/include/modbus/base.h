@@ -1,23 +1,37 @@
 /**
- * @file modbus.h
+ * @file base.h
  * @brief Common definitions for Modbus Master and Slave implementations.
  *
  * This header provides common enumerations, data structures, and type definitions
- * used by both Modbus Master and Slave implementations. It does not depend on any
- * specific hardware or protocol variant, aiming at a portable and flexible design.
+ * used by both Modbus Master and Slave implementations. It is designed to be
+ * portable and flexible, without dependencies on specific hardware or protocol variants.
  *
- * Concepts defined here:
- * - Modbus error and exception codes
- * - A generic modbus_context_t structure for holding platform configuration,
+ * **Key Features:**
+ * - Defines Modbus error and exception codes.
+ * - Provides a generic `modbus_context_t` structure for holding platform configuration,
  *   transport interfaces, and user-specific data.
- * - Data structures for holding registers and their callbacks.
- * - Macros and constants related to Modbus protocol.
+ * - Includes data structures for managing holding registers and their callbacks.
+ * - Contains utility macros and constants related to the Modbus protocol.
  *
- * Users should include this header in their Master or Slave code. Platform-dependent
- * operations (I/O, timing) and higher-level states (FSM) are defined elsewhere.
+ * **Usage:**
+ * - Include this header in your Master or Slave code to access common Modbus definitions.
+ * - Platform-dependent operations (I/O, timing) and higher-level states (FSM) are defined elsewhere.
+ * - Example:
+ *   ```c
+ *   #include "base.h"
+ *   
+ *   void setup_modbus() {
+ *       modbus_context_t ctx;
+ *       // Initialize context and transport
+ *       // ...
+ *   }
+ *   ```
+ *
+ * @author
+ * Luiz Carlos Gili
  * 
- * @author Luiz Carlos Gili
- * @date 2024-12-20
+ * @date
+ * 2024-12-20
  *
  * @addtogroup ModbusCore
  * @{
@@ -34,20 +48,52 @@ extern "C"{
 #endif
 
 #include <modbus/conf.h>
-#include <modbus/transport.h>  /* For modbus_transport_t and related defs */
+#include <modbus/transport.h>  /**< For modbus_transport_t and related definitions */
 
 /* -------------------------------------------------------------------------- */
 /*                          Modbus Protocol Constants                         */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * @brief Modbus broadcast address.
+ *
+ * This address is used to send messages to all slaves on the network.
+ */
 #define MODBUS_BROADCAST_ADDRESS      0x00U
-#define MODBUS_BOOTLOADER_ADDRESS     0xA5U
-
 
 /**
- * @brief Utility macros to extract high/low bytes.
+ * @brief Modbus bootloader address.
+ *
+ * This address is reserved for bootloader operations.
+ */
+#define MODBUS_BOOTLOADER_ADDRESS     0xA5U
+
+/**
+ * @brief Utility macro to extract the low byte from a 16-bit value.
+ *
+ * @param d The 16-bit value.
+ * @return The low byte of the value.
+ *
+ * @example
+ * ```c
+ * uint16_t value = 0x1234;
+ * uint8_t low = GET_LOW_BYTE(value); // low = 0x34
+ * ```
  */
 #define GET_LOW_BYTE(d)       ((uint8_t)((d) & 0x00FFU))
+
+/**
+ * @brief Utility macro to extract the high byte from a 16-bit value.
+ *
+ * @param d The 16-bit value.
+ * @return The high byte of the value.
+ *
+ * @example
+ * ```c
+ * uint16_t value = 0x1234;
+ * uint8_t high = GET_HIGH_BYTE(value); // high = 0x12
+ * ```
+ */
 #define GET_HIGH_BYTE(d)      ((uint8_t)(((d) >> 8U) & 0x00FFU))
 
 /* -------------------------------------------------------------------------- */
@@ -55,10 +101,10 @@ extern "C"{
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Error and exception codes used by the Modbus stack.
+ * @brief Enumeration of Modbus error and exception codes.
  *
- * Negative values represent library or transport errors.
- * Positive values (1 to 4) represent Modbus exceptions as per the standard.
+ * Negative values represent internal library or transport errors.
+ * Positive values (1 to 4) correspond to Modbus exception codes as defined by the Modbus protocol.
  */
 typedef enum {
     MODBUS_ERROR_NONE = 0,                /**< No error */
@@ -66,20 +112,31 @@ typedef enum {
     MODBUS_ERROR_TIMEOUT = -2,            /**< Read/write timeout occurred */
     MODBUS_ERROR_TRANSPORT = -3,          /**< Transport layer error */
     MODBUS_ERROR_CRC = -4,                /**< CRC check failed */
-    MODBUS_ERROR_INVALID_REQUEST = -5,    /**< Received invalid request frame */            
-    MODBUS_ERROR_OTHER_REQUESTS = -6,     
-    MODBUS_OTHERS_REQUESTS = -7,
+    MODBUS_ERROR_INVALID_REQUEST = -5,    /**< Received invalid request frame */
+    MODBUS_ERROR_OTHER_REQUESTS = -6,     /**< Received other types of requests */
+    MODBUS_OTHERS_REQUESTS = -7,          /**< Placeholder for additional request types */
     MODBUS_ERROR_OTHER = -8,              /**< Other unspecified error */
 
     /* Modbus exceptions (positive values) */
     MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,      /**< Exception 1: Illegal function */
     MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS = 2,  /**< Exception 2: Illegal data address */
     MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE = 3,    /**< Exception 3: Illegal data value */
-    MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE = 4   /**< Exception 4: Device failure */
+    MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE = 4   /**< Exception 4: Server device failure */
 } modbus_error_t;
 
 /**
- * @brief Checks if the given error is a Modbus exception (1 to 4).
+ * @brief Determines if the given error code is a Modbus exception.
+ *
+ * @param err The error code to check.
+ * @return `true` if the error is a Modbus exception (1-4), `false` otherwise.
+ *
+ * @example
+ * ```c
+ * modbus_error_t err = MODBUS_EXCEPTION_ILLEGAL_FUNCTION;
+ * if (modbus_error_is_exception(err)) {
+ *     // Handle exception
+ * }
+ * ```
  */
 static inline bool modbus_error_is_exception(modbus_error_t err) {
     return (err >= MODBUS_EXCEPTION_ILLEGAL_FUNCTION && err <= MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE);
@@ -90,14 +147,14 @@ static inline bool modbus_error_is_exception(modbus_error_t err) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Defines the role of this Modbus instance.
+ * @brief Enumeration defining the role of a Modbus instance.
  *
- * A single codebase can support both Master and Slave roles by selecting the role
+ * A single codebase can support both Client and Server roles by selecting the role
  * at runtime or compile time.
  */
 typedef enum {
-    MODBUS_ROLE_MASTER = 0,
-    MODBUS_ROLE_SLAVE  = 1
+    MODBUS_ROLE_CLIENT = 0, /**< Client role */
+    MODBUS_ROLE_SERVER  = 1  /**< Server role */
 } modbus_role_t;
 
 /* -------------------------------------------------------------------------- */
@@ -105,76 +162,111 @@ typedef enum {
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Callback type for reading a variable (e.g. holding register).
+ * @brief Callback type for reading a Modbus variable (e.g., holding register).
  *
  * This callback should return the current value of the variable.
+ *
+ * @return The current value of the variable as a 16-bit integer.
+ *
+ * @example
+ * ```c
+ * int16_t read_temperature(void) {
+ *     return current_temperature;
+ * }
+ * ```
  */
 typedef int16_t (*modbus_read_callback_t)(void);
 
 /**
- * @brief Callback type for writing a variable (e.g. holding register).
+ * @brief Callback type for writing a Modbus variable (e.g., holding register).
  *
  * The callback receives the new value and should write it to the variable if allowed.
- * It returns the value actually written (which may differ if needed).
+ * It returns the value actually written, which may differ if necessary.
+ *
+ * @param new_value The new value to write to the variable.
+ * @return The value that was actually written.
+ *
+ * @example
+ * ```c
+ * int16_t write_temperature(int16_t new_value) {
+ *     if (new_value < MIN_TEMP || new_value > MAX_TEMP) {
+ *         return current_temperature; // Do not change if out of range
+ *     }
+ *     current_temperature = new_value;
+ *     return current_temperature;
+ * }
+ * ```
  */
 typedef int16_t (*modbus_write_callback_t)(int16_t new_value);
 
 /**
- * @brief Structure representing a Modbus variable (e.g. a holding register).
+ * @brief Structure representing a Modbus variable (e.g., holding register).
  *
  * Each variable is identified by an address and can be read-only or read/write.
  * Optional read and write callbacks can be provided for custom logic.
  */
 typedef struct {
-    int16_t *variable_ptr;               /**< Pointer to the variable in memory */
-    modbus_read_callback_t read_callback; /**< Optional callback for reading the variable */
-    modbus_write_callback_t write_callback; /**< Optional callback for writing the variable */
-    bool read_only;                      /**< True if the variable is read-only */
-    uint16_t address;                    /**< Modbus address of this variable */
+    int16_t *variable_ptr;                     /**< Pointer to the variable in memory */
+    modbus_read_callback_t read_callback;      /**< Optional callback for reading the variable */
+    modbus_write_callback_t write_callback;    /**< Optional callback for writing the variable */
+    bool read_only;                            /**< Indicates if the variable is read-only */
+    uint16_t address;                          /**< Modbus address of this variable */
 } variable_modbus_t;
-
 
 /* -------------------------------------------------------------------------- */
 /*                           Modbus Context Structure                         */
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief The Modbus context structure holds all necessary data for both Master and Slave.
+ * @brief The Modbus context structure holds all necessary data for both Client and Server.
  *
- * Fields included:
- * - transport configuration (I/O, timing, etc.)
- * - runtime information (e.g., buffers, message parsing details)
- * - a place for user_data if needed
+ * **Fields:**
+ * - `transport`: Platform-specific I/O and timing functions.
+ * - `role`: Specifies whether the context is for a Client or Server.
+ * - `rx_buffer`: Buffer for incoming data.
+ * - `rx_count`: Number of bytes currently in the receive buffer.
+ * - `rx_index`: Current index in the receive buffer.
+ * - `tx_raw_buffer`: Raw buffer for outgoing data.
+ * - `tx_index`: Current index in the transmit buffer.
+ * - `tx_buffer`: Processed buffer for outgoing data.
+ * - `rx_reference_time`: Timestamp for receiving data, used for handling timeouts.
+ * - `tx_reference_time`: Timestamp for transmitting data, used for handling timeouts.
+ * - `error_timer`: Timer for tracking errors.
+ * - `user_data`: Pointer for user-specific context or data.
  *
- * Specific code for Master or Slave will build upon this context,
- * adding logic for frame parsing, state machines, etc.
+ * **Usage:**
+ * - Initialize this structure before using Modbus Client or Server functions.
+ * - Populate `transport` with appropriate I/O and timing functions.
+ * - Set `role` to `MODBUS_ROLE_MASTER` or `MODBUS_ROLE_SLAVE` based on usage.
+ *
+ * **Example:**
+ * ```c
+ * modbus_context_t ctx;
+ * modbus_transport_init_mock(&ctx.transport);
+ * ctx.role = MODBUS_ROLE_CLIENT;
+ * ctx.user_data = &application_data;
+ * ```
  */
 typedef struct {
     modbus_transport_t transport; /**< Platform-specific I/O and timing functions */
 
-    modbus_role_t role;           /**< Master or Slave role */
+    modbus_role_t role;           /**< Client or Server role */
 
-    // You can add shared buffers, timers, and other data here.
-    // For example, RX/TX buffers and indexes:
-    uint8_t rx_buffer[64];
-    uint16_t rx_count;
-    uint16_t rx_index;
+    uint8_t rx_buffer[64];        /**< Buffer for incoming data */
+    uint16_t rx_count;            /**< Number of bytes in the receive buffer */
+    uint16_t rx_index;            /**< Current index in the receive buffer */
 
-    uint8_t tx_raw_buffer[64];
-    // uint16_t tx_raw_count;
-    uint16_t tx_raw_index;
+    uint8_t tx_raw_buffer[64];    /**< Raw buffer for outgoing data */
+    uint16_t tx_raw_index;        /**< Current index in the transmit buffer */
 
-    uint8_t tx_buffer[64];
-    // uint16_t tx_count;
-    uint16_t tx_index;
+    uint8_t tx_buffer[64];        /**< Processed buffer for outgoing data */
+    uint16_t tx_index;            /**< Current index in the processed buffer */
 
-    
-    uint16_t rx_reference_time; /**< Timestamp for receiving data, used in timeouts. */
-    uint16_t tx_reference_time; /**< Timestamp for transmitting data, used in timeouts. */
-    uint16_t error_timer;
+    uint16_t rx_reference_time;   /**< Timestamp for receiving data, used in timeouts */
+    uint16_t tx_reference_time;   /**< Timestamp for transmitting data, used in timeouts */
+    uint16_t error_timer;         /**< Timer for tracking errors */
 
-    // User data pointer for application-specific context
-    void *user_data;
+    void *user_data;              /**< Pointer for user-specific context */
 } modbus_context_t;
 
 #ifdef __cplusplus

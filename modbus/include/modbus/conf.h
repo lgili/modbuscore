@@ -70,6 +70,10 @@
 #define MODBUS_SEND_BUFFER_SIZE 256
 #endif
 
+#ifndef MASTER_DEFAULT_TIMEOUT_MS
+#define MASTER_DEFAULT_TIMEOUT_MS  1000
+#endif
+
 /**
  * @brief If you want to enable or disable certain functions, you can define
  * macros here. For example:
