@@ -66,8 +66,10 @@ typedef enum {
     MODBUS_ERROR_TIMEOUT = -2,            /**< Read/write timeout occurred */
     MODBUS_ERROR_TRANSPORT = -3,          /**< Transport layer error */
     MODBUS_ERROR_CRC = -4,                /**< CRC check failed */
-    MODBUS_ERROR_INVALID_REQUEST = -5,    /**< Received invalid request frame */
-    MODBUS_ERROR_OTHER = -6,              /**< Other unspecified error */
+    MODBUS_ERROR_INVALID_REQUEST = -5,    /**< Received invalid request frame */            
+    MODBUS_ERROR_OTHER_REQUESTS = -6,     
+    MODBUS_OTHERS_REQUESTS = -7,
+    MODBUS_ERROR_OTHER = -8,              /**< Other unspecified error */
 
     /* Modbus exceptions (positive values) */
     MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,      /**< Exception 1: Illegal function */
@@ -131,34 +133,6 @@ typedef struct {
     uint16_t address;                    /**< Modbus address of this variable */
 } variable_modbus_t;
 
-/* -------------------------------------------------------------------------- */
-/*                             Device Information                             */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Structure representing a package of device information.
- */
-typedef struct {
-    uint8_t id;                                        /**< ID of the package */
-    uint8_t length;                                    /**< Length of the ASCII value */
-    uint8_t value_in_ascii[MAX_DEVICE_PACKAGE_VALUES]; /**< ASCII data of the package */
-} device_package_info_t;
-
-/**
- * @brief Structure representing device-specific information for a Slave device.
- *
- * A Master may not need this, or may use it differently.
- */
-typedef struct {
-    uint16_t *address;                  /**< Pointer to the device address (RTU) */
-    uint16_t *baudrate;                 /**< Pointer to the Modbus baudrate */
-    uint8_t mei_type;                   /**< MEI type for device info requests */
-    uint8_t conformity_level;           /**< Conformity level of the product */
-    uint8_t more_follow;                /**< Number of additional packages */
-    uint8_t next_obj_id;                /**< Next object ID to send */
-    device_package_info_t data[MAX_DEVICE_PACKAGES];
-    uint8_t info_saved;                 /**< Number of data packages saved */
-} device_identification_t;
 
 /* -------------------------------------------------------------------------- */
 /*                           Modbus Context Structure                         */
@@ -182,15 +156,22 @@ typedef struct {
 
     // You can add shared buffers, timers, and other data here.
     // For example, RX/TX buffers and indexes:
-    uint8_t rx_buffer[256];
+    uint8_t rx_buffer[64];
     uint16_t rx_count;
     uint16_t rx_index;
 
-    uint8_t tx_buffer[256];
-    uint16_t tx_count;
+    uint8_t tx_raw_buffer[64];
+    // uint16_t tx_raw_count;
+    uint16_t tx_raw_index;
 
-    // Device info (mostly used by Slave, but a Master might store info about slaves)
-    device_identification_t device_info;
+    uint8_t tx_buffer[64];
+    // uint16_t tx_count;
+    uint16_t tx_index;
+
+    
+    uint16_t rx_reference_time; /**< Timestamp for receiving data, used in timeouts. */
+    uint16_t tx_reference_time; /**< Timestamp for transmitting data, used in timeouts. */
+    uint16_t error_timer;
 
     // User data pointer for application-specific context
     void *user_data;

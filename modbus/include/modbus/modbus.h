@@ -31,8 +31,8 @@
 #include <modbus/utils.h>
 #include <modbus/fsm.h>
 #include <modbus/core.h>
+#include <modbus/server.h>
 // #include <modbus/client.h>
-// #include <modbus/server.h>
 
 
 #endif /* MODBUS_H */

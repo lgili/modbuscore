@@ -3,8 +3,8 @@ set(SOURCES
   src/utils.c
   src/fsm.c
   src/core.c
+  src/server.c
   # src/modbus_client.c
-  # src/modbus_server.c
 )
 
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
@@ -16,8 +16,8 @@ set(HEADERS_PUBLIC
   include/modbus/utils.h
   include/modbus/fsm.h
   include/modbus/core.h
+  include/modbus/server.h
   # include/modbus/client.h
-  # include/modbus/server.h
   
 )
 

@@ -1,6 +1,13 @@
 {
+    "files.associations": {
+        "string.h": "c",
+        "utils.h": "c",
+        "base.h": "c",
+        "transport.h": "c"
+    },
     "cmake.useCMakePresets": "always",
     "cmake.options.statusBarVisibility": "visible",
+    "cmake.configureSettings": { "gtest_build_samples": "ON" },
     "files.associations": {
         "compare": "cpp"
     },

@@ -24,7 +24,9 @@ extern "C"{
 
 #include <modbus/base.h>
 
-
+#define MODBUS_CONVERT_CHAR_INTERVAL_TO_MS(TIME_US, BAUDRATE) \
+        ((1000U * TIME_US * 11) / (BAUDRATE))
+        
 /**
  * @brief Safely reads an 8-bit unsigned integer from a buffer.
  *

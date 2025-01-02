@@ -50,6 +50,23 @@ static int32_t mock_read(uint8_t *buf, uint16_t count) {
     return bytes_to_read;
 }
 
+// static int32_t mock_read_event(uint8_t *buf, uint16_t count) {
+//     uint16_t bytes_available = (rx_mock_count > rx_mock_index) ? (rx_mock_count - rx_mock_index) : 0;
+//     if (bytes_available == 0) {
+//         // No data available, could simulate a timeout
+//         return 0; // Returns 0 indicating no data read
+//     }
+//     uint16_t bytes_to_read = (count < bytes_available) ? count : bytes_available;
+//     // memcpy(buf, &rx_mock_buffer[rx_mock_index], bytes_to_read);
+//     // rx_mock_index += bytes_to_read;
+//     for (size_t i = 0; i < bytes_available; i++)
+//     {
+//         modbus_server_receive_data_from_uart_event()
+//     }
+    
+//     return bytes_to_read;
+// }
+
 /**
  * @brief Mock write function.
  *

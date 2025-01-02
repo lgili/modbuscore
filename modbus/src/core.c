@@ -135,7 +135,9 @@ void modbus_reset_buffers(modbus_context_t *ctx) {
     if (!ctx) return;
     ctx->rx_count = 0;
     ctx->rx_index = 0;
-    ctx->tx_count = 0;
+    ctx->tx_index = 0;
+    ctx->tx_raw_index = 0;
     memset(ctx->rx_buffer, 0, sizeof(ctx->rx_buffer));
     memset(ctx->tx_buffer, 0, sizeof(ctx->tx_buffer));
+    memset(ctx->tx_raw_buffer, 0, sizeof(ctx->tx_raw_buffer));
 }
