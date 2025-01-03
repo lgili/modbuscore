@@ -50,6 +50,15 @@
             "displayName": "Build Release",
             "inherits": "build-base",
             "configurePreset": "release"
+        },
+        {
+            "name": "doc",
+            "displayName": "Build Documentation",
+            "description": "Gera a documentação do projeto",
+            "configurePreset": "debug",
+            "targets": [
+                "doc"
+            ]
         }
     ],
     "testPresets": [

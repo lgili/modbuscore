@@ -1,9 +1,7 @@
 {
     "files.associations": {
-        "string.h": "c",
-        "utils.h": "c",
-        "base.h": "c",
-        "transport.h": "c"
+        "compare": "cpp",
+        "cstdint": "c"
     },
     "cmake.useCMakePresets": "always",
     "cmake.options.statusBarVisibility": "visible",

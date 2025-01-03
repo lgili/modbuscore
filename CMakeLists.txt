@@ -24,3 +24,40 @@ include(CTest)
 
 # # add the tests
 add_subdirectory(tests)
+
+# Find required packages
+find_package(Doxygen REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+# Set Doxygen input and output directories
+set(DOXYGEN_INPUT "${CMAKE_SOURCE_DIR}/modbus/include" "${CMAKE_SOURCE_DIR}/modbus/src")
+set(DOXYGEN_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/doc/xml")
+set(DOXYGEN_CONFIG "${CMAKE_BINARY_DIR}/Doxyfile")
+
+# Configure the Doxyfile
+configure_file(${CMAKE_SOURCE_DIR}/Doxyfile.in ${DOXYGEN_CONFIG} @ONLY)
+
+# Add custom target to generate Doxygen documentation
+add_custom_target(doc_doxygen
+    COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_CONFIG}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating Doxygen XML documentation"
+    VERBATIM
+)
+
+# Add custom target to generate Sphinx documentation
+add_custom_target(doc_sphinx
+    COMMAND ${Python3_EXECUTABLE} -m sphinx -b html ${CMAKE_SOURCE_DIR}/doc/source ${CMAKE_SOURCE_DIR}/doc/build
+    DEPENDS doc_doxygen
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating Sphinx HTML documentation"
+    VERBATIM
+)
+
+# Add a main documentation target that depends on both Doxygen and Sphinx
+add_custom_target(doc
+    DEPENDS doc_sphinx
+    COMMENT "Generating full project documentation"
+)
+
+

@@ -1,0 +1,19 @@
+PROJECT_NAME           = "Modbus"
+OUTPUT_DIRECTORY       = doc
+INPUT                  = modbus/include modbus/src
+RECURSIVE              = YES
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_MAN           = NO
+GENERATE_RTF           = NO
+GENERATE_DOCBOOK       = NO
+
+# EXCLUDE                = */test/*
+
+# Define file patterns to include
+FILE_PATTERNS          = *.c *.h
+
+# Enable extraction of private members if needed
+EXTRACT_ALL            = YES

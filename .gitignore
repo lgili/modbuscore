@@ -2,3 +2,5 @@
 /external/
 
 /olds/
+doc/build
+doc/xml
