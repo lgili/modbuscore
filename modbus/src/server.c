@@ -372,6 +372,7 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
 
     /* Update reference time for RX */
     ctx->rx_reference_time = ctx->transport.get_reference_msec();
+    LOG(LOG_LEVEL_DEBUG, "RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
 
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {

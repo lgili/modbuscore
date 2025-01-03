@@ -16,7 +16,8 @@ include(${PROJECT_SOURCE_DIR}/cmake/SetEnv.cmake)
 add_subdirectory(${LIBRARY_FOLDER})
 
 # Library examples
-add_subdirectory(examples/)
+# Add the examples
+add_subdirectory(examples/win)
 # add_subdirectory(examples/win/client)
 
 # enable_testing()

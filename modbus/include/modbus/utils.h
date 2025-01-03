@@ -53,12 +53,68 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
+
 
 #ifdef __cplusplus
 extern "C"{
 #endif 
 
 #include <modbus/base.h>
+
+typedef enum {
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARNING,
+    LOG_LEVEL_ERROR
+} log_level_t;
+
+
+
+#ifndef DEBUG_MODE
+#include <string.h>
+    static inline const char* get_filename(const char* path) {
+        const char* filename = strrchr(path, '/');
+        if (!filename) {
+                filename = strrchr(path, '\\'); // Suporta separadores de diretório do Windows
+        }
+        return filename ? filename + 1 : path;
+    }
+    #define LOG(level, fmt, ...) \
+        do { \
+            if (level >= LOG_LEVEL_DEBUG) { \
+                fprintf(stderr, "[%s] %s:%d:%s(): " fmt "\n", \
+                        get_log_level_string(level), \
+                        get_filename(__FILE__), __LINE__, __func__, ##__VA_ARGS__); \
+            } \
+        } while (0)
+
+    static inline const char* get_log_level_string(log_level_t level) {
+        switch (level) {
+            case LOG_LEVEL_DEBUG: return "DEBUG";
+            case LOG_LEVEL_INFO: return "INFO";
+            case LOG_LEVEL_WARNING: return "WARNING";
+            case LOG_LEVEL_ERROR: return "ERROR";
+            default: return "UNKNOWN";
+        }
+    }
+    #define LOG_ARRAY(level, array, size, fmt, ...) \
+    do { \
+        if (level >= LOG_LEVEL_DEBUG) { \
+            fprintf(stderr, "[%s] %s:%d:%s(): " fmt "\n", \
+                    get_log_level_string(level), \
+                    get_filename(__FILE__), __LINE__, __func__, ##__VA_ARGS__); \
+            fprintf(stderr, "        Array contents: "); \
+            for (int i = 0; i < (size); i++) { \
+                fprintf(stderr, "%d%s", (array)[i], (i < (size) - 1) ? ", " : "\n"); \
+            } \
+        } \
+    } while (0)
+#else
+    // Quando DEBUG_MODE não está definido, a macro LOG não faz nada
+    #define LOG(level, fmt, ...) do { } while (0)
+    #define LOG_ARRAY(level, array, size, fmt, ...) do { } while (0)
+#endif
 
 /**
  * @def MODBUS_CONVERT_CHAR_INTERVAL_TO_MS

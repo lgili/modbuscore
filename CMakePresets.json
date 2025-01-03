@@ -21,7 +21,8 @@
             "description": "Sets debug build type and cortex arch",
             "inherits": "config-base",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_FLAGS_DEBUG": "-DDEBUG_MODE"
             }
         },
         {
@@ -59,6 +60,18 @@
             "targets": [
                 "doc"
             ]
+        },
+        {
+            "name": "ex_slave_uart",
+            "configurePreset": "debug",
+            "targets": ["slave_uart_example"],
+            "description": "Build Modbus Slave RTU UART Example"
+        },
+        {
+            "name": "ex_master_uart",
+            "configurePreset": "debug",
+            "targets": ["master_uart_example"],
+            "description": "Build Modbus Slave RTU UART Example"
         }
     ],
     "testPresets": [

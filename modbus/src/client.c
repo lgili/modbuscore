@@ -66,49 +66,6 @@ static bool guard_timeout(fsm_t *fsm);
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Modbus Master FSM state: Idle.
- *
- * This state represents the idle condition of the Modbus FSM, where it is waiting
- * for a new request to be sent.
- */
-const fsm_state_t modbus_client_state_idle = FSM_STATE("IDLE", MODBUS_CLIENT_STATE_IDLE, NULL, action_idle);
-
-/**
- * @brief Modbus Master FSM state: Sending Request.
- *
- * This state handles the transmission of a Modbus request to the slave device.
- */
-const fsm_state_t modbus_client_state_sending_request = FSM_STATE("SENDING_REQUEST", MODBUS_CLIENT_STATE_SENDING_REQUEST, NULL, NULL);
-
-/**
- * @brief Modbus Master FSM state: Waiting Response.
- *
- * This state represents the period where the Master is waiting for a response
- * from the slave device after sending a request.
- */
-const fsm_state_t modbus_client_state_waiting_response = FSM_STATE("WAITING_RESPONSE", MODBUS_CLIENT_STATE_WAITING_RESPONSE, NULL, NULL);
-
-/**
- * @brief Modbus Master FSM state: Processing Response.
- *
- * This state handles the processing of the received response from the slave device,
- * including parsing and validating the data.
- */
-const fsm_state_t modbus_client_state_processing_response = FSM_STATE("PROCESSING_RESPONSE", MODBUS_CLIENT_STATE_PROCESSING_RESPONSE, NULL, action_process_response);
-
-/**
- * @brief Modbus Master FSM state: Error.
- *
- * This state represents an error condition in the Modbus FSM. The FSM can recover
- * and transition back to the idle state when a new event occurs.
- */
-const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_STATE_ERROR, NULL, NULL);
-
-/* -------------------------------------------------------------------------- */
-/*                           FSM Transition Definitions                        */
-/* -------------------------------------------------------------------------- */
-
-/**
  * @brief Transition table for the Idle state.
  *
  * When the `MODBUS_CLIENT_EVENT_SEND_REQUEST` event is received, transition to
@@ -117,6 +74,14 @@ const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_S
 static const fsm_transition_t state_idle_transitions[] = {
     FSM_TRANSITION(MODBUS_CLIENT_EVENT_SEND_REQUEST, modbus_client_state_sending_request, action_send_request, NULL)
 };
+
+/**
+ * @brief Modbus Master FSM state: Idle.
+ *
+ * This state represents the idle condition of the Modbus FSM, where it is waiting
+ * for a new request to be sent.
+ */
+const fsm_state_t modbus_client_state_idle = FSM_STATE("IDLE", MODBUS_CLIENT_STATE_IDLE, state_idle_transitions, action_idle);
 
 /**
  * @brief Transition table for the Sending Request state.
@@ -129,6 +94,13 @@ static const fsm_transition_t state_sending_request_transitions[] = {
     FSM_TRANSITION(MODBUS_CLIENT_EVENT_TX_COMPLETE, modbus_client_state_waiting_response, action_wait_response, guard_tx_complete),
     FSM_TRANSITION(MODBUS_CLIENT_EVENT_ERROR_DETECTED, modbus_client_state_error, action_handle_error, NULL)
 };
+/**
+ * @brief Modbus Master FSM state: Sending Request.
+ *
+ * This state handles the transmission of a Modbus request to the slave device.
+ */
+const fsm_state_t modbus_client_state_sending_request = FSM_STATE("SENDING_REQUEST", MODBUS_CLIENT_STATE_SENDING_REQUEST, state_sending_request_transitions, NULL);
+
 
 /**
  * @brief Transition table for the Waiting Response state.
@@ -144,6 +116,14 @@ static const fsm_transition_t state_waiting_response_transitions[] = {
 };
 
 /**
+ * @brief Modbus Master FSM state: Waiting Response.
+ *
+ * This state represents the period where the Master is waiting for a response
+ * from the slave device after sending a request.
+ */
+const fsm_state_t modbus_client_state_waiting_response = FSM_STATE("WAITING_RESPONSE", MODBUS_CLIENT_STATE_WAITING_RESPONSE, state_waiting_response_transitions, NULL);
+
+/**
  * @brief Transition table for the Processing Response state.
  *
  * - On `MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR`, transition back to `IDLE`.
@@ -151,6 +131,13 @@ static const fsm_transition_t state_waiting_response_transitions[] = {
 static const fsm_transition_t state_processing_response_transitions[] = {
     FSM_TRANSITION(MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR, modbus_client_state_idle, NULL, NULL)
 };
+/**
+ * @brief Modbus Master FSM state: Processing Response.
+ *
+ * This state handles the processing of the received response from the slave device,
+ * including parsing and validating the data.
+ */
+const fsm_state_t modbus_client_state_processing_response = FSM_STATE("PROCESSING_RESPONSE", MODBUS_CLIENT_STATE_PROCESSING_RESPONSE, state_processing_response_transitions, action_process_response);
 
 /**
  * @brief Transition table for the Error state.
@@ -160,6 +147,13 @@ static const fsm_transition_t state_processing_response_transitions[] = {
 static const fsm_transition_t state_error_transitions[] = {
     FSM_TRANSITION(MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR, modbus_client_state_idle, NULL, NULL)
 };
+/**
+ * @brief Modbus Master FSM state: Error.
+ *
+ * This state represents an error condition in the Modbus FSM. The FSM can recover
+ * and transition back to the idle state when a new event occurs.
+ */
+const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_STATE_ERROR, state_error_transitions, NULL);
 
 /* -------------------------------------------------------------------------- */
 /*                           FSM State Initialization                           */
@@ -170,14 +164,14 @@ static const fsm_transition_t state_error_transitions[] = {
  *
  * This function sets up the FSM by defining states and their associated transitions.
  */
-static void initialize_fsm_states(void) {
-    /* Define transitions for each state */
-    fsm_state_set_transitions(&modbus_client_state_idle, state_idle_transitions, sizeof(state_idle_transitions) / sizeof(fsm_transition_t));
-    fsm_state_set_transitions(&modbus_client_state_sending_request, state_sending_request_transitions, sizeof(state_sending_request_transitions) / sizeof(fsm_transition_t));
-    fsm_state_set_transitions(&modbus_client_state_waiting_response, state_waiting_response_transitions, sizeof(state_waiting_response_transitions) / sizeof(fsm_transition_t));
-    fsm_state_set_transitions(&modbus_client_state_processing_response, state_processing_response_transitions, sizeof(state_processing_response_transitions) / sizeof(fsm_transition_t));
-    fsm_state_set_transitions(&modbus_client_state_error, state_error_transitions, sizeof(state_error_transitions) / sizeof(fsm_transition_t));
-}
+// static void initialize_fsm_states(void) {
+//     /* Define transitions for each state */
+//     fsm_state_set_transitions(&modbus_client_state_idle, state_idle_transitions, sizeof(state_idle_transitions) / sizeof(fsm_transition_t));
+//     fsm_state_set_transitions(&modbus_client_state_sending_request, state_sending_request_transitions, sizeof(state_sending_request_transitions) / sizeof(fsm_transition_t));
+//     fsm_state_set_transitions(&modbus_client_state_waiting_response, state_waiting_response_transitions, sizeof(state_waiting_response_transitions) / sizeof(fsm_transition_t));
+//     fsm_state_set_transitions(&modbus_client_state_processing_response, state_processing_response_transitions, sizeof(state_processing_response_transitions) / sizeof(fsm_transition_t));
+//     fsm_state_set_transitions(&modbus_client_state_error, state_error_transitions, sizeof(state_error_transitions) / sizeof(fsm_transition_t));
+// }
 
 /* -------------------------------------------------------------------------- */
 /*                           Public API Functions                               */
@@ -250,7 +244,6 @@ modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t
     g_client.timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
 
     /* Initialize FSM */
-    initialize_fsm_states();
     fsm_init(&g_client.fsm, &modbus_client_state_idle, &g_client);
     modbus->role = MODBUS_ROLE_CLIENT;
 
@@ -366,6 +359,9 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
 
+    /* Update reference time for RX */
+    ctx->rx_reference_time = ctx->transport.get_reference_msec();
+    LOG(LOG_LEVEL_DEBUG, "RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
         ctx->rx_buffer[ctx->rx_count++] = data;
@@ -374,6 +370,8 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
         fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
         return;
     }
+
+    fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_RESPONSE_COMPLETE);
 
     /* 
      * Here, you can implement logic to determine if a complete frame has been received.
@@ -528,6 +526,7 @@ static void action_send_request(fsm_t *fsm) {
 static void action_wait_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
+    LOG(LOG_LEVEL_DEBUG, "action_wait_response");
 
     /* Mark reference time for timeout */
     client->request_time_ref = ctx->transport.get_reference_msec();
@@ -545,6 +544,7 @@ static void action_wait_response(fsm_t *fsm) {
 static void action_process_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
+    LOG(LOG_LEVEL_DEBUG, "action_process_response");
 
     /* Parse the received frame */
     uint8_t address, function;
@@ -643,6 +643,7 @@ static bool guard_tx_complete(fsm_t *fsm) {
     /* Assuming transmission is synchronous and completes immediately */
     /* If transmission is asynchronous, implement appropriate checks */
     (void)fsm;
+    LOG(LOG_LEVEL_DEBUG, "guard_tx_complete");
     return true;
 }
 
@@ -658,6 +659,7 @@ static bool guard_tx_complete(fsm_t *fsm) {
 static bool guard_response_complete(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
+    LOG(LOG_LEVEL_DEBUG, "guard_response_complete");
 
     /* Verify CRC and minimum size */
     if (ctx->rx_count < 4) {

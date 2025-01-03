@@ -251,6 +251,7 @@ modbus_error_t modbus_send_frame(modbus_context_t *ctx, const uint8_t *frame, ui
         return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
+    LOG_ARRAY(LOG_LEVEL_DEBUG, frame, frame_len, "Sending this dato to uart:");
     int32_t written = ctx->transport.write(frame, frame_len);
     if (written < 0) {
         return MODBUS_ERROR_TRANSPORT; // Transport layer error

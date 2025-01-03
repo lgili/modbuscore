@@ -1,7 +1,10 @@
 {
     "files.associations": {
         "compare": "cpp",
-        "cstdint": "c"
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "span": "c"
     },
     "cmake.useCMakePresets": "always",
     "cmake.options.statusBarVisibility": "visible",

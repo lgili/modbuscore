@@ -4,3 +4,4 @@
 /olds/
 doc/build
 doc/xml
+*.ini
