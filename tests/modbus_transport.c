@@ -143,6 +143,14 @@ static uint8_t mock_parse_bootloader_request(uint8_t *buffer, uint16_t *buffer_s
     return 0;
 }
 
+/* Public mock helpers ----------------------------------------------------- */
+int mock_inject_rx_data(const uint8_t *data, uint16_t length);
+uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
+void mock_clear_tx_buffer(void);
+void mock_advance_time(uint16_t ms);
+void modbus_transport_init_mock(modbus_transport_t *transport);
+uint16_t get_current_time_ms(void);
+
 /* 
  * Public Functions to Control the Mock 
  * ------------------------------------
@@ -220,4 +228,8 @@ void modbus_transport_init_mock(modbus_transport_t *transport) {
     rx_mock_index = 0;
     tx_mock_count = 0;
     mock_time_reference = 0;
+}
+
+uint16_t get_current_time_ms(void) {
+    return mock_time_reference;
 }

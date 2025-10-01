@@ -1,64 +1,144 @@
-cmake_minimum_required(VERSION 3.10...3.13)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -Wswitch-enum -Wcast-qual -Woverflow -Wunused-parameter")
-set(CMAKE_CPP_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic -Wswitch-enum -Wcast-qual -Woverflow -Wunused-parameter")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3 -g0")
+project(Modbus VERSION 1.2.3 LANGUAGES C CXX)
 
-# Set project name and version
-project(Modbus VERSION 1.2.3)
+# ---------------------------------------------------------------------------
+# Build configuration knobs (Gate 0 deliverables)
+# ---------------------------------------------------------------------------
+option(MODBUS_FORCE_C99 "Force building the library with C99 instead of C11." OFF)
+option(MODBUS_STRICT_WARNINGS "Treat compiler warnings as errors." ON)
+option(MODBUS_ENABLE_TESTS "Build Modbus unit/integration test targets." ON)
+option(MODBUS_ENABLE_INTEGRATION_TESTS "Build extended integration-style tests." OFF)
+option(MODBUS_BUILD_EXAMPLES "Build example applications." OFF)
+option(MODBUS_BUILD_DOCS "Build API/reference documentation targets." OFF)
+option(MODBUS_ENABLE_ASAN "Enable AddressSanitizer when supported." OFF)
+option(MODBUS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer when supported." OFF)
+option(MODBUS_PEDANTIC_WARNINGS "Add -Wconversion/-Wsign-conversion diagnostics." OFF)
 
-# Set environment variables
+if(MODBUS_FORCE_C99)
+    set(CMAKE_C_STANDARD 99)
+else()
+    set(CMAKE_C_STANDARD 11)
+endif()
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# Propagate warning configuration
+if(MSVC)
+    set(MODBUS_WARN_FLAGS /W4 /permissive-)
+    if(MODBUS_STRICT_WARNINGS)
+        list(APPEND MODBUS_WARN_FLAGS /WX)
+    endif()
+else()
+    set(MODBUS_WARN_FLAGS
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wshadow
+        -Wswitch-enum
+        -Wcast-qual
+        -Wstrict-prototypes
+        -Wmissing-prototypes
+    -Wformat
+    -Wformat-security
+        -Wundef
+    )
+    if(MODBUS_PEDANTIC_WARNINGS)
+        list(APPEND MODBUS_WARN_FLAGS -Wconversion -Wsign-conversion)
+    endif()
+    if(MODBUS_STRICT_WARNINGS)
+        list(APPEND MODBUS_WARN_FLAGS -Werror)
+    endif()
+endif()
+
+set(MODBUS_SANITIZERS)
+if(NOT MSVC)
+    if(MODBUS_ENABLE_ASAN)
+        list(APPEND MODBUS_SANITIZERS address)
+    endif()
+    if(MODBUS_ENABLE_UBSAN)
+        list(APPEND MODBUS_SANITIZERS undefined)
+    endif()
+    if(MODBUS_SANITIZERS)
+        string(JOIN "," MODBUS_SANITIZER_FLAGS ${MODBUS_SANITIZERS})
+        add_compile_options(-fsanitize=${MODBUS_SANITIZER_FLAGS})
+        add_link_options(-fsanitize=${MODBUS_SANITIZER_FLAGS})
+    endif()
+endif()
+
+# Make warnings available to subdirectories
+set(MODBUS_WARN_FLAGS ${MODBUS_WARN_FLAGS} CACHE INTERNAL "Compiler warnings for Modbus targets")
+
+# ---------------------------------------------------------------------------
+# Project environment and layout
+# ---------------------------------------------------------------------------
 include(${PROJECT_SOURCE_DIR}/cmake/SetEnv.cmake)
 
-# Library sources
+# ---------------------------------------------------------------------------
+# Core library
+# ---------------------------------------------------------------------------
 add_subdirectory(${LIBRARY_FOLDER})
 
-# Library examples
-# Add the examples
-add_subdirectory(examples/win)
-# add_subdirectory(examples/win/client)
+# ---------------------------------------------------------------------------
+# Examples
+# ---------------------------------------------------------------------------
+if(MODBUS_BUILD_EXAMPLES)
+    if(WIN32)
+        add_subdirectory(examples/win)
+    else()
+        message(WARNING "Examples are currently only available for Windows builds.")
+    endif()
+endif()
 
-# enable_testing()
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 include(CTest)
+if(MODBUS_ENABLE_TESTS)
+    set(BUILD_TESTING ON CACHE BOOL "Enable CTest targets" FORCE)
+    add_subdirectory(tests)
+else()
+    set(BUILD_TESTING OFF CACHE BOOL "Enable CTest targets" FORCE)
+endif()
 
-# # add the tests
-add_subdirectory(tests)
+# ---------------------------------------------------------------------------
+# Documentation (opt-in)
+# ---------------------------------------------------------------------------
+if(MODBUS_BUILD_DOCS)
+    find_package(Doxygen REQUIRED)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-# Find required packages
-find_package(Doxygen REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(DOXYGEN_INPUT "${CMAKE_SOURCE_DIR}/modbus/include" "${CMAKE_SOURCE_DIR}/modbus/src")
+    set(DOXYGEN_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/doc/xml")
+    set(DOXYGEN_CONFIG "${CMAKE_BINARY_DIR}/Doxyfile")
 
-# Set Doxygen input and output directories
-set(DOXYGEN_INPUT "${CMAKE_SOURCE_DIR}/modbus/include" "${CMAKE_SOURCE_DIR}/modbus/src")
-set(DOXYGEN_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/doc/xml")
-set(DOXYGEN_CONFIG "${CMAKE_BINARY_DIR}/Doxyfile")
+    configure_file(${CMAKE_SOURCE_DIR}/Doxyfile.in ${DOXYGEN_CONFIG} @ONLY)
 
-# Configure the Doxyfile
-configure_file(${CMAKE_SOURCE_DIR}/Doxyfile.in ${DOXYGEN_CONFIG} @ONLY)
+    add_custom_target(doc_doxygen
+        COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_CONFIG}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating Doxygen XML documentation"
+        VERBATIM
+    )
 
-# Add custom target to generate Doxygen documentation
-add_custom_target(doc_doxygen
-    COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_CONFIG}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Generating Doxygen XML documentation"
-    VERBATIM
-)
+    add_custom_target(doc_sphinx
+        COMMAND ${Python3_EXECUTABLE} -m sphinx -b html ${CMAKE_SOURCE_DIR}/doc/source ${CMAKE_SOURCE_DIR}/doc/build
+        DEPENDS doc_doxygen
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating Sphinx HTML documentation"
+        VERBATIM
+    )
 
-# Add custom target to generate Sphinx documentation
-add_custom_target(doc_sphinx
-    COMMAND ${Python3_EXECUTABLE} -m sphinx -b html ${CMAKE_SOURCE_DIR}/doc/source ${CMAKE_SOURCE_DIR}/doc/build
-    DEPENDS doc_doxygen
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Generating Sphinx HTML documentation"
-    VERBATIM
-)
-
-# Add a main documentation target that depends on both Doxygen and Sphinx
-add_custom_target(doc
-    DEPENDS doc_sphinx
-    COMMENT "Generating full project documentation"
-)
+    add_custom_target(doc
+        DEPENDS doc_sphinx
+        COMMENT "Generating full project documentation"
+    )
+endif()
 
 

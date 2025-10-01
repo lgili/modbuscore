@@ -1,11 +1,64 @@
 {
     "version": 8,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20,
+        "patch": 0
+    },
     "configurePresets": [
         {
-            "name": "config-base",
+            "name": "host-base",
+            "hidden": true,
+            "displayName": "Host (native)",
+            "description": "Default host toolchain (requires Ninja).",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/${presetName}",
+                "MODBUS_ENABLE_TESTS": "ON"
+            }
+        },
+        {
+            "name": "host-debug",
+            "displayName": "Host Debug",
+            "description": "Debug build with tests enabled",
+            "inherits": "host-base"
+        },
+        {
+            "name": "host-release",
+            "displayName": "Host Release",
+            "description": "Optimised build without tests",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_ENABLE_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "host-asan",
+            "displayName": "Host ASan/UBSan",
+            "description": "Debug build with sanitizers",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_ASAN": "ON",
+                "MODBUS_ENABLE_UBSAN": "ON"
+            }
+        },
+        {
+            "name": "host-docs",
+            "displayName": "Host Documentation",
+            "description": "Debug build with documentation enabled",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_BUILD_DOCS": "ON"
+            }
+        },
+        {
+            "name": "mingw-base",
             "hidden": true,
             "displayName": "GCC 13.2.0 x86_64-w64-mingw32 (ucrt64)",
-            "description": "Using compilers: C = C:\\msys64\\ucrt64\\bin\\gcc.exe, CXX = C:\\msys64\\ucrt64\\bin\\g++.exe",
+            "description": "MinGW/ucrt64 toolchain",
             "generator": "MinGW Makefiles",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
@@ -13,74 +66,65 @@
                 "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
                 "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
                 "CMAKE_MAKE_PROGRAM": "C:/msys64/ucrt64/bin/mingw32-make.exe",
-                "CMAKE_BUILD_TYPE": "Debug"
+                "MODBUS_ENABLE_TESTS": "ON"
             }
         },
         {
-            "name": "debug",
-            "displayName": "Config Debug",
-            "description": "Sets debug build type and cortex arch",
-            "inherits": "config-base",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_FLAGS_DEBUG": "-DDEBUG_MODE"
-            }
+            "name": "mingw-debug",
+            "displayName": "MinGW Debug",
+            "inherits": "mingw-base"
         },
         {
-            "name": "release",
-            "displayName": "Config Release",
-            "description": "Sets release build type",
-            "inherits": "debug",
+            "name": "mingw-release",
+            "displayName": "MinGW Release",
+            "inherits": "mingw-base",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_ENABLE_TESTS": "OFF"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "build-base",
-            "hidden": true,
-            "configurePreset": "debug"
+            "name": "host-debug",
+            "displayName": "Build Host Debug",
+            "configurePreset": "host-debug"
         },
         {
-            "name": "debug",
-            "displayName": "Build Debug",
-            "inherits": "build-base"
+            "name": "host-release",
+            "displayName": "Build Host Release",
+            "configurePreset": "host-release"
         },
         {
-            "name": "release",
-            "displayName": "Build Release",
-            "inherits": "build-base",
-            "configurePreset": "release"
+            "name": "host-asan",
+            "displayName": "Build Host Sanitizers",
+            "configurePreset": "host-asan"
         },
         {
-            "name": "doc",
-            "displayName": "Build Documentation",
-            "description": "Gera a documentação do projeto",
-            "configurePreset": "debug",
+            "name": "mingw-debug",
+            "displayName": "Build MinGW Debug",
+            "configurePreset": "mingw-debug"
+        },
+        {
+            "name": "mingw-release",
+            "displayName": "Build MinGW Release",
+            "configurePreset": "mingw-release"
+        },
+        {
+            "name": "docs",
+            "displayName": "Generate Documentation",
+            "description": "Build Doxygen + Sphinx output",
+            "configurePreset": "host-docs",
             "targets": [
                 "doc"
             ]
-        },
-        {
-            "name": "ex_slave_uart",
-            "configurePreset": "debug",
-            "targets": ["slave_uart_example"],
-            "description": "Build Modbus Slave RTU UART Example"
-        },
-        {
-            "name": "ex_master_uart",
-            "configurePreset": "debug",
-            "targets": ["master_uart_example"],
-            "description": "Build Modbus Slave RTU UART Example"
         }
     ],
     "testPresets": [
         {
-            "name": "fsm",
-            "description": "",
-            "displayName": "",
-            "configurePreset": "debug"
+            "name": "all",
+            "displayName": "Run ctest",
+            "configurePreset": "host-debug"
         }
     ]
 }

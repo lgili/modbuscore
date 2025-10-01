@@ -44,14 +44,17 @@ static int16_t test_reg_array[3]; // RW array
 
 class ModbusServerTest : public ::testing::Test {
 protected:
+    uint16_t device_addr_{};
+    uint16_t baud_{};
+
     void SetUp() override {
         modbus_transport_init_mock(&mock_transport);
         memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
 
-        uint16_t device_addr = 10;
-        uint16_t baud = 19200;
+        device_addr_ = 10;
+        baud_ = 19200;
 
-        modbus_error_t err = modbus_server_create(&g_modbus_ctx, &mock_transport, &device_addr, &baud);
+        modbus_error_t err = modbus_server_create(&g_modbus_ctx, &mock_transport, &device_addr_, &baud_);
         ASSERT_EQ(err, MODBUS_ERROR_NONE);
 
 
@@ -84,7 +87,7 @@ protected:
     }
 
     void pollServer(unsigned times=1) {
-        for (unsigned i=0; i<times; i++) {
+        for (unsigned iteration = 0; iteration < times; ++iteration) {
             mock_advance_time(50);
             modbus_server_data_t *server = (modbus_server_data_t *)g_modbus_ctx.user_data;
             uint8_t data[64];
@@ -93,9 +96,9 @@ protected:
             if(server->fsm.current_state->id == MODBUS_SERVER_STATE_IDLE || server->fsm.current_state->id == MODBUS_SERVER_STATE_RECEIVING) {
                 uint8_t size_read = server->ctx->transport.read(data, 64); // read max size
                 if(size_read > 0) {
-                    for (size_t i = 0; i < size_read; i++)
+                    for (uint8_t idx = 0; idx < size_read; ++idx)
                     {
-                        modbus_server_receive_data_from_uart_event(&server->fsm, data[i]);
+                        modbus_server_receive_data_from_uart_event(&server->fsm, data[idx]);
                         mock_advance_time(5);
                     }
                     
@@ -121,12 +124,12 @@ TEST_F(ModbusServerTest, ValidReadRequest) {
     // Check response: should return 2 bytes of data: test_reg_100=0x1234
     uint8_t resp[20];
     uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_GT(resp_len, 0);
+    ASSERT_GT(resp_len, 0);
 
     // Parse response to verify correctness
     uint8_t address, function;
     const uint8_t *payload;
-    uint16_t payload_len;
+    uint16_t payload_len = 0;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
     EXPECT_EQ(err, MODBUS_ERROR_NONE);
     EXPECT_EQ(address, 10);
@@ -151,11 +154,11 @@ TEST_F(ModbusServerTest, WriteSingleRegisterRW) {
     // Check response: should echo the same address and value
     uint8_t resp[20];
     uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_GT(resp_len, 0);
+    ASSERT_GT(resp_len, 0);
 
     uint8_t address, function;
     const uint8_t *payload;
-    uint16_t payload_len;
+    uint16_t payload_len = 0;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
     EXPECT_EQ(err, MODBUS_ERROR_NONE);
     EXPECT_EQ(address, 10);
@@ -185,7 +188,7 @@ TEST_F(ModbusServerTest, WriteSingleRegisterRO) {
 
     uint8_t address, function;
     const uint8_t *payload;
-    uint16_t payload_len;
+    uint16_t payload_len = 0;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
     EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
     EXPECT_EQ(address, 10);
@@ -252,7 +255,7 @@ TEST_F(ModbusServerTest, InvalidAddressException) {
 
     uint8_t address, function;
     const uint8_t *payload;
-    uint16_t payload_len;
+    uint16_t payload_len = 0;
     modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
     EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
     EXPECT_EQ(address, 10);

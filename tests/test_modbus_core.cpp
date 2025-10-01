@@ -107,12 +107,10 @@ TEST_F(ModbusCoreTest, ReceiveFrame) {
     // Inject a valid frame into RX and try to receive it
     uint8_t frame[] = {0x01, 0x03, 0x00, 0x0A, 0xC5, 0xCD};
     mock_inject_rx_data(frame, 6);
-    printf("teste\n");
 
     uint8_t out_buf[20];
     uint16_t out_len = 0;
     modbus_error_t err = modbus_receive_frame(&ctx, out_buf, (uint16_t)sizeof(out_buf), &out_len);
-    printf("[MOCKED FUNCTION] modbus_receive_frame %d \n", out_len);
     // Depending on the receive_frame logic, it might block or require multiple calls
     // For simplicity, assume it returns after reading all data.
     EXPECT_EQ(err, MODBUS_ERROR_NONE);
@@ -130,13 +128,17 @@ TEST_F(ModbusCoreTest, ExceptionToError) {
 
 TEST_F(ModbusCoreTest, ResetBuffers) {
     ctx.rx_count = 10;
-    ctx.tx_count = 5;
+    ctx.tx_index = 5;
+    ctx.tx_raw_index = 3;
     ctx.rx_buffer[0] = 0x55;
     ctx.tx_buffer[0] = 0xAA;
+    ctx.tx_raw_buffer[0] = 0xCC;
     modbus_reset_buffers(&ctx);
     EXPECT_EQ(ctx.rx_count, 0);
-    EXPECT_EQ(ctx.tx_count, 0);
+    EXPECT_EQ(ctx.tx_index, 0);
+    EXPECT_EQ(ctx.tx_raw_index, 0);
     EXPECT_EQ(ctx.rx_buffer[0], 0x00);
     EXPECT_EQ(ctx.tx_buffer[0], 0x00);
+    EXPECT_EQ(ctx.tx_raw_buffer[0], 0x00);
 }
 

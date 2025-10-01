@@ -166,8 +166,9 @@
 
 // test_modbus_master.cpp
 
-#include <modbus/modbus.h> 
+#include <modbus/modbus.h>
 #include "gtest/gtest.h"
+#include <vector>
 
 #ifdef __cplusplus
 extern "C"{
@@ -201,7 +202,7 @@ protected:
 
     // Poll the master and handle incoming data
     void pollMaster(unsigned times=1) {
-        for (unsigned i=0; i<times; i++) {
+        for (unsigned iteration = 0; iteration < times; ++iteration) {
             mock_advance_time(50); // Simulate time passing
 
             modbus_client_data_t *client = (modbus_client_data_t *)g_modbus_ctx.user_data;
@@ -211,8 +212,8 @@ protected:
                 // Read data from mock transport's rx buffer
                 uint8_t size_read = client->ctx->transport.read(data, 64); // Adjust based on your mock_transport
                 if(size_read > 0) {
-                    for (size_t i = 0; i < size_read; i++) {
-                        modbus_client_receive_data_event(&client->fsm, data[i]);
+                    for (uint8_t idx = 0; idx < size_read; ++idx) {
+                        modbus_client_receive_data_event(&client->fsm, data[idx]);
                         mock_advance_time(5);
                     }
                 }
@@ -243,26 +244,29 @@ protected:
             uint16_t quantity = (tx_buf[4] << 8) | tx_buf[5];
 
             // Generate response: byte_count + data + CRC
-            uint8_t resp_payload[1 + 2 * quantity];
-            resp_payload[0] = 2 * quantity; // byte_count
-            for(int i=0; i < quantity; i++) {
+            std::vector<uint8_t> resp_payload(1U + 2U * quantity);
+            resp_payload[0] = static_cast<uint8_t>(2U * quantity); // byte_count
+            for(uint16_t idx = 0; idx < quantity; ++idx) {
                 // For testing, set register value to (start_addr + i) * 0x100 + i
                 // e.g., start_addr=0x0000, i=0: 0x0000, i=1: 0x0101
-                uint16_t reg_val = (start_addr + i) * 0x100 + i;
-                resp_payload[1 + 2*i] = (reg_val >> 8) & 0xFF; // high byte
-                resp_payload[1 + 2*i + 1] = reg_val & 0xFF;    // low byte
+                uint16_t reg_val = (uint16_t)(((uint32_t)start_addr + idx) * 0x100U + idx);
+                resp_payload[1U + 2U * idx] = (uint8_t)((reg_val >> 8) & 0xFFU); // high byte
+                resp_payload[1U + 2U * idx + 1U] = (uint8_t)(reg_val & 0xFFU);    // low byte
             }
 
             uint8_t resp_frame[256];
-            uint16_t resp_len = modbus_build_rtu_frame(slave_address, function, resp_payload, 1 + 2 * quantity, resp_frame, sizeof(resp_frame));
+            uint16_t resp_len = modbus_build_rtu_frame(
+                slave_address,
+                function,
+                resp_payload.data(),
+                (uint16_t)resp_payload.size(),
+                resp_frame,
+                sizeof(resp_frame));
             if(resp_len > 0) {
                 mock_inject_rx_data(resp_frame, resp_len);
             }
 
         } else if(function == 0x06) { // Write Single Register
-            uint16_t reg_addr = (tx_buf[2] << 8) | tx_buf[3];
-            uint16_t reg_val = (tx_buf[4] << 8) | tx_buf[5];
-
             // For simplicity, echo back the same frame as response
             uint8_t resp_frame[256];
             uint16_t resp_len = modbus_build_rtu_frame(slave_address, function, &tx_buf[2], 4, resp_frame, sizeof(resp_frame));

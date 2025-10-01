@@ -91,24 +91,22 @@ static const fsm_transition_t idle_transitions[] = {
     FSM_TRANSITION(TEST_EVENT_START, state_running, action_start, NULL),
     FSM_TRANSITION(TEST_EVENT_ERROR, state_error, action_error_state, NULL)
 };
-const fsm_state_t state_idle = FSM_STATE("IDLE", TEST_STATE_IDLE, idle_transitions, default_action);
+const fsm_state_t state_idle = FSM_STATE("IDLE", TEST_STATE_IDLE, idle_transitions, default_action, 0);
 
 static const fsm_transition_t running_transitions[] = {
     FSM_TRANSITION(TEST_EVENT_NEXT, state_running, action_next, NULL),
     FSM_TRANSITION(TEST_EVENT_DENY, state_running, action_next, guard_deny),
     FSM_TRANSITION(TEST_EVENT_ERROR, state_error, action_error_state, NULL)
 };
-const fsm_state_t state_running = FSM_STATE("RUNNING", TEST_STATE_RUNNING, running_transitions, default_action);
+const fsm_state_t state_running = FSM_STATE("RUNNING", TEST_STATE_RUNNING, running_transitions, default_action, 0);
 
-static const fsm_transition_t error_transitions[] = {
-    // No transitions back, just an error state
-};
 const fsm_state_t state_error = {
     "ERROR",
     TEST_STATE_ERROR_STATE,
-    error_transitions,
+    nullptr,
     0,
-    default_action
+    default_action,
+    0
 };
 
 // Test Fixture

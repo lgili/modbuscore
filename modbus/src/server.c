@@ -390,20 +390,20 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
 
+    /* Update reference time for RX on every byte to track inter-character timing */
+    ctx->rx_reference_time = ctx->transport.get_reference_msec();
+
+    /* Store received byte in RX buffer */
+    if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
+        ctx->rx_buffer[ctx->rx_count++] = data;
+    } else {
+        /* Buffer overflow detected */
+        server->msg.error = MODBUS_ERROR_INVALID_REQUEST;
+        fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
+        return;
+    }
+
     if (fsm->current_state->id == MODBUS_SERVER_STATE_IDLE) {
-        /* Update reference time for RX */
-        ctx->rx_reference_time = ctx->transport.get_reference_msec();
-
-        /* Store received byte in RX buffer */
-        if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
-            ctx->rx_buffer[ctx->rx_count++] = data;
-        } else {
-            /* Buffer overflow detected */
-            server->msg.error = MODBUS_ERROR_INVALID_REQUEST;
-            fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-            return;
-        }
-
         fsm_handle_event(fsm, MODBUS_EVENT_RX_BYTE_RECEIVED);
     }
 }
@@ -649,7 +649,7 @@ static void modbus_restart(fsm_t *fsm, bool hard)
 /* -------------------------------------------------------------------------- */
 /*                           FSM Action Implementations                       */
 /* -------------------------------------------------------------------------- */
-void print_buffer(fsm_t *fsm) {
+static void print_buffer(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
     if(ctx->rx_count > 0) {
@@ -707,7 +707,9 @@ static void action_idle(fsm_t *fsm) {
  * @param[in,out] fsm Pointer to the FSM instance.
  */
 static void action_start_receiving(fsm_t *fsm) {
-    fsm_handle_event(fsm, MODBUS_EVENT_PARSE_ADDRESS);
+    if (full_cycle) {
+        fsm_handle_event(fsm, MODBUS_EVENT_PARSE_ADDRESS);
+    }
     full_cycle = false;
     LOG_TRACE("--> action_start_receiving  <--");
     print_buffer(fsm);
@@ -971,8 +973,6 @@ static void action_calculate_crc_response(fsm_t *fsm) {
  * @param[in,out] fsm Pointer to the FSM instance.
  */
 static void action_send_response(fsm_t *fsm) {
-    modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
-    modbus_context_t *ctx = server->ctx;
     LOG_TRACE("--> action_send_response  <--");
 
     
@@ -1058,6 +1058,7 @@ static bool guard_receive_finished(fsm_t *fsm) {
 
     uint16_t rx_position_length_time;
     rx_position_length_time = ctx->transport.measure_time_msec(ctx->rx_reference_time);
+    LOG_TRACE("RX count=%d elapsed=%d", ctx->rx_count, rx_position_length_time);
     if (rx_position_length_time >= MODBUS_CONVERT_CHAR_INTERVAL_TO_MS(3.5, *server->device_info.baudrate)) {
         if (ctx->rx_count >= 1U && ctx->rx_count <= 3U) {
             fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
@@ -1121,11 +1122,9 @@ static modbus_error_t parse_request(modbus_server_data_t *server) {
     uint16_t *idx = &ctx->rx_index;
     const uint8_t *buffer = ctx->rx_buffer;
     uint16_t size = ctx->rx_count;
-    printf("function %d", server->msg.function_code);
     switch (server->msg.function_code) {
         case MODBUS_FUNC_READ_INPUT_REGISTERS:
         case MODBUS_FUNC_READ_HOLDING_REGISTERS:
-            printf("parse_read_holding_registers\n");
             return parse_read_holding_registers(server, buffer, idx, size);
         case MODBUS_FUNC_WRITE_SINGLE_REGISTER:
             return parse_write_single_register(server, buffer, idx, size);

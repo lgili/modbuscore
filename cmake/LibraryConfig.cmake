@@ -3,15 +3,22 @@ add_library(${LIBRARY_NAME}
   ${SOURCES}
   ${HEADERS_PUBLIC}
   ${HEADERS_PRIVATE}
-  )
+)
 
 
 # Alias:
 #   - Foo::foo alias of foo
 add_library(${PROJECT_NAME}::${LIBRARY_NAME} ALIAS ${LIBRARY_NAME})
 
-# C++11
-target_compile_features(${LIBRARY_NAME} PUBLIC cxx_std_11)
+if(MODBUS_FORCE_C99)
+  target_compile_features(${LIBRARY_NAME} PUBLIC c_std_99)
+else()
+  target_compile_features(${LIBRARY_NAME} PUBLIC c_std_11)
+endif()
+
+if(MODBUS_WARN_FLAGS)
+  target_compile_options(${LIBRARY_NAME} PRIVATE ${MODBUS_WARN_FLAGS})
+endif()
 
 # Add definitions for targets
 # Values:

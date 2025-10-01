@@ -55,7 +55,7 @@ static char s_message[LOG_MAX_MESSAGE_LENGTH];
 // =============================================================================
 // user-visible code
 
-void log_init() {
+void log_init(void) {
   memset(s_subscribers, 0, sizeof(s_subscribers));
 }
 

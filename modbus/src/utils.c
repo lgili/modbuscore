@@ -149,9 +149,11 @@ bool modbus_read_uint16(const uint8_t *buffer, uint16_t *index, uint16_t buffer_
     if ((*index + 1U) >= buffer_size) {
         return false; // Not enough data to read
     }
-    uint8_t data_high = buffer[(*index)++];
-    uint8_t data_low  = buffer[(*index)++];
-    *value = ((uint16_t)data_high << 8U) | (uint16_t)data_low;
+    const uint8_t data_high = buffer[(*index)++];
+    const uint8_t data_low  = buffer[(*index)++];
+    const uint16_t high_word = (uint16_t)((uint16_t)data_high << 8U);
+    const uint16_t low_word = (uint16_t)data_low;
+    *value = (uint16_t)(high_word | low_word);
     return true;
 }
 

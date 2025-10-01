@@ -204,17 +204,18 @@ void fsm_run(fsm_t *fsm) {
     for (uint8_t i = 0; i < num_transitions; i++) {
         const fsm_transition_t *transition = &transitions[i];
         if (transition->event == event) {
-            // Check guard condition
-            if (transition->guard == NULL || transition->guard(fsm)) {
-                // Execute action if defined
+            bool guard_passed = (transition->guard == NULL) || transition->guard(fsm);
+            if (guard_passed) {
                 if (transition->action) {
                     transition->action(fsm);
                 }
-                // Transition to next state
                 fsm->current_state = transition->next_state;
                 fsm->state_entry_time = get_current_time_ms();
+                event_processed = true;
+            } else {
+                /* Guard rejected transition, requeue event for future evaluation */
+                fsm_handle_event(fsm, event);
             }
-            event_processed = true;
             break;
         }
     }

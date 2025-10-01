@@ -192,7 +192,9 @@ modbus_error_t modbus_parse_rtu_frame(const uint8_t *frame, uint16_t frame_lengt
 
     /* Extract and verify CRC */
     uint16_t calc_crc = modbus_crc_with_table(frame, frame_length - 2U);
-    uint16_t recv_crc = ((uint16_t)frame[frame_length - 1U] << 8U) | (uint16_t)frame[frame_length - 2U];
+    const uint16_t crc_high = (uint16_t)((uint16_t)frame[frame_length - 1U] << 8U);
+    const uint16_t crc_low = (uint16_t)frame[frame_length - 2U];
+    const uint16_t recv_crc = (uint16_t)(crc_high | crc_low);
 
     if (calc_crc != recv_crc) {
         return MODBUS_ERROR_CRC; // CRC mismatch
@@ -323,10 +325,10 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
         bytes_read += (uint16_t)r;
 
         /* Check if enough data has been read to determine frame length */
-        if (bytes_read >= 4U) {
+        uint16_t expected_length = 0U;
+        if (bytes_read >= 3U) {
             /* Extract expected frame length based on function code and data */
             uint8_t function_code = out_buffer[1];
-            uint16_t expected_length = 0U;
 
             switch (function_code) {
                 case MODBUS_FUNC_READ_COILS:
@@ -334,9 +336,9 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
                 case MODBUS_FUNC_READ_HOLDING_REGISTERS:
                 case MODBUS_FUNC_READ_INPUT_REGISTERS:
                     /* For read functions: address(1) + function(1) + byte count(1) + data + CRC(2) */
-                    if (bytes_read == 3U) {
+                    if (bytes_read >= 3U) {
                         uint8_t byte_count = out_buffer[2];
-                        expected_length = 3U + byte_count + 2U;
+                        expected_length = (uint16_t)(3U + byte_count + 2U);
                     }
                     break;
                 case MODBUS_FUNC_WRITE_SINGLE_COIL:
@@ -348,9 +350,9 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
                 case MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS:
                 case MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS:
                     /* For write multiple: address(1) + function(1) + byte count(1) + data + CRC(2) */
-                    if (bytes_read == 3U) {
+                    if (bytes_read >= 3U) {
                         uint8_t byte_count = out_buffer[2];
-                        expected_length = 3U + byte_count + 2U;
+                        expected_length = (uint16_t)(3U + byte_count + 2U);
                     }
                     break;
                 case MODBUS_FUNC_READ_DEVICE_INFORMATION:
@@ -362,15 +364,17 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
                     expected_length = 1U + 1U + 2U;
                     break;
             }
-
-            if (expected_length > 0U && bytes_read >= expected_length) {
-                /* Frame is complete */
-                break;
-            }
         }
 
-        /* Update frame start time for inter-byte timeout */
-        frame_start_time = ctx->transport.get_reference_msec();
+        if (expected_length > 0U && bytes_read >= expected_length) {
+            /* Frame is complete */
+            break;
+        }
+
+        /* Update frame start time for inter-byte timeout when awaiting more bytes */
+        if (expected_length == 0U || bytes_read < expected_length) {
+            frame_start_time = ctx->transport.get_reference_msec();
+        }
     }
 
     if (bytes_read == 0U) {
