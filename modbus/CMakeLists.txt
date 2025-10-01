@@ -1,5 +1,6 @@
 # Set SOURCES variable
 set(SOURCES
+  src/log.c
   src/utils.c
   src/fsm.c
   src/core.c
@@ -9,6 +10,7 @@ set(SOURCES
 
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
 set(HEADERS_PUBLIC  
+include/modbus/log.h
   include/modbus/modbus.h
   include/modbus/conf.h
   include/modbus/transport.h

@@ -17,6 +17,7 @@
 #ifndef MODBUS_CONF_H
 #define MODBUS_CONF_H
 
+#define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.
  */

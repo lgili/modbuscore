@@ -68,6 +68,8 @@
 #include <modbus/fsm.h>
 #include <stddef.h>
 
+extern uint16_t get_current_time_ms(void);
+
 /**
  * @brief Initializes the finite state machine (FSM).
  *
@@ -96,6 +98,8 @@ void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data) {
     fsm->user_data = user_data;
     fsm->event_queue.head = 0;
     fsm->event_queue.tail = 0;
+    fsm->state_entry_time = get_current_time_ms();
+    fsm->has_timeout = false;
 }
 
 /**
@@ -159,6 +163,25 @@ void fsm_run(fsm_t *fsm) {
         return;
     }
 
+    const fsm_state_t *s = fsm->current_state;
+    fsm->has_timeout = false;
+
+    // 1) se este estado tem timeout configurado, verifica se excedeu
+	if (s->timeout_ms > 0) {
+    	uint16_t now = get_current_time_ms();
+    	uint16_t elapsed = now - fsm->state_entry_time;
+    	if (elapsed >= s->timeout_ms) {
+        	// limpa fila e dispara evento de timeout
+        	fsm->event_queue.head = fsm->event_queue.tail;
+            fsm->has_timeout = true;
+        	fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
+        	// atualiza timestamp (para não disparar repetidamente)f
+        	fsm->state_entry_time = now;
+    	}
+	}
+
+
+
     // Check if we have an event to process
     if (fsm->event_queue.head == fsm->event_queue.tail) {
         // No events pending, execute default action if available
@@ -189,6 +212,7 @@ void fsm_run(fsm_t *fsm) {
                 }
                 // Transition to next state
                 fsm->current_state = transition->next_state;
+                fsm->state_entry_time = get_current_time_ms();
             }
             event_processed = true;
             break;

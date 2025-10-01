@@ -34,9 +34,12 @@
 #include <modbus/fsm.h>
 #include <string.h>
 
+#include <modbus/log.h>
+
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                                */
 /* -------------------------------------------------------------------------- */
+bool full_cycle =  true;
 
 /**
  * @brief Global server data structure.
@@ -72,6 +75,7 @@ static void handle_function(modbus_server_data_t *server);
 /* Specific parsing functions for different Modbus function codes */
 static modbus_error_t parse_read_holding_registers(modbus_server_data_t *server, const uint8_t *buf, uint16_t *idx, uint16_t size);
 static modbus_error_t parse_write_single_register(modbus_server_data_t *server, const uint8_t *buf, uint16_t *idx, uint16_t size);
+static modbus_error_t parse_write_multiple_registers(modbus_server_data_t *server, const uint8_t *buf, uint16_t *idx, uint16_t size);
 static modbus_error_t parse_device_info_request(modbus_server_data_t *server, const uint8_t *buf, uint16_t *idx, uint16_t size);
 
 /* FSM Action functions */
@@ -109,7 +113,7 @@ static const fsm_transition_t state_idle_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_RX_BYTE_RECEIVED, modbus_server_state_receiving, action_start_receiving, NULL)
 };
 
-const fsm_state_t modbus_server_state_idle = FSM_STATE("IDLE", MODBUS_SERVER_STATE_IDLE, state_idle_transitions, action_idle);
+const fsm_state_t modbus_server_state_idle = FSM_STATE("IDLE", MODBUS_SERVER_STATE_IDLE, state_idle_transitions, action_idle, /*timeout_ms=*/0);
 
 /**
  * @brief Modbus FSM state: Receiving.
@@ -121,9 +125,10 @@ static const fsm_transition_t state_receiving_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_RX_BYTE_RECEIVED, modbus_server_state_receiving, action_start_receiving, NULL),
     FSM_TRANSITION(MODBUS_EVENT_PARSE_ADDRESS, modbus_server_state_parsing_address, action_parse_address, guard_receive_finished),
     FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_WRONG_BAUDRATE, modbus_server_state_error, action_handle_wrong_baudrate, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_WRONG_BAUDRATE, modbus_server_state_error, action_handle_wrong_baudrate, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_receiving = FSM_STATE("RECEIVING", MODBUS_SERVER_STATE_RECEIVING, state_receiving_transitions, action_start_receiving);
+const fsm_state_t modbus_server_state_receiving = FSM_STATE("RECEIVING", MODBUS_SERVER_STATE_RECEIVING, state_receiving_transitions, action_start_receiving, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Parsing Address.
@@ -132,9 +137,10 @@ const fsm_state_t modbus_server_state_receiving = FSM_STATE("RECEIVING", MODBUS_
  */
 static const fsm_transition_t state_parsing_address_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_PARSE_FUNCTION, modbus_server_state_parsing_function, action_parse_function, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_parsing_address = FSM_STATE("PARSING_ADDRESS", MODBUS_SERVER_STATE_PARSING_ADDRESS, state_parsing_address_transitions, NULL);
+const fsm_state_t modbus_server_state_parsing_address = FSM_STATE("PARSING_ADDRESS", MODBUS_SERVER_STATE_PARSING_ADDRESS, state_parsing_address_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Parsing Function.
@@ -143,9 +149,10 @@ const fsm_state_t modbus_server_state_parsing_address = FSM_STATE("PARSING_ADDRE
  */
 static const fsm_transition_t state_parsing_function_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_PROCESS_FRAME, modbus_server_state_processing, action_process_frame, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_parsing_function = FSM_STATE("PARSING_FUNCTION", MODBUS_SERVER_STATE_PARSING_FUNCTION, state_parsing_function_transitions, NULL);
+const fsm_state_t modbus_server_state_parsing_function = FSM_STATE("PARSING_FUNCTION", MODBUS_SERVER_STATE_PARSING_FUNCTION, state_parsing_function_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Processing.
@@ -156,9 +163,10 @@ const fsm_state_t modbus_server_state_parsing_function = FSM_STATE("PARSING_FUNC
 static const fsm_transition_t state_processing_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_VALIDATE_FRAME, modbus_server_state_validating_frame, action_validate_frame, NULL),
     FSM_TRANSITION(MODBUS_EVENT_BOOTLOADER, modbus_server_state_sending, action_send_response, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_processing = FSM_STATE("PROCESSING", MODBUS_SERVER_STATE_PROCESSING, state_processing_transitions, NULL);
+const fsm_state_t modbus_server_state_processing = FSM_STATE("PROCESSING", MODBUS_SERVER_STATE_PROCESSING, state_processing_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Validating Frame.
@@ -167,9 +175,10 @@ const fsm_state_t modbus_server_state_processing = FSM_STATE("PROCESSING", MODBU
  */
 static const fsm_transition_t state_validating_frame_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_BUILD_RESPONSE, modbus_server_state_building_response, action_build_response, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_validating_frame = FSM_STATE("VALIDATING_FRAME", MODBUS_SERVER_STATE_VALIDATING_FRAME, state_validating_frame_transitions, NULL);
+const fsm_state_t modbus_server_state_validating_frame = FSM_STATE("VALIDATING_FRAME", MODBUS_SERVER_STATE_VALIDATING_FRAME, state_validating_frame_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Building Response.
@@ -179,9 +188,11 @@ const fsm_state_t modbus_server_state_validating_frame = FSM_STATE("VALIDATING_F
 static const fsm_transition_t state_building_response_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_PUT_DATA_ON_BUFFER, modbus_server_state_putting_data_on_buffer, action_put_data_on_buffer, NULL),
     FSM_TRANSITION(MODBUS_EVENT_BROADCAST_DONT_ANSWER, modbus_server_state_idle, NULL, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_BUILD_RESPONSE, modbus_server_state_building_response, action_build_response, NULL), // Adicionado para loop de leitura
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_building_response = FSM_STATE("BUILDING_RESPONSE", MODBUS_SERVER_STATE_BUILDING_RESPONSE, state_building_response_transitions, NULL);
+const fsm_state_t modbus_server_state_building_response = FSM_STATE("BUILDING_RESPONSE", MODBUS_SERVER_STATE_BUILDING_RESPONSE, state_building_response_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Putting Data on Buffer.
@@ -190,9 +201,10 @@ const fsm_state_t modbus_server_state_building_response = FSM_STATE("BUILDING_RE
  */
 static const fsm_transition_t state_putting_data_on_buffer_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_CALCULATE_CRC, modbus_server_state_calculating_crc, action_calculate_crc_response, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_putting_data_on_buffer = FSM_STATE("PUTTING_DATA_ON_BUF", MODBUS_SERVER_STATE_PUTTING_DATA_ON_BUF, state_putting_data_on_buffer_transitions, NULL);
+const fsm_state_t modbus_server_state_putting_data_on_buffer = FSM_STATE("PUTTING_DATA_ON_BUF", MODBUS_SERVER_STATE_PUTTING_DATA_ON_BUF, state_putting_data_on_buffer_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Calculating CRC.
@@ -201,9 +213,10 @@ const fsm_state_t modbus_server_state_putting_data_on_buffer = FSM_STATE("PUTTIN
  */
 static const fsm_transition_t state_calculating_crc_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_SEND_RESPONSE, modbus_server_state_sending, action_send_response, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_calculating_crc = FSM_STATE("CALCULATING_CRC", MODBUS_SERVER_STATE_CALCULATING_CRC, state_calculating_crc_transitions, NULL);
+const fsm_state_t modbus_server_state_calculating_crc = FSM_STATE("CALCULATING_CRC", MODBUS_SERVER_STATE_CALCULATING_CRC, state_calculating_crc_transitions, NULL, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Sending.
@@ -212,9 +225,10 @@ const fsm_state_t modbus_server_state_calculating_crc = FSM_STATE("CALCULATING_C
  */
 static const fsm_transition_t state_sending_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_TX_COMPLETE, modbus_server_state_idle, NULL, guard_send_finished),
-    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_ERROR_DETECTED, modbus_server_state_error, action_handle_error, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_sending = FSM_STATE("SENDING", MODBUS_SERVER_STATE_SENDING, state_sending_transitions, action_send_response);
+const fsm_state_t modbus_server_state_sending = FSM_STATE("SENDING", MODBUS_SERVER_STATE_SENDING, state_sending_transitions, action_send_response, /*timeout_ms=*/300);
 
 /**
  * @brief Modbus FSM state: Error.
@@ -224,9 +238,10 @@ const fsm_state_t modbus_server_state_sending = FSM_STATE("SENDING", MODBUS_SERV
  */
 static const fsm_transition_t state_error_transitions[] = {
     FSM_TRANSITION(MODBUS_EVENT_RX_BYTE_RECEIVED, modbus_server_state_idle, NULL, NULL),
-    FSM_TRANSITION(MODBUS_EVENT_RESTART_FROM_ERROR, modbus_server_state_idle, NULL, NULL)
+    FSM_TRANSITION(MODBUS_EVENT_RESTART_FROM_ERROR, modbus_server_state_idle, NULL, NULL),
+    FSM_TRANSITION(FSM_EVENT_STATE_TIMEOUT, modbus_server_state_error,	action_handle_error, NULL)
 };
-const fsm_state_t modbus_server_state_error = FSM_STATE("ERROR", MODBUS_SERVER_STATE_ERROR, state_error_transitions, NULL);
+const fsm_state_t modbus_server_state_error = FSM_STATE("ERROR", MODBUS_SERVER_STATE_ERROR, state_error_transitions, NULL, /*timeout_ms=*/300);
 
 
 /* -------------------------------------------------------------------------- */
@@ -317,6 +332,7 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
     return MODBUS_ERROR_NONE;
 }
 
+
 /**
  * @brief Polls the Modbus server state machine.
  *
@@ -342,6 +358,10 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
 void modbus_server_poll(modbus_context_t *ctx) {
     if (!ctx) return;
     modbus_server_data_t *server = (modbus_server_data_t *)ctx->user_data;
+
+ 
+
+
     fsm_run(&server->fsm);
 }
 
@@ -370,22 +390,37 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
 
-    /* Update reference time for RX */
-    ctx->rx_reference_time = ctx->transport.get_reference_msec();
-    LOG(LOG_LEVEL_DEBUG, "RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
+    if (fsm->current_state->id == MODBUS_SERVER_STATE_IDLE) {
+        /* Update reference time for RX */
+        ctx->rx_reference_time = ctx->transport.get_reference_msec();
 
-    /* Store received byte in RX buffer */
-    if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
-        ctx->rx_buffer[ctx->rx_count++] = data;
-    } else {
-        /* Buffer overflow detected */
-        server->msg.error = MODBUS_ERROR_INVALID_REQUEST;
-        fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-        return;
+        /* Store received byte in RX buffer */
+        if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
+            ctx->rx_buffer[ctx->rx_count++] = data;
+        } else {
+            /* Buffer overflow detected */
+            server->msg.error = MODBUS_ERROR_INVALID_REQUEST;
+            fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
+            return;
+        }
+
+        fsm_handle_event(fsm, MODBUS_EVENT_RX_BYTE_RECEIVED);
     }
+}
 
-    /* Trigger receiving state if not already in receiving */
+void modbus_server_receive_buffer_from_uart_event(fsm_t *fsm, uint8_t *data, uint16_t lenght) {
+    modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
+    modbus_context_t *ctx = server->ctx;
+
     if (fsm->current_state->id != MODBUS_SERVER_STATE_RECEIVING) {
+        /* Update reference time for RX */
+        ctx->rx_reference_time = ctx->transport.get_reference_msec();
+
+        ctx->rx_count = lenght;
+        for (uint8_t i = 0; i < ctx->rx_count; i++)
+        {
+            ctx->rx_buffer[i] = data[i];
+        }  
         fsm_handle_event(fsm, MODBUS_EVENT_RX_BYTE_RECEIVED);
     }
 }
@@ -417,7 +452,7 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
  * 
  * @example
  * ```c
- * static int16_t reg_value = 100;
+ * static int16_t reg_value = 300;
  * modbus_error_t error = modbus_set_holding_register(&ctx, 0x0000, &reg_value, false, read_callback, write_callback);
  * if (error != MODBUS_ERROR_NONE) {
  *     // Handle registration error
@@ -584,9 +619,55 @@ int16_t update_baudrate(uint16_t baud) {
     return baud;
 }
 
+
+/* @brief Reinicia o Modbus de forma “soft” ou “hard”.
+ *
+ * - soft: limpa buffers e volta ao estado idle
+ * - hard: além de soft, reinicia UART e re‐inicializa a FSM por completo
+ *
+ * @param ctx  Ponteiro para o contexto Modbus.
+ * @param hard true para hard reset, false para soft reset.
+ */
+static void modbus_restart(fsm_t *fsm, bool hard)
+{
+    modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
+    modbus_context_t *ctx = server->ctx;
+	// limpa buffers e mensagens
+	modbus_reset_buffers(ctx);
+    reset_message(server);	
+
+	if (hard && ctx->transport.restart_uart) {
+    	// reinicialização “hard”
+    	ctx->transport.restart_uart();
+    	// re‐cria FSM a partir do estado idle
+    	// fsm_init(&ctx->fsm, &modbus_server_state_idle, ctx);
+        fsm_init(&g_server.fsm, &modbus_server_state_idle, &g_server);
+	}
+	// se soft, FSM continua no mesmo state, mas sem eventos pendentes
+}
+
 /* -------------------------------------------------------------------------- */
 /*                           FSM Action Implementations                       */
 /* -------------------------------------------------------------------------- */
+void print_buffer(fsm_t *fsm) {
+    modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
+    modbus_context_t *ctx = server->ctx;
+    if(ctx->rx_count > 0) {
+        LOG_DEBUG("Buffer data:");
+        for(int8_t i = 0; i <  ctx->rx_count; i++)
+        {
+            // ctx->rx_buffer, &idx,
+            printf(" %d ", ctx->rx_buffer[i]);
+        }
+        printf("\n"); 
+        // for(int8_t i = 0; i <  ctx->rx_count; i++)
+        // {
+        //     // ctx->rx_buffer, &idx,
+        //     printf(" %d ", ctx->rx_ptr[i]);
+        // }
+        // printf("\n");   
+    }
+}
 
 /**
  * @brief Idle action for the FSM.
@@ -596,17 +677,24 @@ int16_t update_baudrate(uint16_t baud) {
  *
  * @param[in,out] fsm Pointer to the FSM instance.
  */
+int ft =0;
 static void action_idle(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    if(ft == 0) {        
+        LOG_TRACE("--> action_idle  <--");
+        ft= 1;
+    }
+    modbus_reset_buffers(ctx);
+    reset_message(server);
+
+    full_cycle = true;
 
     if (need_update_baudrate == true)
     {
         need_update_baudrate = false;
         *server->device_info.baudrate = ctx->transport.change_baudrate(*server->device_info.baudrate);
-        if (ctx->transport.restart_uart) {
-            ctx->transport.restart_uart();
-        }
+        modbus_restart(fsm, true);       
     }
     /* Additional idle actions can be added here */
 }
@@ -620,6 +708,9 @@ static void action_idle(fsm_t *fsm) {
  */
 static void action_start_receiving(fsm_t *fsm) {
     fsm_handle_event(fsm, MODBUS_EVENT_PARSE_ADDRESS);
+    full_cycle = false;
+    LOG_TRACE("--> action_start_receiving  <--");
+    print_buffer(fsm);
 }
 
 /**
@@ -633,7 +724,10 @@ static void action_start_receiving(fsm_t *fsm) {
 static void action_parse_address(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    reset_message(server);
+    ft= 0;
+    LOG_TRACE("--> action_parse_address  <--");
+    print_buffer(fsm);
+    // reset_message(server);
 
     uint8_t slave_address;
     uint16_t idx = ctx->rx_index;
@@ -644,6 +738,7 @@ static void action_parse_address(fsm_t *fsm) {
     }
     server->msg.slave_address = slave_address;
     ctx->rx_index = idx;
+    LOG_TRACE("--> slave_address %d <--", slave_address);
 
     /* Check if the message is for this server or is a broadcast */
     if ((server->msg.slave_address == *server->device_info.address) ||
@@ -669,6 +764,8 @@ static void action_parse_address(fsm_t *fsm) {
 static void action_parse_function(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_parse_function  <--");
+    print_buffer(fsm);
 
     uint8_t function_code;
     if (!modbus_read_uint8(ctx->rx_buffer, &ctx->rx_index, ctx->rx_count, &function_code)) {
@@ -678,6 +775,7 @@ static void action_parse_function(fsm_t *fsm) {
     }
     server->msg.function_code = function_code;
     fsm_handle_event(fsm, MODBUS_EVENT_PROCESS_FRAME);
+    LOG_TRACE("--> function %d <--", function_code);
 }
 
 /**
@@ -689,13 +787,18 @@ static void action_parse_function(fsm_t *fsm) {
  */
 static void action_process_frame(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
+    LOG_TRACE("--> action_process_frame  <--");
+    print_buffer(fsm);
+
     modbus_error_t err = parse_request(server);
     if (err != MODBUS_ERROR_NONE) {
         server->msg.error = err;
-        if (err == MODBUS_ERROR_OTHER) {
+        if (err == MODBUS_OTHERS_REQUESTS) {
+            LOG_ERROR("MODBUS_EVENT_BOOTLOADER");
             fsm_handle_event(fsm, MODBUS_EVENT_BOOTLOADER);
         } else {
             fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
+            LOG_ERROR("MODBUS_EVENT_ERROR_DETECTED");
         }
         return;
     }
@@ -712,6 +815,7 @@ static void action_process_frame(fsm_t *fsm) {
 static void action_validate_frame(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_validate_frame  <--");
 
     /* Verify CRC */
     if ((ctx->rx_index + 2U) > ctx->rx_count) {
@@ -742,36 +846,58 @@ static void action_validate_frame(fsm_t *fsm) {
 static void action_build_response(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_build_response (current_read_index: %d, read_quantity: %d)  <--", server->msg.current_read_index, server->msg.read_quantity);
+
     handle_function(server);
 
-    if(server->msg.error != MODBUS_ERROR_NONE) {
+    // Se ocorreu um erro durante handle_function (ex: registrador não encontrado)
+    if (server->msg.error != MODBUS_ERROR_NONE) {
+        fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED); // Deixa action_handle_error cuidar disso
         return;
     }
 
-    /* Determine if the response should be sent or not based on broadcast */
-    if((server->msg.current_read_index >=  server->msg.read_quantity)
-       || (server->msg.write_quantity >= 1)
-       || (server->msg.mei_type != 0))
-    {
-        if(server->msg.broadcast == true) {
+    // Verifica se a operação está completa
+    bool read_operation = (server->msg.function_code == MODBUS_FUNC_READ_HOLDING_REGISTERS ||
+                           server->msg.function_code == MODBUS_FUNC_READ_INPUT_REGISTERS);
+    bool write_operation = (server->msg.function_code == MODBUS_FUNC_WRITE_SINGLE_REGISTER ||
+                            server->msg.function_code == MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS ||
+                            server->msg.function_code == MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS); // Assumindo que a parte de escrita de R/W é tratada primeiro
+    bool device_info_operation = (server->msg.function_code == MODBUS_FUNC_READ_DEVICE_INFORMATION);
+
+    bool operation_complete = false;
+    if (read_operation) {
+        operation_complete = (server->msg.current_read_index >= server->msg.read_quantity);
+    } else if (write_operation) {
+        // Para escrita, consideramos completo se msg.error == NONE após handle_function.
+        // A lógica de tx_raw_index para escrita já deve estar preenchida por handle_function.
+        operation_complete = (server->msg.write_quantity > 0 || server->msg.function_code == MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS); // Simplificação
+    } else if (device_info_operation) {
+        operation_complete = (ctx->tx_raw_index > 0); // Simples checagem de que algo foi populado
+    }
+
+    if (operation_complete) {
+        if (server->msg.broadcast && server->msg.function_code != MODBUS_FUNC_READ_DEVICE_INFORMATION) { // Broadcast não responde, exceto talvez para algumas funções específicas
             fsm_handle_event(fsm, MODBUS_EVENT_BROADCAST_DONT_ANSWER);
-            ctx->tx_raw_index = 0;
-            ctx->rx_count = 0;
+            LOG_TRACE("Broadcast: não respondendo.");
         } else {
+            LOG_TRACE("Operação completa, prosseguindo para PUT_DATA_ON_BUFFER.");
             fsm_handle_event(fsm, MODBUS_EVENT_PUT_DATA_ON_BUFFER);
         }
         build_error_count = 0;
-    } else {        
-        if(server->msg.current_read_index == 0 && server->msg.write_quantity == 0){
+    } else if (read_operation && (server->msg.current_read_index < server->msg.read_quantity)) {
+        // Ainda há registradores para ler
+        LOG_TRACE("Ainda lendo registradores (lidos: %d de %d), re-acionando BUILD_RESPONSE.", server->msg.current_read_index, server->msg.read_quantity);
+        fsm_handle_event(fsm, MODBUS_EVENT_BUILD_RESPONSE); // Dispara evento para continuar lendo
+    } else {
+        // Caso onde a operação não está completa e não é uma leitura continuada
+        // Isso pode indicar um problema na lógica de handle_function para escritas ou device_info se precisarem de múltiplas passagens
+        build_error_count++;
+        LOG_WARNING("Build response não completo e não é leitura continuada. build_error_count: %d", build_error_count);
+        if (build_error_count >= 3) { // Limite para evitar loop infinito em caso de bug
             server->msg.error = MODBUS_ERROR_TRANSPORT;
             fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-        } else {
-            build_error_count++;
-            if(build_error_count >=  128) {
-                server->msg.error = MODBUS_ERROR_TRANSPORT;
-                fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-                build_error_count = 0;
-            }
+            LOG_ERROR("Erro de build persistente, forçando erro.");
+            build_error_count = 0;
         }
     }
 }
@@ -786,6 +912,7 @@ static void action_build_response(fsm_t *fsm) {
 static void action_put_data_on_buffer(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_put_data_on_buffer  <--");
 
     uint16_t quantity_to_send = 0;
     if(server->msg.function_code == MODBUS_FUNC_READ_COILS) {
@@ -821,11 +948,18 @@ static void action_put_data_on_buffer(fsm_t *fsm) {
 static void action_calculate_crc_response(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_calculate_crc_response  <--");
 
     uint16_t crc = modbus_crc_with_table(ctx->tx_buffer, ctx->tx_index);
     ctx->tx_buffer[ctx->tx_index++] = GET_LOW_BYTE(crc);
     ctx->tx_buffer[ctx->tx_index++] = GET_HIGH_BYTE(crc);
 
+    modbus_error_t err = modbus_send_frame(ctx, ctx->tx_buffer, ctx->tx_index);
+    if (err != MODBUS_ERROR_NONE) {
+        server->msg.error = err;
+        fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
+        return;
+    }
     fsm_handle_event(fsm, MODBUS_EVENT_SEND_RESPONSE);
 }
 
@@ -839,13 +973,9 @@ static void action_calculate_crc_response(fsm_t *fsm) {
 static void action_send_response(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_send_response  <--");
 
-    modbus_error_t err = modbus_send_frame(ctx, ctx->tx_buffer, ctx->tx_index);
-    if (err != MODBUS_ERROR_NONE) {
-        server->msg.error = err;
-        fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-        return;
-    }
+    
     fsm_handle_event(fsm, MODBUS_EVENT_TX_COMPLETE);
 }
 
@@ -859,6 +989,18 @@ static void action_send_response(fsm_t *fsm) {
 static void action_handle_error(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_handle_error  <--");
+    if(fsm->has_timeout) {
+        LOG_TRACE("--> action_handle_error TIMEOUT  <--");
+        uint8_t exception_function = server->msg.function_code | 0x80;
+        uint8_t exception_code = MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE;
+        uint8_t frame[5];
+        uint16_t len = modbus_build_rtu_frame(server->msg.slave_address, exception_function,
+                                              &exception_code, 1, frame, sizeof(frame));
+        if (len > 0) {
+            modbus_send_frame(ctx, frame, len);
+        }
+    }
 
     if (modbus_error_is_exception(server->msg.error) && !server->msg.broadcast) {
         /* Send exception response */
@@ -872,9 +1014,7 @@ static void action_handle_error(fsm_t *fsm) {
         }
     } else {
         /* Internal error handling, restart UART if available */
-        if (ctx->transport.restart_uart) {
-            ctx->transport.restart_uart();
-        }
+        modbus_restart(fsm, true);
     }
     fsm_handle_event(fsm, MODBUS_EVENT_RESTART_FROM_ERROR);
 }
@@ -889,10 +1029,11 @@ static void action_handle_error(fsm_t *fsm) {
 static void action_handle_wrong_baudrate(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> action_handle_wrong_baudrate  <--");
 
-    if (ctx->transport.change_baudrate && ctx->transport.restart_uart) {
-        *server->device_info.baudrate = ctx->transport.change_baudrate(19200);
-        ctx->transport.restart_uart();
+    if (ctx->transport.change_baudrate) {
+        *server->device_info.baudrate = ctx->transport.change_baudrate(MODBUS_BAUDRATE);
+        modbus_restart(fsm, true);   
     }
     fsm_handle_event(fsm, MODBUS_EVENT_RESTART_FROM_ERROR);
 }
@@ -913,12 +1054,13 @@ static void action_handle_wrong_baudrate(fsm_t *fsm) {
 static bool guard_receive_finished(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> guard_receive_finished  <--");
 
     uint16_t rx_position_length_time;
     rx_position_length_time = ctx->transport.measure_time_msec(ctx->rx_reference_time);
     if (rx_position_length_time >= MODBUS_CONVERT_CHAR_INTERVAL_TO_MS(3.5, *server->device_info.baudrate)) {
         if (ctx->rx_count >= 1U && ctx->rx_count <= 3U) {
-            fsm_handle_event(fsm, MODBUS_EVENT_ERROR_WRONG_BAUDRATE);
+            fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
         }
         else {
             return true;
@@ -939,6 +1081,7 @@ static bool guard_receive_finished(fsm_t *fsm) {
 static bool guard_send_finished(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
+    LOG_TRACE("--> guard_send_finished  <--");
 
     uint16_t tx_position_length_time;
     tx_position_length_time = ctx->transport.measure_time_msec(ctx->tx_reference_time);
@@ -978,12 +1121,16 @@ static modbus_error_t parse_request(modbus_server_data_t *server) {
     uint16_t *idx = &ctx->rx_index;
     const uint8_t *buffer = ctx->rx_buffer;
     uint16_t size = ctx->rx_count;
-
+    printf("function %d", server->msg.function_code);
     switch (server->msg.function_code) {
+        case MODBUS_FUNC_READ_INPUT_REGISTERS:
         case MODBUS_FUNC_READ_HOLDING_REGISTERS:
+            printf("parse_read_holding_registers\n");
             return parse_read_holding_registers(server, buffer, idx, size);
         case MODBUS_FUNC_WRITE_SINGLE_REGISTER:
             return parse_write_single_register(server, buffer, idx, size);
+        case MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS:
+            return parse_write_multiple_registers(server, buffer, idx, size);
         case MODBUS_FUNC_READ_DEVICE_INFORMATION:
             return parse_device_info_request(server, buffer, idx, size);
         default:
@@ -1010,7 +1157,14 @@ static modbus_error_t parse_read_holding_registers(modbus_server_data_t *server,
     if (!modbus_read_uint16(buf, idx, size, &start_addr)) return MODBUS_ERROR_INVALID_ARGUMENT;
     if (!modbus_read_uint16(buf, idx, size, &quantity)) return MODBUS_ERROR_INVALID_ARGUMENT;
 
-    if (quantity < 1 || quantity > MODBUS_MAX_READ_WRITE_SIZE) return MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE;
+    // O limite prático para RTU é 125 registradores (250 bytes de dados + 1 byte count = 251 PDU)
+    // (PDU_MAX_SIZE - Cabeçalho_Resposta_FC03) / Bytes_Por_Registrador
+    // (253 - 2) / 2 = 125.5 -> 125
+    #define MAX_REGISTERS_PER_RTU_READ 125
+    if (quantity < 1 || quantity > MAX_REGISTERS_PER_RTU_READ) {
+        LOG_WARNING("Quantidade solicitada (%d) excede o limite de %d para RTU.", quantity, MAX_REGISTERS_PER_RTU_READ);
+        return MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE;
+    }
     if ((start_addr + quantity) > MAX_ADDRESS_HOLDING_REGISTERS) return MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
 
     server->msg.read_address = start_addr;
@@ -1038,8 +1192,46 @@ static modbus_error_t parse_write_single_register(modbus_server_data_t *server, 
     if (addr > MAX_ADDRESS_HOLDING_REGISTERS) return MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
     server->msg.write_address = addr;
     server->msg.write_value = (int16_t)value;
+    server->msg.write_quantity = 1; /* Indicar que é uma operação de escrita de um item */
 
     /* Writing is handled in handle_function() */
+    return MODBUS_ERROR_NONE;
+}
+
+/**
+ * @brief Parses the Write Multiple Registers request.
+ *
+ * This function extracts the starting address, quantity of registers, byte count,
+ * and the register values to write from the received buffer.
+ *
+ * @param[in,out] server Pointer to the server data structure.
+ * @param[in]     buf    Pointer to the received buffer.
+ * @param[in,out] idx    Pointer to the current index in the buffer.
+ * @param[in]     size   Size of the received buffer.
+ *
+ * @return modbus_error_t `MODBUS_ERROR_NONE` if parsing is successful, or an error code otherwise.
+ */
+static modbus_error_t parse_write_multiple_registers(modbus_server_data_t *server, const uint8_t *buf, uint16_t *idx, uint16_t size) {
+    modbus_context_t *ctx = server->ctx;
+    uint16_t start_addr, quantity;
+    uint8_t byte_count;
+
+    if (!modbus_read_uint16(buf, idx, size, &start_addr)) return MODBUS_ERROR_INVALID_ARGUMENT;
+    if (!modbus_read_uint16(buf, idx, size, &quantity)) return MODBUS_ERROR_INVALID_ARGUMENT;
+    if (!modbus_read_uint8(buf, idx, size, &byte_count)) return MODBUS_ERROR_INVALID_ARGUMENT;
+
+    if (quantity < 1 || quantity > MAX_REGISTERS_PER_RTU_READ || byte_count != (quantity * 2)) {
+        return MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE;
+    }
+    if ((start_addr + quantity) > MAX_ADDRESS_HOLDING_REGISTERS) return MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
+
+    server->msg.write_address = start_addr;
+    server->msg.write_quantity = quantity;
+    server->msg.byte_count = byte_count;
+
+    if ((*idx + byte_count) > size) return MODBUS_ERROR_INVALID_ARGUMENT; // Check if data fits    
+    memcpy(ctx->rx_raw_buffer, &buf[*idx], byte_count);
+    *idx += byte_count; // Advance index past the data
     return MODBUS_ERROR_NONE;
 }
 
@@ -1240,6 +1432,7 @@ static bool write_single_register(modbus_server_data_t *server, uint16_t address
  */
 static inline bool write_registers(modbus_server_data_t *server, uint16_t start_address, uint16_t quantity)
 {
+    modbus_context_t *ctx = server->ctx;
     if ((start_address + quantity) > MAX_ADDRESS_HOLDING_REGISTERS)
     {
         server->msg.error = MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS;
@@ -1257,15 +1450,20 @@ static inline bool write_registers(modbus_server_data_t *server, uint16_t start_
         }
         variable_modbus_t *var = &server->holding_registers[idx];
         if (!var->read_only)
-        {
-            uint16_t data = server->msg.buffer[i];
+        {   
+            // Os dados para escrita múltipla estão em server->msg.buffer
+            // Cada registrador ocupa 2 bytes (Big Endian)
+            uint16_t data_high = ctx->rx_raw_buffer[i * 2];
+            uint16_t data_low = ctx->rx_raw_buffer[i * 2 + 1];
+            uint16_t value_to_write = (data_high << 8) | data_low;
+
             if (var->write_callback)
             {
-                *var->variable_ptr = var->write_callback(data);
+                *var->variable_ptr = var->write_callback(value_to_write);
             }
             else
             {
-                *var->variable_ptr = data;
+                *var->variable_ptr = value_to_write;
             }
         }
     }

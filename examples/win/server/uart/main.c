@@ -5,10 +5,24 @@
 
 #include "uart_windows.h"
 #include <modbus/modbus.h>
+#include <modbus/log.h>
 
 
 uart_handle_t uart;
 modbus_context_t ctx;
+uint16_t baudrate = 19200;
+
+void my_console_logger(log_level_t severity, char *msg) {
+    SYSTEMTIME t;
+    GetSystemTime(&t); // or GetLocalTime(&t)
+    // printf("The system time is: %02d:%02d:%02d.%03d\n", 
+    //     t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
+     printf("%02d:%02d:%02d.%03d [%s]: %s\n",
+         t.wHour, t.wMinute, t.wSecond, t.wMilliseconds,    // user defined function
+         log_level_name(severity),
+         msg);
+}
+
 // Function to get the current time in milliseconds
 uint16_t get_current_time_ms(void) {
     return (uint16_t)(GetTickCount() & 0xFFFF);
@@ -22,18 +36,39 @@ uint16_t measure_elapsed_time(uint16_t start_time) {
 
 // Transport write function
 int32_t transport_write(const uint8_t *data, uint16_t length) {
+    LOG_DEBUG("tamanho enviado para uart %d", length);
     int result = uart_write(&uart, data, length);
     if (result < 0) {
-        LOG(LOG_LEVEL_ERROR, "Falha ao escrever na UART.");
+        LOG_ERROR("Falha ao escrever na UART.");
     } else {
-        LOG(LOG_LEVEL_DEBUG, "Escrito %d bytes na UART.", result);
+        LOG_DEBUG("Escrito %d bytes na UART.", result);
     }
+    modbus_server_data_t *server = (modbus_server_data_t *)ctx.user_data;
+    //ctx.tx_reference_time = ctx.transport.get_reference_msec();
+    
     return result;
 }
 
 // Transport read function
 int transport_read(uint8_t *buffer, uint16_t length) {
+    // int size  = uart_has_data(&uart);
+    // if(size <= 0) return size;
     return uart_read(&uart, buffer, length);
+}
+int init_uart() {
+    const char *com_port = "COM18"; // Replace with your COM port
+    uint16_t baud_rate = baudrate;
+
+    if (uart_init(&uart, com_port, (int)baud_rate) != 0) {
+        LOG_ERROR("UART initialization failed.\n");
+        return 1;
+    }
+    return 0;
+}
+
+void restart_uart() {
+    uart_close(&uart);
+    init_uart();
 }
 
 // fake interrupt
@@ -42,39 +77,48 @@ void uart_interrupt() {
     uint8_t data[64];
     // Simulate RX interrupt if waiting for a response    
     // Read data from mock transport's rx buffer
-    uint8_t size_read = server->ctx->transport.read(data, 64); // Adjust based on your mock_transport
-    if(size_read > 0) {
-        for (size_t i = 0; i < size_read; i++) {
-            // printf("[Info] Receiving data on uart\n");
-            LOG(LOG_LEVEL_DEBUG, "Receiving data on uart\n");
-            modbus_server_receive_data_from_uart_event(&server->fsm, data[i]);
+    int size  = uart_has_data(&uart);
+    if(size > 0) {
+        uint8_t size_read = server->ctx->transport.read(data, 64); // get data from DMA buffer, here is a example
+        modbus_server_receive_buffer_from_uart_event(&server->fsm, data, size_read);
+        if(size_read > 0) {
+            printf("[Info] Receiving data on uart\n");
+            for (size_t i = 0; i < size_read; i++) {
+                LOG_DEBUG("Data %d", data[i]);
+                // modbus_server_receive_data_from_uart_event(&server->fsm, data[i]);
+            }
+            printf("\n");
         }
     }
     
 }
 
 // interrupt from uart
-int on_byte_received(uint8_t data) {
-    LOG(LOG_LEVEL_DEBUG, "Slave recebeu byte: %d", data);
+int on_byte_received(uint8_t *data, uint16_t lenght) {
+    LOG_DEBUG("Slave recebeu byte: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
     modbus_server_data_t *server = (modbus_server_data_t *)ctx.user_data;
-    modbus_server_receive_data_from_uart_event(&server->fsm, data);
+    // modbus_server_receive_data_from_uart_event(&server->fsm, data);
+    modbus_server_receive_buffer_from_uart_event(&server->fsm, data, lenght);
     return 0;
 }
 
-int main(void) {
+int main(void) {    
+    LOG_INIT();
+    LOG_SUBSCRIBE(my_console_logger, LOG_TRACE_LEVEL);
+    // LOG_TRACE("Critical, arg=%d", arg); 
+    // LOG_DEBUG("Critical, arg=%d", arg);
+    // LOG_INFO("Critical, arg=%d", arg);
+    // LOG_WARNING("Critical, arg=%d", arg);
+    // LOG_ERROR("Critical, arg=%d", arg);
+    // LOG_CRITICAL("Critical, arg=%d", arg);
+    
     // Initialize logging
-    printf("Initializing Modbus Slave Example...\n");
+    LOG_INFO("Initializing Modbus Slave Example...\n");
 
     // Initialize UART
+    init_uart();
     
-    const char *com_port = "COM15"; // Replace with your COM port
-    uint16_t baud_rate = 19200;
-
-    if (uart_init(&uart, com_port, (int)baud_rate) != 0) {
-        printf("[Error] UART initialization failed.\n");
-        return 1;
-    }
-    uart_set_callback(&uart, on_byte_received);
+    // uart_set_callback(&uart, on_byte_received);
 
     // Define transport with user_data as the UART handle
     modbus_transport_t transport = {
@@ -88,48 +132,69 @@ int main(void) {
     
     uint16_t device_address = 1;
 
-    modbus_error_t error = modbus_server_create(&ctx, &transport, &device_address, &baud_rate);
+    modbus_error_t error = modbus_server_create(&ctx, &transport, &device_address, &baudrate);
     if (error != MODBUS_ERROR_NONE) {
-        printf("[Error] Failed to initialize Modbus Slave. Error code: %d\n", error);
+        LOG_ERROR("Failed to initialize Modbus Slave. Error code: %d\n", error);
         uart_close(&uart);
         return 1;
     }
 
-    printf("[Info] Modbus Slave initialized successfully.\n");
+    LOG_INFO("Modbus Slave initialized successfully.\n");
 
     // Register holding registers
     int16_t reg1 = 100;
     int16_t reg2 = 200;
+    int16_t reg3 = 300;
+    int16_t reg4 = 400;
+    int16_t reg5 = 500;
 
-    error = modbus_set_holding_register(&ctx, 0x0000, &reg1, false, NULL, NULL);
+    error = modbus_set_holding_register(&ctx, 0x0000, &reg1, true, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        printf("[Error] Failed to register holding register 0x0000. Error code: %d\n", error);
+        LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
+    }
+
+    error = modbus_set_holding_register(&ctx, 0x0005, &reg1, true, NULL, NULL);
+    if (error != MODBUS_ERROR_NONE) {
+        LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0001, &reg2, false, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        printf("[Error] Failed to register holding register 0x0001. Error code: %d\n", error);
+        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
     }
 
-    printf("[Info] Holding registers registered successfully.\n");
+    error = modbus_set_holding_register(&ctx, 0x0002, &reg3, false, NULL, NULL);
+    if (error != MODBUS_ERROR_NONE) {
+        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    }
 
-    // Add device information
-    const char vendor_name[] = "Embraco_Modbus_Slave";
+    error = modbus_set_holding_register(&ctx, 0x0003, &reg4, false, NULL, NULL);
+    if (error != MODBUS_ERROR_NONE) {
+        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    }
+
+    error = modbus_set_holding_register(&ctx, 0x0004, &reg5, false, NULL, NULL);
+    if (error != MODBUS_ERROR_NONE) {
+        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    }
+
+    LOG_INFO("Holding registers registered successfully.\n");
+
+    // Add device information    
     error = modbus_server_add_device_info(&ctx, "SECOP", 5);
     if (error != MODBUS_ERROR_NONE) {
-        printf("[Error] Failed to add device information. Error code: %d\n", error);
+        LOG_ERROR("Failed to add device information. Error code: %d\n", error);
     }
 
-    printf("[Info] Device information added successfully.\n");
+    LOG_INFO("Device information added successfully.\n");
 
     // Main polling loop
-    printf("[Info] Entering main polling loop. Press Ctrl+C to exit.\n");
-    int count =0;
+    LOG_INFO("Entering main polling loop. Press Ctrl+C to exit.\n");    
     while (1) {       
-        //uart_interrupt();
+        uart_interrupt(); // manual calling
         modbus_server_poll(&ctx);
         // Additional application tasks can be performed here
-        Sleep(10); // Sleep to reduce CPU usage
+        // Sleep(100); // Sleep to reduce CPU usage
     }
 
     // Cleanup (unreachable in this example)

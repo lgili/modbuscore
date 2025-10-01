@@ -1,10 +1,8 @@
 {
     "files.associations": {
         "compare": "cpp",
-        "array": "c",
-        "string": "c",
-        "string_view": "c",
-        "span": "c"
+        "algorithm": "c",
+        "format": "c"
     },
     "cmake.useCMakePresets": "always",
     "cmake.options.statusBarVisibility": "visible",

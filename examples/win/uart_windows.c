@@ -1,6 +1,6 @@
 #include "uart_windows.h"
 #include <stdio.h>
-#include <modbus/utils.h>
+#include <modbus/log.h>
 
 DWORD WINAPI uart_listener_thread(LPVOID lpParam);
 
@@ -19,7 +19,7 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
     );
 
     if (uart->hSerial == INVALID_HANDLE_VALUE) {
-        printf("[Error] Unable to open %s.\n", port_name);
+        LOG_ERROR("Unable to open %s.\n", port_name);
         return -1;
     }
 
@@ -27,7 +27,7 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
     dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
 
     if (!GetCommState(uart->hSerial, &dcbSerialParams)) {
-        printf("[Error] Failed to get COM state.\n");
+        LOG_ERROR("Failed to get COM state.\n");
         CloseHandle(uart->hSerial);
         return -1;
     }
@@ -35,10 +35,10 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
     dcbSerialParams.BaudRate = baud_rate;
     dcbSerialParams.ByteSize = 8;
     dcbSerialParams.StopBits = ONESTOPBIT;
-    dcbSerialParams.Parity   = NOPARITY;
+    dcbSerialParams.Parity   = EVENPARITY;
 
     if (!SetCommState(uart->hSerial, &dcbSerialParams)) {
-        printf("[Error] Failed to set COM parameters.\n");
+        LOG_ERROR("Failed to set COM parameters.\n");
         CloseHandle(uart->hSerial);
         return -1;
     }
@@ -51,14 +51,14 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
     timeouts.WriteTotalTimeoutMultiplier = 10;
 
     if (!SetCommTimeouts(uart->hSerial, &timeouts)) {
-        printf("[Error] Failed to set COM timeouts.\n");
+        LOG_ERROR("Failed to set COM timeouts.\n");
         CloseHandle(uart->hSerial);
         return -1;
     }
 
     // Configura máscara de eventos para monitorar dados recebidos
     if (!SetCommMask(uart->hSerial, EV_RXCHAR)) {
-        printf("[Error] Failed to set communication mask.\n");
+        LOG_ERROR("Failed to set communication mask.\n");
         CloseHandle(uart->hSerial);
         return -1;
     }
@@ -67,7 +67,7 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
     uart->onDataReceived = NULL;
     uart->stopThread = FALSE;
 
-    printf("[Info] COM port %s opened and configured successfully.\n", port_name);
+    LOG_INFO("COM port %s opened and configured successfully.\n", port_name);
     return 0;
 }
 
@@ -86,19 +86,19 @@ int uart_init(uart_handle_t *uart, const char *port_name, int baud_rate) {
 //     return (int)bytesWritten;
 // }
 int uart_write(uart_handle_t *uart, const uint8_t *data, uint16_t length) {
-    LOG(LOG_LEVEL_DEBUG, "Iniciando uart_write: %d bytes", length);
+    // LOG_DEBUG("Iniciando uart_write: %d bytes", length);
     DWORD bytesWritten;
     OVERLAPPED overlapped = {0};
     overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (overlapped.hEvent == NULL) {
-        LOG(LOG_LEVEL_ERROR, "Falha ao criar evento Overlapped.");
+        LOG_ERROR("Falha ao criar evento Overlapped.");
         return -1;
     }
 
     BOOL status = WriteFile(uart->hSerial, data, length, &bytesWritten, &overlapped);
     if (!status) {
         if (GetLastError() != ERROR_IO_PENDING) {
-            LOG(LOG_LEVEL_ERROR, "Falha ao escrever na COM port.");
+            LOG_ERROR("Falha ao escrever na COM port.");
             CloseHandle(overlapped.hEvent);
             return -1;
         }
@@ -106,31 +106,31 @@ int uart_write(uart_handle_t *uart, const uint8_t *data, uint16_t length) {
         // Espera a operação de escrita completar
         status = GetOverlappedResult(uart->hSerial, &overlapped, &bytesWritten, TRUE);
         if (!status) {
-            LOG(LOG_LEVEL_ERROR, "Falha na operação de escrita Overlapped.");
+            LOG_ERROR("Falha na operação de escrita Overlapped.");
             CloseHandle(overlapped.hEvent);
             return -1;
         }
     }
 
-    LOG(LOG_LEVEL_INFO, "Enviou %lu bytes para a COM port.", bytesWritten);
+    LOG_INFO("Enviou %lu bytes para a COM port.", bytesWritten);
     CloseHandle(overlapped.hEvent);
     return (int)bytesWritten;
 }
 
 int uart_read(uart_handle_t *uart, uint8_t *buffer, uint16_t length) {
-    // LOG(LOG_LEVEL_DEBUG, "Iniciando uart_read: %d bytes", length);
+    // LOG_DEBUG("Iniciando uart_read: %d bytes", length);
     DWORD bytesRead;
     OVERLAPPED overlapped = {0};
     overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (overlapped.hEvent == NULL) {
-        LOG(LOG_LEVEL_ERROR, "Falha ao criar evento Overlapped.");
+        LOG_ERROR("Falha ao criar evento Overlapped.");
         return -1;
     }
 
     BOOL status = ReadFile(uart->hSerial, buffer, length, &bytesRead, &overlapped);
     if (!status) {
         if (GetLastError() != ERROR_IO_PENDING) {
-            LOG(LOG_LEVEL_ERROR, "Falha ao ler da COM port.");
+            LOG_ERROR("Falha ao ler da COM port.");
             CloseHandle(overlapped.hEvent);
             return -1;
         }
@@ -138,14 +138,14 @@ int uart_read(uart_handle_t *uart, uint8_t *buffer, uint16_t length) {
         // Espera a operação de leitura completar
         status = GetOverlappedResult(uart->hSerial, &overlapped, &bytesRead, TRUE);
         if (!status) {
-            LOG(LOG_LEVEL_ERROR, "Falha na operação de leitura Overlapped.");
+            LOG_ERROR("Falha na operação de leitura Overlapped.");
             CloseHandle(overlapped.hEvent);
             return -1;
         }
     }
 
     if(bytesRead > 0)
-        LOG(LOG_LEVEL_DEBUG, "Lido %lu bytes da COM port.", bytesRead);
+        LOG_DEBUG("Lido %lu bytes da COM port.", bytesRead);
     CloseHandle(overlapped.hEvent);
     return (int)bytesRead;
 }
@@ -182,30 +182,31 @@ void uart_close(uart_handle_t *uart) {
     if (uart->hSerial != INVALID_HANDLE_VALUE) {
         CloseHandle(uart->hSerial);
         uart->hSerial = INVALID_HANDLE_VALUE;
-        printf("[Info] COM port closed.\n");
+        LOG_INFO("COM port closed.\n");
     }
 }
 
-int uart_set_callback(uart_handle_t *uart, int (*callback)(uint8_t data)) {
+int uart_set_callback(uart_handle_t *uart, int (*callback)(uint8_t *data, uint16_t lenght)) {
     uart->onDataReceived = callback;
 
     // Cria uma thread para monitorar a UART
     if (!uart->hThread) {
         uart->hThread = CreateThread(NULL, 0, uart_listener_thread, uart, 0, NULL);
         if (!uart->hThread) {
-            printf("[Error] Failed to create UART listener thread.\n");
+            LOG_ERROR("Failed to create UART listener thread.\n");
             return -1;
         }
     }
 
     return 0;
 }
-
+uint8_t buffer[256]; // Buffer para armazenar múltiplos bytes
 DWORD WINAPI uart_listener_thread(LPVOID lpParam) {
     uart_handle_t *uart = (uart_handle_t *)lpParam;
     DWORD eventMask;
-    uint8_t buffer[256]; // Buffer para armazenar múltiplos bytes
+    
     DWORD bytesRead;
+    LOG_INFO("Receiving data: \n");
 
     while (!uart->stopThread) {
         if (WaitCommEvent(uart->hSerial, &eventMask, NULL)) {
@@ -213,11 +214,12 @@ DWORD WINAPI uart_listener_thread(LPVOID lpParam) {
                 // Ler todos os bytes disponíveis na UART
                 while (ReadFile(uart->hSerial, buffer, sizeof(buffer), &bytesRead, NULL) && bytesRead > 0) {
                     // Processar cada byte no buffer
-                    for (DWORD i = 0; i < bytesRead; i++) {
-                        if (uart->onDataReceived) {
-                            uart->onDataReceived(buffer[i]); // Chama o callback para cada byte
-                        }
-                    }
+                    // for (DWORD i = 0; i < bytesRead; i++) {
+                    //     if (uart->onDataReceived) {
+                    //         uart->onDataReceived(buffer[i]); // Chama o callback para cada byte
+                    //     }
+                    // }
+                    uart->onDataReceived(buffer, (uint16_t)bytesRead);
                 }
             }
         } else {
@@ -225,7 +227,7 @@ DWORD WINAPI uart_listener_thread(LPVOID lpParam) {
             // Exemplo: verificar erros de comunicação e encerrar a thread
             DWORD error = GetLastError();
             if (error != ERROR_IO_PENDING) {
-                printf("[Error] WaitCommEvent failed with error: %lu\n", error);
+                LOG_ERROR("WaitCommEvent failed with error: %lu\n", error);
                 break;
             }
         }
@@ -257,3 +259,19 @@ DWORD WINAPI uart_listener_thread(LPVOID lpParam) {
 //     }
 //     return 0;
 // }
+
+
+int uart_has_data(uart_handle_t *uart)
+{
+    if (!uart)
+        return 0;
+
+    COMSTAT cs;
+    DWORD r;
+    if (!ClearCommError(uart->hSerial, NULL, &cs)) {
+        return 0;
+    }
+    r = cs.cbInQue;
+    if (r > INT_MAX) r = INT_MAX;
+    return (int)r;
+}

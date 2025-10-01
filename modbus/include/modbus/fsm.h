@@ -80,6 +80,12 @@
 extern "C" {
 #endif
 
+#ifndef FSM_EVENT_STATE_TIMEOUT
+#define FSM_EVENT_STATE_TIMEOUT  0xFF
+#endif
+
+
+
 /**
  * @brief Opaque structure representing the FSM.
  *
@@ -157,6 +163,8 @@ struct fsm_state {
     const fsm_transition_t *transitions;    /**< Array of transitions for this state. */
     uint8_t num_transitions;                /**< Number of transitions in the array. */
     fsm_action_t default_action;            /**< Default action executed when no events are pending (optional). */
+    uint16_t timeout_ms; 	                /**< Timeout *deste* estado (0=desabilitado) */
+
 };
 
 /**
@@ -166,7 +174,7 @@ struct fsm_state {
  * the new event is discarded.
  */
 #ifndef FSM_EVENT_QUEUE_SIZE
-#define FSM_EVENT_QUEUE_SIZE 10
+#define FSM_EVENT_QUEUE_SIZE 20
 #endif
 
 /**
@@ -192,6 +200,8 @@ struct fsm {
     const fsm_state_t *current_state;   /**< Pointer to the current state. */
     void *user_data;                    /**< User data associated with the FSM instance. */
     fsm_event_queue_t event_queue;      /**< Event queue for handling asynchronous events. */
+    uint16_t state_entry_time;
+    bool has_timeout;
 };
 
 /**
@@ -282,8 +292,8 @@ void fsm_run(fsm_t *fsm);
  *
  * @return Initialized `fsm_state_t` structure.
  */
-#define FSM_STATE(_name, _state_id, _transitions, _default_action) \
-    { #_name, _state_id, _transitions, sizeof(_transitions) / sizeof(fsm_transition_t),  _default_action }
+#define FSM_STATE(_name, _state_id, _transitions, _default_action, _timeout) \
+	{ #_name, _state_id, _transitions, sizeof(_transitions)/sizeof(fsm_transition_t), _default_action, _timeout }
 
 #ifdef __cplusplus
 }

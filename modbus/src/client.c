@@ -34,6 +34,8 @@
 #include <modbus/fsm.h>
 #include <string.h>
 
+#include <modbus/log.h>
+
 /* -------------------------------------------------------------------------- */
 /*                           Global Variables                                  */
 /* -------------------------------------------------------------------------- */
@@ -81,7 +83,7 @@ static const fsm_transition_t state_idle_transitions[] = {
  * This state represents the idle condition of the Modbus FSM, where it is waiting
  * for a new request to be sent.
  */
-const fsm_state_t modbus_client_state_idle = FSM_STATE("IDLE", MODBUS_CLIENT_STATE_IDLE, state_idle_transitions, action_idle);
+const fsm_state_t modbus_client_state_idle = FSM_STATE("IDLE", MODBUS_CLIENT_STATE_IDLE, state_idle_transitions, action_idle, 0);
 
 /**
  * @brief Transition table for the Sending Request state.
@@ -99,7 +101,7 @@ static const fsm_transition_t state_sending_request_transitions[] = {
  *
  * This state handles the transmission of a Modbus request to the slave device.
  */
-const fsm_state_t modbus_client_state_sending_request = FSM_STATE("SENDING_REQUEST", MODBUS_CLIENT_STATE_SENDING_REQUEST, state_sending_request_transitions, NULL);
+const fsm_state_t modbus_client_state_sending_request = FSM_STATE("SENDING_REQUEST", MODBUS_CLIENT_STATE_SENDING_REQUEST, state_sending_request_transitions, NULL, 0);
 
 
 /**
@@ -121,7 +123,7 @@ static const fsm_transition_t state_waiting_response_transitions[] = {
  * This state represents the period where the Master is waiting for a response
  * from the slave device after sending a request.
  */
-const fsm_state_t modbus_client_state_waiting_response = FSM_STATE("WAITING_RESPONSE", MODBUS_CLIENT_STATE_WAITING_RESPONSE, state_waiting_response_transitions, NULL);
+const fsm_state_t modbus_client_state_waiting_response = FSM_STATE("WAITING_RESPONSE", MODBUS_CLIENT_STATE_WAITING_RESPONSE, state_waiting_response_transitions, NULL, 0);
 
 /**
  * @brief Transition table for the Processing Response state.
@@ -137,7 +139,7 @@ static const fsm_transition_t state_processing_response_transitions[] = {
  * This state handles the processing of the received response from the slave device,
  * including parsing and validating the data.
  */
-const fsm_state_t modbus_client_state_processing_response = FSM_STATE("PROCESSING_RESPONSE", MODBUS_CLIENT_STATE_PROCESSING_RESPONSE, state_processing_response_transitions, action_process_response);
+const fsm_state_t modbus_client_state_processing_response = FSM_STATE("PROCESSING_RESPONSE", MODBUS_CLIENT_STATE_PROCESSING_RESPONSE, state_processing_response_transitions, action_process_response, 0);
 
 /**
  * @brief Transition table for the Error state.
@@ -153,7 +155,7 @@ static const fsm_transition_t state_error_transitions[] = {
  * This state represents an error condition in the Modbus FSM. The FSM can recover
  * and transition back to the idle state when a new event occurs.
  */
-const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_STATE_ERROR, state_error_transitions, NULL);
+const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_STATE_ERROR, state_error_transitions, NULL, 0);
 
 /* -------------------------------------------------------------------------- */
 /*                           FSM State Initialization                           */
@@ -361,7 +363,7 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
 
     /* Update reference time for RX */
     ctx->rx_reference_time = ctx->transport.get_reference_msec();
-    LOG(LOG_LEVEL_DEBUG, "RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
+    LOG_TRACE("RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
         ctx->rx_buffer[ctx->rx_count++] = data;
@@ -526,7 +528,7 @@ static void action_send_request(fsm_t *fsm) {
 static void action_wait_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG(LOG_LEVEL_DEBUG, "action_wait_response");
+    LOG_TRACE("action_wait_response");
 
     /* Mark reference time for timeout */
     client->request_time_ref = ctx->transport.get_reference_msec();
@@ -544,7 +546,7 @@ static void action_wait_response(fsm_t *fsm) {
 static void action_process_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG(LOG_LEVEL_DEBUG, "action_process_response");
+    LOG_TRACE("action_process_response");
 
     /* Parse the received frame */
     uint8_t address, function;
@@ -565,7 +567,6 @@ static void action_process_response(fsm_t *fsm) {
             fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
             return;
         }
-        uint8_t exc_code = payload[0];
         /* Log or handle specific exception codes as needed */
         fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
         return;
@@ -643,7 +644,7 @@ static bool guard_tx_complete(fsm_t *fsm) {
     /* Assuming transmission is synchronous and completes immediately */
     /* If transmission is asynchronous, implement appropriate checks */
     (void)fsm;
-    LOG(LOG_LEVEL_DEBUG, "guard_tx_complete");
+    LOG_TRACE("guard_tx_complete");
     return true;
 }
 
@@ -659,7 +660,7 @@ static bool guard_tx_complete(fsm_t *fsm) {
 static bool guard_response_complete(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG(LOG_LEVEL_DEBUG, "guard_response_complete");
+    LOG_TRACE("guard_response_complete");
 
     /* Verify CRC and minimum size */
     if (ctx->rx_count < 4) {

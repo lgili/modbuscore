@@ -104,6 +104,21 @@ Ensure you have the following installed on your system:
 
     The documentation will be generated in the `doc/build/html` directory.
 
+6. **Build and run slave rtu example**
+   Change the COM port on the code (line 59 on main.c) to use the correct one, before build!!!
+
+  ```bash
+    cmake --build . --preset ex_slave_uart
+    .\build\debug\examples\win\server\uart\slave_uart_example.exe
+  ```
+
+7. **Build and run master rtu example**
+  Change the COM port on the code (line 85 on main.c) to use the correct one, before build!!!
+  ```bash
+    cmake --build . --preset ex_master_uart
+    .\build\debug\examples\win\server\uart\master_uart_example.exe
+  ```
+
 ## Usage
 
 For detailed instructions on initializing and configuring both Master and Slave functionalities, refer to the [Usage Documentation](doc/build/html/usage.html).

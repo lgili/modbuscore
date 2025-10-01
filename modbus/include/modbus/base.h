@@ -255,6 +255,7 @@ typedef struct {
     uint8_t rx_buffer[64];        /**< Buffer for incoming data */
     uint16_t rx_count;            /**< Number of bytes in the receive buffer */
     uint16_t rx_index;            /**< Current index in the receive buffer */
+    uint8_t rx_raw_buffer[64]; /**< Buffer for receiving data */
 
     uint8_t tx_raw_buffer[64];    /**< Raw buffer for outgoing data */
     uint16_t tx_raw_index;        /**< Current index in the transmit buffer */

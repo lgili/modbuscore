@@ -171,7 +171,6 @@ typedef struct {
         uint16_t write_quantity;                /**< Quantity of registers/coils to write */
         uint16_t write_value;                   /**< Value to write for single write operations */
         uint8_t byte_count;                     /**< Byte count for variable-length responses */
-        uint8_t buffer[MODBUS_RECEIVE_BUFFER_SIZE]; /**< Buffer for receiving data */
         uint16_t current_read_index;            /**< Current read index in the buffer */
         
         uint8_t mei_type;                       /**< MEI type for device info */
@@ -417,6 +416,8 @@ void modbus_server_poll(modbus_context_t *ctx);
  * ```
  */
 void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data);
+
+void modbus_server_receive_buffer_from_uart_event(fsm_t *fsm, uint8_t *data, uint16_t lenght);
 
 /**
  * @brief Registers a single holding register in the server.

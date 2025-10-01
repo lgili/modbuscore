@@ -9,7 +9,7 @@
 typedef struct {
     HANDLE hSerial;
     HANDLE hThread;
-    int (*onDataReceived)(uint8_t data); // Callback para dado recebido
+    int (*onDataReceived)(uint8_t *data, uint16_t lenght); // Callback para dado recebido
     volatile BOOL stopThread;            // Flag para sinalizar a thread a encerrar
 } uart_handle_t;
 
@@ -28,6 +28,8 @@ int uart_read(uart_handle_t *uart, uint8_t *buffer, uint16_t length);
 // Closes the UART
 void uart_close(uart_handle_t *uart);
 
-int uart_set_callback(uart_handle_t *uart, int (*callback)(uint8_t data)); // Configura callback
+int uart_set_callback(uart_handle_t *uart, int (*callback)(uint8_t *data, uint16_t lenght)); // Configura callback
+
+int uart_has_data(uart_handle_t *uart);
 
 #endif // UART_WINDOWS_H
