@@ -21,6 +21,8 @@ extern "C" {
 #define MB_PDU_FC_WRITE_SINGLE_REGISTER  0x06U
 #define MB_PDU_FC_WRITE_MULTIPLE_REGISTERS 0x10U
 
+#define MB_PDU_EXCEPTION_BIT 0x80U
+
 #define MB_PDU_FC03_MIN_REGISTERS 1U
 #define MB_PDU_FC03_MAX_REGISTERS 125U
 
@@ -40,6 +42,9 @@ mb_err_t mb_pdu_parse_write_single_response(const mb_u8 *pdu, mb_size_t len, mb_
 
 mb_err_t mb_pdu_build_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const mb_u16 *values, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count, const mb_u8 **out_payload);
+mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code);
+mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_function, mb_u8 *out_exception);
+
 
 mb_err_t mb_pdu_build_write_multiple_response(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count);

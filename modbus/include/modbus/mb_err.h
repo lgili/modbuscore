@@ -46,6 +46,27 @@ typedef enum modbus_error {
  */
 typedef modbus_error_t mb_err_t;
 
+#define MB_OK                       MODBUS_ERROR_NONE
+#define MB_ERR_INVALID_ARGUMENT     MODBUS_ERROR_INVALID_ARGUMENT
+#define MB_ERR_TIMEOUT              MODBUS_ERROR_TIMEOUT
+#define MB_ERR_TRANSPORT            MODBUS_ERROR_TRANSPORT
+#define MB_ERR_CRC                  MODBUS_ERROR_CRC
+#define MB_ERR_INVALID_REQUEST      MODBUS_ERROR_INVALID_REQUEST
+#define MB_ERR_OTHER_REQUESTS       MODBUS_ERROR_OTHER_REQUESTS
+#define MB_ERR_OTHER                MODBUS_ERROR_OTHER
+
+#define MB_EX_ILLEGAL_FUNCTION      MODBUS_EXCEPTION_ILLEGAL_FUNCTION
+#define MB_EX_ILLEGAL_DATA_ADDRESS  MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS
+#define MB_EX_ILLEGAL_DATA_VALUE    MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE
+#define MB_EX_SERVER_DEVICE_FAILURE MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE
+
+static inline bool mb_err_is_ok(mb_err_t err)
+{
+    return err == MB_OK;
+}
+
+const char *mb_err_str(mb_err_t err);
+
 /**
  * @brief Determines if the given error code represents a Modbus exception.
  *

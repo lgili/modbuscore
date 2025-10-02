@@ -9,6 +9,7 @@
 
 uart_handle_t uart;
 modbus_context_t ctx;
+modbus_client_data_t client;
 
 void my_console_logger(mb_log_level_t severity, char *msg) {
     SYSTEMTIME t;
@@ -101,7 +102,7 @@ int main(void) {
 
     // Initialize Modbus Master context    
 
-    modbus_error_t error = modbus_client_create(&ctx, &transport, &baud_rate);
+    modbus_error_t error = modbus_client_create(&ctx, &transport, &baud_rate, &client);
     if (error != MODBUS_ERROR_NONE) {
     MB_LOG_ERROR("Failed to initialize Modbus Master. Error code: %d\n", error);
         uart_close(&uart);

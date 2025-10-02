@@ -168,6 +168,8 @@ typedef enum {
  *                                 and at least the `transport` and `device_info` fields must be set before calling.
  * @param[in]     platform_conf    Pointer to the transport configuration (`modbus_transport_t`).
  * @param[in]     baudrate         Pointer to the Modbus baud rate.
+ * @param[in,out] client           Pointer to the client state storage supplied by the caller. Must remain valid
+ *                                 for the lifetime of the Modbus context.
  * 
  * @return modbus_error_t `MODBUS_ERROR_NONE` on success, or an error code if initialization fails.
  *
@@ -183,6 +185,7 @@ typedef enum {
  * @example
  * ```c
  * modbus_context_t ctx;
+ * modbus_client_data_t client;
  * modbus_transport_t transport = {
  *     .write = transport_write_function,        // User-defined transport write function
  *     .read = transport_read_function,          // User-defined transport read function
@@ -192,13 +195,13 @@ typedef enum {
  * 
  * uint16_t baud = 19200;
  * 
- * modbus_error_t error = modbus_client_create(&ctx, &transport, &baud);
+ * modbus_error_t error = modbus_client_create(&ctx, &transport, &baud, &client);
  * if (error != MODBUS_ERROR_NONE) {
  *     // Handle initialization error
  * }
  * ```
  */
-modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t *platform_conf, uint16_t *baudrate);
+modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t *platform_conf, uint16_t *baudrate, modbus_client_data_t *client);
 
 /**
  * @brief Polls the Modbus Master state machine.

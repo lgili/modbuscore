@@ -10,6 +10,7 @@
 
 uart_handle_t uart;
 modbus_context_t ctx;
+modbus_server_data_t server;
 uint16_t baudrate = 19200;
 
 void my_console_logger(mb_log_level_t severity, char *msg) {
@@ -132,7 +133,7 @@ int main(void) {
     
     uint16_t device_address = 1;
 
-    modbus_error_t error = modbus_server_create(&ctx, &transport, &device_address, &baudrate);
+    modbus_error_t error = modbus_server_create(&ctx, &transport, &device_address, &baudrate, &server);
     if (error != MODBUS_ERROR_NONE) {
     MB_LOG_ERROR("Failed to initialize Modbus Slave. Error code: %d\n", error);
         uart_close(&uart);

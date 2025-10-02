@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-gcc-debug
+            os: ubuntu-latest
+            preset: host-debug
+            cmake_args: "-DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++"
+          - name: linux-clang-asan
+            os: ubuntu-latest
+            preset: host-asan
+            cmake_args: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++"
+          - name: windows-msvc
+            os: windows-latest
+            preset: host-debug
+            cmake_args: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }} ${{ matrix.cmake_args }}
+        shell: bash
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+        shell: bash
+      - name: Run tests
+        run: ctest --output-on-failure --test-dir build/${{ matrix.preset }}
+        shell: bash
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+      - name: Install documentation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz python3-pip
+          python3 -m pip install --upgrade pip
+          python3 -m pip install sphinx breathe
+        shell: bash
+      - name: Configure docs preset
+        run: cmake --preset host-docs
+        shell: bash
+      - name: Build documentation
+        run: cmake --build --preset host-docs --target doc
+        shell: bash

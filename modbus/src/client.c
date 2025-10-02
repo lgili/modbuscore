@@ -37,18 +37,6 @@
 #include <modbus/mb_log.h>
 
 /* -------------------------------------------------------------------------- */
-/*                           Global Variables                                  */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Global client data structure.
- *
- * This global instance holds all client-specific data, including FSM state, context, device information,
- * current request details, read data buffer, and timeout references.
- */
-modbus_client_data_t g_client;
-
-/* -------------------------------------------------------------------------- */
 /*                           Internal Prototypes                                */
 /* -------------------------------------------------------------------------- */
 
@@ -219,8 +207,12 @@ const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_S
  * }
  * ```
  */
-modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t *platform_conf, uint16_t *baudrate) {
-    if (modbus == NULL || baudrate == NULL || platform_conf == NULL)
+modbus_error_t modbus_client_create(modbus_context_t *modbus,
+                                    modbus_transport_t *platform_conf,
+                                    uint16_t *baudrate,
+                                    modbus_client_data_t *client)
+{
+    if (modbus == NULL || baudrate == NULL || platform_conf == NULL || client == NULL)
     {
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
@@ -230,12 +222,12 @@ modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    /* Assign global client data to the context */
-    modbus->user_data = &g_client;
-    g_client.ctx = modbus;
+    modbus_context_use_internal_buffers(modbus);
+    modbus_reset_buffers(modbus);
 
-    /* Initialize device information */
-    g_client.device_info.baudrate = baudrate;
+    memset(client, 0, sizeof(*client));
+    client->ctx = modbus;
+
     modbus->transport = *platform_conf;
 
     modbus_error_t bind_status = modbus_transport_bind_legacy(&modbus->transport_iface, &modbus->transport);
@@ -249,11 +241,15 @@ modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t
     modbus->tx_reference_time = now;
 
     /* Initialize default timeout */
-    g_client.timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
+    client->timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
+
+    /* Initialize device information */
+    client->device_info.baudrate = baudrate;
 
     /* Initialize FSM */
-    fsm_init(&g_client.fsm, &modbus_client_state_idle, &g_client);
+    fsm_init(&client->fsm, &modbus_client_state_idle, client);
     modbus->role = MODBUS_ROLE_CLIENT;
+    modbus->user_data = client;
 
     return MODBUS_ERROR_NONE;
 }
@@ -374,7 +370,7 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
     MB_LOG_TRACE("RECEIVED Byte %u on %llu ms", data,
                  (unsigned long long)ctx->rx_reference_time);
     /* Store received byte in RX buffer */
-    if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
+    if (ctx->rx_count < ctx->rx_capacity) {
         ctx->rx_buffer[ctx->rx_count++] = data;
     } else {
         /* Buffer overflow detected */
@@ -502,7 +498,7 @@ static void action_send_request(fsm_t *fsm) {
         data[3] = (uint8_t)(client->current_quantity & 0xFF);
 
         uint16_t len = modbus_build_rtu_frame(client->current_slave_address, client->current_function,
-                                              data, 4, ctx->tx_buffer, sizeof(ctx->tx_buffer));
+                                              data, 4, ctx->tx_buffer, ctx->tx_capacity);
         if (len == 0) {
             /* Failed to build frame */
             fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);

@@ -6,6 +6,7 @@ set(SOURCES
   src/frame.c
   src/transport.c
   src/mb_log.c
+  src/mb_err.c
   src/log.c
   src/utils.c
   src/fsm.c

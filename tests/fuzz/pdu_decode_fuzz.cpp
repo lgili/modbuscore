@@ -31,6 +31,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
     (void)mb_pdu_parse_write_multiple_request(pdu, len, &addr, &out_count, &payload);
     (void)mb_pdu_parse_write_multiple_response(pdu, len, &addr, &out_count);
+    mb_u8 ex_function = 0U;
+    mb_u8 ex_code = 0U;
+    (void)mb_pdu_parse_exception(pdu, len, &ex_function, &ex_code);
 
     return 0;
 }

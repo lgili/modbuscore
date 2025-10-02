@@ -43,6 +43,7 @@ protected:
     void SetUp() override {
         modbus_transport_init_mock(&mock_transport);
         memset(&ctx, 0, sizeof(ctx));
+        modbus_context_use_internal_buffers(&ctx);
         ctx.transport = mock_transport;
         ASSERT_EQ(MODBUS_ERROR_NONE, modbus_transport_bind_legacy(&ctx.transport_iface, &ctx.transport));
     }

@@ -148,4 +148,17 @@ TEST_F(RingbufFixture, ResetClearsState)
     EXPECT_FALSE(mb_ringbuf_pop(&rb, &tmp));
 }
 
+TEST_F(RingbufFixture, GracefullyHandleInvalidArgs)
+{
+    uint8_t tmp[4]{};
+
+    EXPECT_EQ(0U, mb_ringbuf_write(nullptr, tmp, sizeof tmp));
+    EXPECT_EQ(0U, mb_ringbuf_write(&rb, nullptr, sizeof tmp));
+    EXPECT_EQ(0U, mb_ringbuf_write(&rb, tmp, 0U));
+
+    EXPECT_EQ(0U, mb_ringbuf_read(nullptr, tmp, sizeof tmp));
+    EXPECT_EQ(0U, mb_ringbuf_read(&rb, nullptr, sizeof tmp));
+    EXPECT_EQ(0U, mb_ringbuf_read(&rb, tmp, 0U));
+}
+
 } // namespace

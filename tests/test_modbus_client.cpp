@@ -44,7 +44,7 @@
 //         memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
 
 //         uint16_t baud = 19200;
-//         modbus_client_create(&g_modbus_ctx, &mock_transport, &baud);
+//         modbus_client_create(&g_modbus_ctx, &mock_transport, &baud, &g_client);
 //     }
 
 //     void TearDown() override {
@@ -184,6 +184,7 @@ extern void mock_advance_time(uint16_t ms);
 
 static modbus_transport_t mock_transport;
 static modbus_context_t g_modbus_ctx; // The master context
+static modbus_client_data_t g_client;
 
 class ModbusMasterTest : public ::testing::Test {
 protected:
@@ -192,7 +193,7 @@ protected:
         memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
 
         uint16_t baud = 19200;
-        modbus_client_create(&g_modbus_ctx, &mock_transport, &baud);
+        modbus_client_create(&g_modbus_ctx, &mock_transport, &baud, &g_client);
     }
 
     void TearDown() override {

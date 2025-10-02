@@ -36,6 +36,7 @@ extern void mock_advance_time(uint16_t ms);
 // We need a global context as per our previous assumption
 modbus_context_t g_modbus_ctx;
 static modbus_transport_t mock_transport;
+static modbus_server_data_t g_server;
 
 // Let's define some holding registers to be used in tests
 static int16_t test_reg_100;   // RW
@@ -54,7 +55,7 @@ protected:
         device_addr_ = 10;
         baud_ = 19200;
 
-        modbus_error_t err = modbus_server_create(&g_modbus_ctx, &mock_transport, &device_addr_, &baud_);
+        modbus_error_t err = modbus_server_create(&g_modbus_ctx, &mock_transport, &device_addr_, &baud_, &g_server);
         ASSERT_EQ(err, MODBUS_ERROR_NONE);
 
 

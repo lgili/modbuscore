@@ -26,6 +26,7 @@ mb_err_t mb_ringbuf_init(mb_ringbuf_t *rb, uint8_t *storage, size_t capacity)
     rb->mask = capacity - 1U;
     rb->head = 0U;
     rb->tail = 0U;
+    rb->count = 0U;
 
     return MODBUS_ERROR_NONE;
 }
@@ -38,33 +39,22 @@ void mb_ringbuf_reset(mb_ringbuf_t *rb)
 
     rb->head = 0U;
     rb->tail = 0U;
+    rb->count = 0U;
 }
 
 size_t mb_ringbuf_capacity(const mb_ringbuf_t *rb)
 {
-    if (rb == NULL) {
-        return 0U;
-    }
-
-    return rb->capacity;
+    return (rb == NULL) ? 0U : rb->capacity;
 }
 
 size_t mb_ringbuf_size(const mb_ringbuf_t *rb)
 {
-    if (rb == NULL) {
-        return 0U;
-    }
-
-    return rb->tail - rb->head;
+    return (rb == NULL) ? 0U : rb->count;
 }
 
 size_t mb_ringbuf_free(const mb_ringbuf_t *rb)
 {
-    if (rb == NULL) {
-        return 0U;
-    }
-
-    return rb->capacity - mb_ringbuf_size(rb);
+    return (rb == NULL) ? 0U : (rb->capacity - rb->count);
 }
 
 bool mb_ringbuf_is_empty(const mb_ringbuf_t *rb)
@@ -78,7 +68,7 @@ bool mb_ringbuf_is_full(const mb_ringbuf_t *rb)
         return false;
     }
 
-    return mb_ringbuf_size(rb) == rb->capacity;
+    return rb->count == rb->capacity;
 }
 
 size_t mb_ringbuf_write(mb_ringbuf_t *rb, const uint8_t *data, size_t len)
@@ -87,15 +77,15 @@ size_t mb_ringbuf_write(mb_ringbuf_t *rb, const uint8_t *data, size_t len)
         return 0U;
     }
 
-    size_t available = mb_ringbuf_free(rb);
-    size_t to_write = (len < available) ? len : available;
+    const size_t available = rb->capacity - rb->count;
+    const size_t to_write = (len < available) ? len : available;
 
     for (size_t i = 0U; i < to_write; ++i) {
-        size_t idx = (rb->tail + i) & rb->mask;
-        rb->buffer[idx] = data[i];
+        rb->buffer[rb->tail] = data[i];
+        rb->tail = (rb->tail + 1U) & rb->mask;
     }
 
-    rb->tail += to_write;
+    rb->count += to_write;
     return to_write;
 }
 
@@ -105,44 +95,37 @@ size_t mb_ringbuf_read(mb_ringbuf_t *rb, uint8_t *out, size_t len)
         return 0U;
     }
 
-    size_t available = mb_ringbuf_size(rb);
-    size_t to_read = (len < available) ? len : available;
+    const size_t to_read = (len < rb->count) ? len : rb->count;
 
     for (size_t i = 0U; i < to_read; ++i) {
-        size_t idx = (rb->head + i) & rb->mask;
-        out[i] = rb->buffer[idx];
+        out[i] = rb->buffer[rb->head];
+        rb->head = (rb->head + 1U) & rb->mask;
     }
 
-    rb->head += to_read;
+    rb->count -= to_read;
     return to_read;
 }
 
 bool mb_ringbuf_push(mb_ringbuf_t *rb, uint8_t byte)
 {
-    if (rb == NULL) {
+    if (rb == NULL || rb->count == rb->capacity) {
         return false;
     }
 
-    if (mb_ringbuf_is_full(rb)) {
-        return false;
-    }
-
-    rb->buffer[rb->tail & rb->mask] = byte;
-    rb->tail += 1U;
+    rb->buffer[rb->tail] = byte;
+    rb->tail = (rb->tail + 1U) & rb->mask;
+    rb->count += 1U;
     return true;
 }
 
 bool mb_ringbuf_pop(mb_ringbuf_t *rb, uint8_t *out_byte)
 {
-    if (rb == NULL || out_byte == NULL) {
+    if (rb == NULL || out_byte == NULL || rb->count == 0U) {
         return false;
     }
 
-    if (mb_ringbuf_is_empty(rb)) {
-        return false;
-    }
-
-    *out_byte = rb->buffer[rb->head & rb->mask];
-    rb->head += 1U;
+    *out_byte = rb->buffer[rb->head];
+    rb->head = (rb->head + 1U) & rb->mask;
+    rb->count -= 1U;
     return true;
 }

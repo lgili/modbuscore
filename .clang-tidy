@@ -1,0 +1,9 @@
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  performance-*,
+  readability-implicit-bool-conversion,
+  readability-misleading-indentation
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(modbus|tests)/'
+FormatStyle: file

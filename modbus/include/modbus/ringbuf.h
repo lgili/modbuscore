@@ -29,16 +29,17 @@ extern "C" {
 /**
  * @brief Ring buffer descriptor.
  *
- * The structure keeps monotonically increasing cursors.  The @p mask is
- * derived from @p capacity and is used to wrap the physical index into the
- * provided storage.
+ * The structure keeps explicit cursors and the current occupancy.  The @p mask is
+ * derived from @p capacity and is used to wrap the physical index into the provided
+ * storage.
  */
 typedef struct mb_ringbuf {
     uint8_t *buffer;      /**< Backing storage provided by the caller. */
     size_t   capacity;    /**< Total number of bytes that fit in @ref buffer. */
     size_t   mask;        /**< Cached (capacity - 1) for fast wrap-around. */
-    size_t   head;        /**< Read cursor (monotonic). */
-    size_t   tail;        /**< Write cursor (monotonic). */
+    size_t   head;        /**< Read cursor. */
+    size_t   tail;        /**< Write cursor. */
+    size_t   count;       /**< Number of bytes currently stored. */
 } mb_ringbuf_t;
 
 mb_err_t mb_ringbuf_init(mb_ringbuf_t *rb, uint8_t *storage, size_t capacity);

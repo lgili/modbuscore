@@ -394,4 +394,48 @@ TEST(PduFc16, ParseResponseRejectsCountOutOfRange)
               mb_pdu_parse_write_multiple_response(frame.data(), frame.size(), nullptr, nullptr));
 }
 
+TEST(PduException, BuildAndParse)
+{
+    mb_u8 buffer[2]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_exception(buffer, sizeof buffer, MB_PDU_FC_READ_HOLDING_REGISTERS, MB_EX_ILLEGAL_DATA_VALUE));
+
+    EXPECT_EQ((mb_u8)(MB_PDU_FC_READ_HOLDING_REGISTERS | MB_PDU_EXCEPTION_BIT), buffer[0]);
+    EXPECT_EQ(MB_EX_ILLEGAL_DATA_VALUE, buffer[1]);
+
+    mb_u8 function = 0U;
+    mb_u8 code = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_exception(buffer, sizeof buffer, &function, &code));
+
+    EXPECT_EQ(MB_PDU_FC_READ_HOLDING_REGISTERS, function);
+    EXPECT_EQ(MB_EX_ILLEGAL_DATA_VALUE, code);
+}
+
+TEST(PduException, RejectsInvalidInputs)
+{
+    mb_u8 buffer[2]{};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_exception(nullptr, sizeof buffer, MB_PDU_FC_READ_HOLDING_REGISTERS, MB_EX_ILLEGAL_FUNCTION));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_exception(buffer, 1U, MB_PDU_FC_READ_HOLDING_REGISTERS, MB_EX_ILLEGAL_FUNCTION));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_exception(buffer, sizeof buffer, (mb_u8)(MB_PDU_FC_READ_HOLDING_REGISTERS | MB_PDU_EXCEPTION_BIT), MB_EX_ILLEGAL_FUNCTION));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_exception(buffer, sizeof buffer, MB_PDU_FC_READ_HOLDING_REGISTERS, 0U));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_exception(nullptr, 2U, nullptr, nullptr));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_exception(buffer, 1U, nullptr, nullptr));
+    buffer[0] = MB_PDU_FC_READ_HOLDING_REGISTERS;
+    buffer[1] = MB_EX_ILLEGAL_FUNCTION;
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_exception(buffer, sizeof buffer, nullptr, nullptr));
+
+    buffer[0] = (mb_u8)(MB_PDU_FC_READ_HOLDING_REGISTERS | MB_PDU_EXCEPTION_BIT);
+    buffer[1] = 0x55U;
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_exception(buffer, sizeof buffer, nullptr, nullptr));
+}
+
 } // namespace

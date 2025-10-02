@@ -78,6 +78,22 @@ cmake --build build/coverage
 cmake --build build/coverage --target coverage
 ```
 
+To reuse an existing GoogleTest installation (for offline builds or
+distribution packaging), configure CMake with
+`-DMODBUS_USE_SYSTEM_GTEST=ON` and provide the appropriate `GTestConfig.cmake`.
+
+## Developer tooling
+
+- **Formatting** – `.clang-format` encodes the project coding style.  Run
+  `clang-format -i <files>` before committing or integrate it into your editor.
+- **Static analysis** – `.clang-tidy` is configured with a conservative set of
+  checks (`clang-analyzer-*`, `bugprone-*`, etc.).  Use `run-clang-tidy -p
+  build/host-debug` (or your preferred wrapper) once the project has been
+  configured.
+- **Continuous integration** – GitHub Actions (`.github/workflows/ci.yml`)
+  exercise GCC, Clang/ASan and MSVC builds and verify that the documentation
+  toolchain stays healthy.
+
 ## Utilities (Gate 1)
 
 Gate 1 introduces reusable, heap-free utilities that underpin future transport
@@ -159,32 +175,29 @@ Ensure you have the following installed on your system:
     The project uses CMake with presets to simplify the build process.
 
     ```bash
-    cmake --preset release
-    cmake --build --preset release
+    cmake --preset host-debug
+    cmake --build --preset host-debug
+    ctest --output-on-failure --test-dir build/host-debug
     ```
 
 5. **Generate the Documentation**
 
     ```bash
-    cmake --build . --preset doc
+    cmake --preset host-docs
+    cmake --build --preset host-docs --target doc
     ```
 
     The documentation will be generated in the `doc/build/html` directory.
 
-6. **Build and run slave rtu example**
-   Change the COM port on the code (line 59 on main.c) to use the correct one, before build!!!
+6. **Build optional examples**
 
-  ```bash
-    cmake --build . --preset ex_slave_uart
-    .\build\debug\examples\win\server\uart\slave_uart_example.exe
-  ```
+   Examples are opt-in to keep default builds lean.  Enable them when configuring
+   and invoke the targets of interest (Windows-only at the moment):
 
-7. **Build and run master rtu example**
-  Change the COM port on the code (line 85 on main.c) to use the correct one, before build!!!
-  ```bash
-    cmake --build . --preset ex_master_uart
-    .\build\debug\examples\win\server\uart\master_uart_example.exe
-  ```
+    ```bash
+    cmake --preset host-release -DMODBUS_BUILD_EXAMPLES=ON
+    cmake --build --preset host-release --target slave_uart_example
+    ```
 
 ## Usage
 

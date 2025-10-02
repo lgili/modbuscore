@@ -13,7 +13,8 @@
  * - Does not use dynamic memory allocation.
  *
  * **Requirements:**
- * - The `modbus_context_t` must contain a field `modbus_server_data_t server_data;` to store server data.
+ * - The application must allocate a `modbus_server_data_t` structure and pass it to
+ *   `modbus_server_create()` so the server can keep its state.
  * - The user must:
  *   - Call `modbus_server_create()`.
  *   - Register registers using `modbus_set_holding_register()` / `modbus_set_array_holding_register()`.
@@ -37,33 +38,6 @@
 #include <inttypes.h>
 
 #include <modbus/mb_log.h>
-
-/* -------------------------------------------------------------------------- */
-/*                             Global Variables                                */
-/* -------------------------------------------------------------------------- */
-bool full_cycle =  true;
-
-/**
- * @brief Global server data structure.
- *
- * This global instance holds all server-specific data, including FSM state, context, device information,
- * current message processing state, and holding registers.
- */
-modbus_server_data_t g_server;
-
-/**
- * @brief Counter for build errors.
- *
- * This static variable counts the number of consecutive build errors to prevent infinite error loops.
- */
-static int build_error_count = 0;
-
-/**
- * @brief Flag indicating the need to update the baud rate.
- *
- * When set to `true`, the server will update the baud rate in the next idle action.
- */
-static bool need_update_baudrate = false;
 
 /* -------------------------------------------------------------------------- */
 /*                             Internal Prototypes                             */
@@ -286,15 +260,15 @@ const fsm_state_t modbus_server_state_error = FSM_STATE("ERROR", MODBUS_SERVER_S
  * uint16_t device_addr = 10;
  * uint16_t baud = 19200;
  * 
- * modbus_error_t error = modbus_server_create(&ctx, &transport, &device_addr, &baud);
+ * modbus_error_t error = modbus_server_create(&ctx, &transport, &device_addr, &baud, &server);
  * if (error != MODBUS_ERROR_NONE) {
  *     // Handle initialization error
  * }
  * ```
  */
-modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t *platform_conf, uint16_t *device_address, uint16_t *baudrate)
+modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t *platform_conf, uint16_t *device_address, uint16_t *baudrate, modbus_server_data_t *server)
 {
-    if (modbus == NULL || device_address == NULL || baudrate == NULL || platform_conf == NULL)
+    if (modbus == NULL || device_address == NULL || baudrate == NULL || platform_conf == NULL || server == NULL)
     {
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
@@ -309,14 +283,17 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    /* Assign global server data to the context */
-    modbus->user_data = &g_server;
-    g_server.ctx = modbus;
+    modbus_context_use_internal_buffers(modbus);
     modbus_reset_buffers(modbus);
 
+    memset(server, 0, sizeof(*server));
+    server->full_cycle = true;
+    modbus->user_data = server;
+    server->ctx = modbus;
+
     /* Initialize device information */
-    g_server.device_info.address = device_address;
-    g_server.device_info.baudrate = baudrate;
+    server->device_info.address = device_address;
+    server->device_info.baudrate = baudrate;
     modbus->transport = *platform_conf;
 
     modbus_error_t bind_status = modbus_transport_bind_legacy(&modbus->transport_iface, &modbus->transport);
@@ -331,11 +308,11 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
     modbus->error_timer = now;
 
     /* Initialize FSM */
-    fsm_init(&g_server.fsm, &modbus_server_state_idle, &g_server);
+    fsm_init(&server->fsm, &modbus_server_state_idle, server);
     modbus->role = MODBUS_ROLE_SERVER;
 
     /* Set conformity level (fixed value for now) */
-    g_server.device_info.conformity_level = 0x81;
+    server->device_info.conformity_level = 0x81;
 
     return MODBUS_ERROR_NONE;
 }
@@ -391,7 +368,7 @@ void modbus_server_poll(modbus_context_t *ctx) {
  * ```c
  * // Assume `received_byte` is obtained from the transport layer
  * uint8_t received_byte = get_received_byte(); // User-defined function
- * modbus_server_receive_data_from_uart_event(&ctx.server_data.fsm, received_byte);
+ * modbus_server_receive_data_from_uart_event(&server_ctx.fsm, received_byte);
  * ```
  */
 void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
@@ -402,7 +379,7 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
     ctx->rx_reference_time = mb_transport_now(&ctx->transport_iface);
 
     /* Store received byte in RX buffer */
-    if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
+    if (ctx->rx_count < ctx->rx_capacity) {
         ctx->rx_buffer[ctx->rx_count++] = data;
     } else {
         /* Buffer overflow detected */
@@ -602,7 +579,8 @@ modbus_error_t modbus_server_add_device_info(modbus_context_t *ctx, const char *
  * This function allows dynamic updating of the Modbus server's baud rate. It is useful
  * for scenarios where the baud rate needs to be changed without restarting the server.
  *
- * @param[in] baud The new baud rate to set.
+ * @param[in,out] server Pointer to the server bookkeeping structure.
+ * @param[in]     baud   The new baud rate to set.
  *
  * @return int16_t The updated baud rate, or an error code if the update fails.
  *
@@ -616,14 +594,16 @@ modbus_error_t modbus_server_add_device_info(modbus_context_t *ctx, const char *
  * @example
  * ```c
  * int16_t new_baud = 38400;
- * int16_t result = update_baudrate(new_baud);
+ * int16_t result = update_baudrate(server, new_baud);
  * if (result < 0) {
  *     // Handle baud rate update error
  * }
  * ```
  */
-int16_t update_baudrate(uint16_t baud) {
-    need_update_baudrate = true;
+int16_t update_baudrate(modbus_server_data_t *server, uint16_t baud) {
+    if (server != NULL) {
+        server->need_update_baudrate = true;
+    }
     return baud;
 }
 
@@ -649,7 +629,7 @@ static void modbus_restart(fsm_t *fsm, bool hard)
     	ctx->transport.restart_uart();
     	// re‐cria FSM a partir do estado idle
     	// fsm_init(&ctx->fsm, &modbus_server_state_idle, ctx);
-        fsm_init(&g_server.fsm, &modbus_server_state_idle, &g_server);
+        fsm_init(&server->fsm, &modbus_server_state_idle, server);
 	}
 	// se soft, FSM continua no mesmo state, mas sem eventos pendentes
 }
@@ -696,11 +676,11 @@ static void action_idle(fsm_t *fsm) {
     modbus_reset_buffers(ctx);
     reset_message(server);
 
-    full_cycle = true;
+    server->full_cycle = true;
 
-    if (need_update_baudrate == true)
+    if (server->need_update_baudrate == true)
     {
-        need_update_baudrate = false;
+        server->need_update_baudrate = false;
         *server->device_info.baudrate = ctx->transport.change_baudrate(*server->device_info.baudrate);
         modbus_restart(fsm, true);       
     }
@@ -715,10 +695,11 @@ static void action_idle(fsm_t *fsm) {
  * @param[in,out] fsm Pointer to the FSM instance.
  */
 static void action_start_receiving(fsm_t *fsm) {
-    if (full_cycle) {
+    modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
+    if (server->full_cycle) {
         fsm_handle_event(fsm, MODBUS_EVENT_PARSE_ADDRESS);
     }
-    full_cycle = false;
+    server->full_cycle = false;
     MB_LOG_TRACE("--> action_start_receiving  <--");
     print_buffer(fsm);
 }
@@ -892,7 +873,7 @@ static void action_build_response(fsm_t *fsm) {
             MB_LOG_TRACE("Operação completa, prosseguindo para PUT_DATA_ON_BUFFER.");
             fsm_handle_event(fsm, MODBUS_EVENT_PUT_DATA_ON_BUFFER);
         }
-        build_error_count = 0;
+        server->build_error_count = 0;
     } else if (read_operation && (server->msg.current_read_index < server->msg.read_quantity)) {
         // Ainda há registradores para ler
     MB_LOG_TRACE("Ainda lendo registradores (lidos: %d de %d), re-acionando BUILD_RESPONSE.", server->msg.current_read_index, server->msg.read_quantity);
@@ -900,13 +881,13 @@ static void action_build_response(fsm_t *fsm) {
     } else {
         // Caso onde a operação não está completa e não é uma leitura continuada
         // Isso pode indicar um problema na lógica de handle_function para escritas ou device_info se precisarem de múltiplas passagens
-        build_error_count++;
-    MB_LOG_WARNING("Build response não completo e não é leitura continuada. build_error_count: %d", build_error_count);
-        if (build_error_count >= 3) { // Limite para evitar loop infinito em caso de bug
+        server->build_error_count++;
+    MB_LOG_WARNING("Build response não completo e não é leitura continuada. build_error_count: %d", server->build_error_count);
+        if (server->build_error_count >= 3) { // Limite para evitar loop infinito em caso de bug
             server->msg.error = MODBUS_ERROR_TRANSPORT;
             fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
             MB_LOG_ERROR("Erro de build persistente, forçando erro.");
-            build_error_count = 0;
+            server->build_error_count = 0;
         }
     }
 }

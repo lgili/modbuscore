@@ -304,3 +304,54 @@ mb_err_t mb_pdu_parse_write_multiple_response(const mb_u8 *pdu, mb_size_t len, m
 
     return MODBUS_ERROR_NONE;
 }
+
+mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code)
+{
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if ((function & MB_PDU_EXCEPTION_BIT) != 0U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (exception_code < MB_EX_ILLEGAL_FUNCTION || exception_code > MB_EX_SERVER_DEVICE_FAILURE) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (!mb_pdu_validate_capacity(2U, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = (mb_u8)(function | MB_PDU_EXCEPTION_BIT);
+    out[1] = exception_code;
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_function, mb_u8 *out_exception)
+{
+    if (pdu == NULL || len != 2U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if ((pdu[0] & MB_PDU_EXCEPTION_BIT) == 0U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    mb_u8 function = (mb_u8)(pdu[0] & (mb_u8)~MB_PDU_EXCEPTION_BIT);
+    mb_u8 code = pdu[1];
+
+    if (code < MB_EX_ILLEGAL_FUNCTION || code > MB_EX_SERVER_DEVICE_FAILURE) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (out_function != NULL) {
+        *out_function = function;
+    }
+
+    if (out_exception != NULL) {
+        *out_exception = code;
+    }
+
+    return MODBUS_ERROR_NONE;
+}

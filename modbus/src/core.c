@@ -446,8 +446,20 @@ void modbus_reset_buffers(modbus_context_t *ctx) {
     ctx->tx_raw_index = 0U;
 
     /* Clear RX and TX buffers */
-    memset(ctx->rx_buffer, 0, sizeof(ctx->rx_buffer));
-    memset(ctx->tx_buffer, 0, sizeof(ctx->tx_buffer));
-    memset(ctx->tx_raw_buffer, 0, sizeof(ctx->tx_raw_buffer));
+    if (ctx->rx_buffer != NULL && ctx->rx_capacity > 0U) {
+        memset(ctx->rx_buffer, 0, ctx->rx_capacity);
+    }
+
+    if (ctx->rx_raw_buffer != NULL && ctx->rx_raw_capacity > 0U) {
+        memset(ctx->rx_raw_buffer, 0, ctx->rx_raw_capacity);
+    }
+
+    if (ctx->tx_buffer != NULL && ctx->tx_capacity > 0U) {
+        memset(ctx->tx_buffer, 0, ctx->tx_capacity);
+    }
+
+    if (ctx->tx_raw_buffer != NULL && ctx->tx_raw_capacity > 0U) {
+        memset(ctx->tx_raw_buffer, 0, ctx->tx_raw_capacity);
+    }
 }
 

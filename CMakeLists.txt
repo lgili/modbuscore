@@ -16,6 +16,7 @@ option(MODBUS_ENABLE_COVERAGE "Enable code coverage instrumentation (GCC/Clang).
 option(MODBUS_ENABLE_ASAN "Enable AddressSanitizer when supported." OFF)
 option(MODBUS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer when supported." OFF)
 option(MODBUS_PEDANTIC_WARNINGS "Add -Wconversion/-Wsign-conversion diagnostics." OFF)
+option(MODBUS_USE_SYSTEM_GTEST "Use an existing GTest installation instead of downloading it." OFF)
 
 if(MODBUS_FORCE_C99)
     set(CMAKE_C_STANDARD 99)
@@ -160,5 +161,4 @@ if(MODBUS_BUILD_DOCS)
         COMMENT "Generating full project documentation"
     )
 endif()
-
 

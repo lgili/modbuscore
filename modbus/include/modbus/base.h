@@ -210,15 +210,20 @@ typedef struct {
 
     modbus_role_t role;           /**< Client or Server role */
 
-    uint8_t rx_buffer[64];        /**< Buffer for incoming data */
+    uint8_t *rx_buffer;           /**< Buffer for incoming data */
+    uint16_t rx_capacity;         /**< Capacity of the RX buffer */
     uint16_t rx_count;            /**< Number of bytes in the receive buffer */
     uint16_t rx_index;            /**< Current index in the receive buffer */
-    uint8_t rx_raw_buffer[64]; /**< Buffer for receiving data */
 
-    uint8_t tx_raw_buffer[64];    /**< Raw buffer for outgoing data */
-    uint16_t tx_raw_index;        /**< Current index in the transmit buffer */
+    uint8_t *rx_raw_buffer;       /**< Buffer for raw RX bytes */
+    uint16_t rx_raw_capacity;     /**< Capacity of the raw RX buffer */
 
-    uint8_t tx_buffer[64];        /**< Processed buffer for outgoing data */
+    uint8_t *tx_raw_buffer;       /**< Raw buffer for outgoing data */
+    uint16_t tx_raw_capacity;     /**< Capacity of the raw TX buffer */
+    uint16_t tx_raw_index;        /**< Current index in the raw transmit buffer */
+
+    uint8_t *tx_buffer;           /**< Processed buffer for outgoing data */
+    uint16_t tx_capacity;         /**< Capacity of the processed TX buffer */
     uint16_t tx_index;            /**< Current index in the processed buffer */
 
     mb_time_ms_t rx_reference_time;   /**< Timestamp for receiving data, used in timeouts */
@@ -226,7 +231,41 @@ typedef struct {
     mb_time_ms_t error_timer;         /**< Timer for tracking errors */
 
     void *user_data;              /**< Pointer for user-specific context */
+
+    struct {
+        uint8_t rx[MODBUS_RECEIVE_BUFFER_SIZE];       /**< Default RX buffer storage */
+        uint8_t rx_raw[MODBUS_RECEIVE_BUFFER_SIZE];   /**< Default raw RX buffer storage */
+        uint8_t tx_raw[MODBUS_SEND_BUFFER_SIZE];      /**< Default raw TX buffer storage */
+        uint8_t tx[MODBUS_SEND_BUFFER_SIZE];          /**< Default processed TX buffer storage */
+    } internal_buffers;
 } modbus_context_t;
+
+static inline void modbus_context_use_internal_buffers(modbus_context_t *ctx)
+{
+    if (ctx == NULL) {
+        return;
+    }
+
+    if (ctx->rx_buffer == NULL) {
+        ctx->rx_buffer = ctx->internal_buffers.rx;
+        ctx->rx_capacity = (uint16_t)MB_COUNTOF(ctx->internal_buffers.rx);
+    }
+
+    if (ctx->rx_raw_buffer == NULL) {
+        ctx->rx_raw_buffer = ctx->internal_buffers.rx_raw;
+        ctx->rx_raw_capacity = (uint16_t)MB_COUNTOF(ctx->internal_buffers.rx_raw);
+    }
+
+    if (ctx->tx_raw_buffer == NULL) {
+        ctx->tx_raw_buffer = ctx->internal_buffers.tx_raw;
+        ctx->tx_raw_capacity = (uint16_t)MB_COUNTOF(ctx->internal_buffers.tx_raw);
+    }
+
+    if (ctx->tx_buffer == NULL) {
+        ctx->tx_buffer = ctx->internal_buffers.tx;
+        ctx->tx_capacity = (uint16_t)MB_COUNTOF(ctx->internal_buffers.tx);
+    }
+}
 
 #ifdef __cplusplus
 }

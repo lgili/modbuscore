@@ -41,8 +41,8 @@
  *     
  *     ctx.transport = transport;
  *     ctx.role = MODBUS_ROLE_SLAVE;
- *     ctx.server_data.device_info.address = &device_addr;
- *     ctx.server_data.device_info.baudrate = &baud;
+ *     server.device_info.address = &device_addr;
+ *     server.device_info.baudrate = &baud;
  *     
  *     // Initialize Modbus server
  *     modbus_error_t error = modbus_server_create(&ctx, &transport, &device_addr, &baud);
@@ -59,7 +59,7 @@
  *         // Inject received bytes into FSM via modbus_server_receive_data_from_uart_event()
  *         // This should be called whenever a new byte is received from the transport layer
  *         uint8_t received_byte = get_received_byte(); // User-defined function
- *         modbus_server_receive_data_from_uart_event(&ctx.server_data.fsm, received_byte);
+ *         modbus_server_receive_data_from_uart_event(&server.fsm, received_byte);
  *         
  *         // Poll the Modbus server FSM
  *         modbus_server_poll(&ctx);
@@ -146,7 +146,7 @@ typedef struct {
 typedef struct {
     fsm_t fsm;                          /**< FSM instance for managing server states */
     modbus_context_t *ctx;              /**< Pointer to the Modbus context */
-    
+
     /** 
      * @brief Device information used for responding to device info requests.
      * 
@@ -186,6 +186,10 @@ typedef struct {
      */
     variable_modbus_t holding_registers[MAX_SIZE_HOLDING_REGISTERS]; /**< Array of holding registers */
     uint16_t holding_register_count;                                        /**< Number of holding registers registered */
+
+    bool full_cycle;                    /**< Tracks whether a complete read cycle is in progress */
+    bool need_update_baudrate;          /**< Signals that baudrate must be refreshed on next idle */
+    int build_error_count;              /**< Guards against infinite retry loops when building responses */
 } modbus_server_data_t;
 
 /* -------------------------------------------------------------------------- */
@@ -328,12 +332,13 @@ typedef enum {
   * This function sets up the FSM with the initial state, initializes buffers, and prepares
   * the server to receive and respond to Modbus requests.
   *
-  * @param[in,out] ctx              Pointer to the Modbus context. The context must be allocated by the user,
-  *                                   and at least the `transport` and `device_info` fields must be set before calling.
+  * @param[in,out] ctx              Pointer to the Modbus context supplied by the caller.
   * @param[in]     platform_conf    Pointer to the transport configuration (`modbus_transport_t`).
   * @param[in]     device_address   Pointer to the device address (RTU).
   * @param[in]     baudrate         Pointer to the Modbus baud rate.
-  * 
+  * @param[in,out] server           Pointer to the server state storage supplied by the caller. Must remain valid
+  *                                 for the lifetime of the Modbus instance.
+  *
   * @return modbus_error_t `MODBUS_ERROR_NONE` on success, or an error code if initialization fails.
   *
   * @retval MODBUS_ERROR_NONE          Server initialized successfully.
@@ -342,33 +347,29 @@ typedef enum {
   * @retval Others                      Various error codes as defined in `modbus_error_t`.
   *
   * @warning
-  * - Ensure that `ctx`, `platform_conf`, `device_address`, and `baudrate` are valid pointers.
+  * - Ensure that `ctx`, `platform_conf`, `device_address`, `baudrate`, and `server` are valid pointers.
   * - The transport layer functions (`write`, `read`, `get_reference_msec`) must be properly implemented.
-  * 
+  *
   * @example
   * ```c
   * modbus_context_t ctx;
+  * modbus_server_data_t server;
   * modbus_transport_t transport = {
   *     .write = transport_write_function,       // User-defined transport write function
   *     .read = transport_read_function,         // User-defined transport read function
   *     .get_reference_msec = get_msec_function   // User-defined function to get current time in ms
   * };
-  * 
+  *
   * uint16_t device_addr = 10;
   * uint16_t baud = 19200;
-  * 
-  * ctx.transport = transport;
-  * ctx.role = MODBUS_ROLE_SERVER;
-  * ctx.server_data.device_info.address = &device_addr;
-  * ctx.server_data.device_info.baudrate = &baud;
-  * 
-  * modbus_error_t error = modbus_server_create(&ctx, &transport, &device_addr, &baud);
+  *
+  * modbus_error_t error = modbus_server_create(&ctx, &transport, &device_addr, &baud, &server);
   * if (error != MODBUS_ERROR_NONE) {
   *     // Handle initialization error
   * }
   * ```
   */
-modbus_error_t modbus_server_create(modbus_context_t *ctx, modbus_transport_t *platform_conf, uint16_t *device_address, uint16_t *baudrate);
+modbus_error_t modbus_server_create(modbus_context_t *ctx, modbus_transport_t *platform_conf, uint16_t *device_address, uint16_t *baudrate, modbus_server_data_t *server);
 
 /**
  * @brief Polls the Modbus server state machine.
@@ -412,7 +413,7 @@ void modbus_server_poll(modbus_context_t *ctx);
  * ```c
  * // Assume `received_byte` is obtained from the transport layer
  * uint8_t received_byte = get_received_byte(); // User-defined function
- * modbus_server_receive_data_from_uart_event(&ctx.server_data.fsm, received_byte);
+ * modbus_server_receive_data_from_uart_event(&server.fsm, received_byte);
  * ```
  */
 void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data);
@@ -532,6 +533,7 @@ modbus_error_t modbus_server_add_device_info(modbus_context_t *ctx, const char *
  * This function allows dynamic updating of the Modbus server's baud rate. It is useful
  * for scenarios where the baud rate needs to be changed without restarting the server.
  *
+ * @param[in,out] server Pointer to the server state.
  * @param[in] baud The new baud rate to set.
  *
  * @return int16_t The updated baud rate, or an error code if the update fails.
@@ -546,13 +548,13 @@ modbus_error_t modbus_server_add_device_info(modbus_context_t *ctx, const char *
  * @example
  * ```c
  * int16_t new_baud = 38400;
- * int16_t result = update_baudrate(new_baud);
+ * int16_t result = update_baudrate(&server, new_baud);
  * if (result < 0) {
  *     // Handle baud rate update error
  * }
  * ```
  */
-int16_t update_baudrate(uint16_t baud);
+int16_t update_baudrate(modbus_server_data_t *server, uint16_t baud);
 
 #ifdef __cplusplus
 }

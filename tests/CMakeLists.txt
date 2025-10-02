@@ -2,22 +2,42 @@ if(NOT BUILD_TESTING)
   return()
 endif()
 
-# Include FetchContent module
-include(FetchContent)
+if(MODBUS_USE_SYSTEM_GTEST)
+  find_package(GTest CONFIG QUIET)
+  if(NOT GTest_FOUND)
+    find_package(GTest REQUIRED)
+  endif()
+else()
+  include(FetchContent)
 
-# Declare the dependency on GoogleTest
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/release-1.12.1.zip
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/release-1.12.1.zip
+  )
+
+  # Prevent overriding the parent project's compiler/linker settings
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+  FetchContent_MakeAvailable(googletest)
+endif()
+
+set(_modbus_gtest_main_candidates
+  GTest::gtest_main
+  GTest::Main
+  gtest_main
+  GTest::gtest-main
 )
+set(MODBUS_GTEST_MAIN_TARGET "")
+foreach(_candidate IN LISTS _modbus_gtest_main_candidates)
+  if(TARGET ${_candidate})
+    set(MODBUS_GTEST_MAIN_TARGET ${_candidate})
+    break()
+  endif()
+endforeach()
 
-# Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-# Fetch and make available GoogleTest
-FetchContent_MakeAvailable(googletest)
-
-# Now, GTest targets are available as GTest::gtest and GTest::gtest_main
+if(NOT MODBUS_GTEST_MAIN_TARGET)
+  message(FATAL_ERROR "Unable to locate a gtest_main target; provide GTest via MODBUS_USE_SYSTEM_GTEST or allow FetchContent downloads.")
+endif()
 
 set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_fsm.cpp
@@ -27,6 +47,8 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ringbuf.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mempool.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_pdu_codec.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_log.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_err.cpp
 )
 
 if(MODBUS_ENABLE_INTEGRATION_TESTS)
@@ -54,7 +76,7 @@ foreach(TEST_SRC ${TEST_SOURCES})
       CXX_EXTENSIONS OFF
   )
 
-  target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main modbus)
+  target_link_libraries(${TEST_NAME} PRIVATE ${MODBUS_GTEST_MAIN_TARGET} modbus)
 
   if(MODBUS_WARN_FLAGS)
     target_compile_options(${TEST_NAME} PRIVATE ${MODBUS_WARN_FLAGS})
