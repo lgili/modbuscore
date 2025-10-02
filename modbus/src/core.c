@@ -61,8 +61,11 @@
  * @{
  */
 
-#include <modbus/core.h>
 #include <string.h>
+
+#include <modbus/core.h>
+#include <modbus/frame.h>
+#include <modbus/transport_if.h>
 
 /* Internal defines for timeouts, if needed */
 #ifndef MODBUS_INTERFRAME_TIMEOUT_MS
@@ -112,31 +115,19 @@
 uint16_t modbus_build_rtu_frame(uint8_t address, uint8_t function_code,
                                 const uint8_t *data, uint16_t data_length,
                                 uint8_t *out_buffer, uint16_t out_buffer_size) {
-    if (!out_buffer) {
-        return 0; // Invalid output buffer
+    const mb_adu_view_t adu = {
+        .unit_id = address,
+        .function = function_code,
+        .payload = data,
+        .payload_len = data_length
+    };
+
+    mb_size_t produced = 0U;
+    if (mb_frame_rtu_encode(&adu, out_buffer, out_buffer_size, &produced) != MODBUS_ERROR_NONE) {
+        return 0U;
     }
 
-    /* Calculate required frame size: address + function_code + data + CRC */
-    uint16_t required_size = 1U + 1U + data_length + 2U;
-    if (out_buffer_size < required_size) {
-        return 0; // Not enough space
-    }
-
-    uint16_t index = 0U;
-    out_buffer[index++] = address;
-    out_buffer[index++] = function_code;
-
-    if (data && data_length > 0U) {
-        memcpy(&out_buffer[index], data, data_length);
-        index += data_length;
-    }
-
-    /* Calculate CRC using the table-driven method for efficiency */
-    uint16_t crc = modbus_crc_with_table(out_buffer, index);
-    out_buffer[index++] = GET_LOW_BYTE(crc);
-    out_buffer[index++] = GET_HIGH_BYTE(crc);
-
-    return index; // Total frame length
+    return (uint16_t)produced;
 }
 
 /**
@@ -183,35 +174,30 @@ modbus_error_t modbus_parse_rtu_frame(const uint8_t *frame, uint16_t frame_lengt
                                       uint8_t *address, uint8_t *function,
                                       const uint8_t **payload, uint16_t *payload_len) {
     if (!frame || !address || !function || !payload || !payload_len) {
-        return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
+        return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    if (frame_length < 4U) {
-        return MODBUS_ERROR_INVALID_ARGUMENT; // Too short (address + function + CRC)
+    mb_adu_view_t adu = {0};
+    modbus_error_t status = mb_frame_rtu_decode(frame, frame_length, &adu);
+    if (status != MODBUS_ERROR_NONE) {
+        return status;
     }
 
-    /* Extract and verify CRC */
-    uint16_t calc_crc = modbus_crc_with_table(frame, frame_length - 2U);
-    const uint16_t crc_high = (uint16_t)((uint16_t)frame[frame_length - 1U] << 8U);
-    const uint16_t crc_low = (uint16_t)frame[frame_length - 2U];
-    const uint16_t recv_crc = (uint16_t)(crc_high | crc_low);
-
-    if (calc_crc != recv_crc) {
-        return MODBUS_ERROR_CRC; // CRC mismatch
-    }
-
-    *address = frame[0];
-    *function = frame[1];
+    *address = adu.unit_id;
+    *function = adu.function;
 
     /* Check if the function code indicates an error response */
     if (modbus_is_error_response(*function)) {
-        uint8_t exception_code = frame[2];
+        if (adu.payload_len == 0U || !adu.payload) {
+            return MODBUS_ERROR_INVALID_ARGUMENT;
+        }
+        uint8_t exception_code = adu.payload[0];
         return modbus_exception_to_error(exception_code);
     }
 
     /* Extract payload */
-    *payload = &frame[2];
-    *payload_len = frame_length - 4U; // Subtract address(1) + function(1) + CRC(2)
+    *payload = adu.payload;
+    *payload_len = (uint16_t)adu.payload_len;
 
     return MODBUS_ERROR_NONE;
 }
@@ -253,15 +239,18 @@ modbus_error_t modbus_send_frame(modbus_context_t *ctx, const uint8_t *frame, ui
         return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
-    // MB_LOG_INFO("Sending frame to transport (%u bytes)", frame_len);
-    int32_t written = ctx->transport.write(frame, frame_len);
-    if (written < 0) {
-        return MODBUS_ERROR_TRANSPORT; // Transport layer error
-    } else if ((uint16_t)written < frame_len) {
-        return MODBUS_ERROR_TRANSPORT; // Partial write occurred
+    const mb_transport_if_t *iface = &ctx->transport_iface;
+    mb_transport_io_result_t io = {0};
+    const mb_err_t status = mb_transport_send(iface, frame, (mb_size_t)frame_len, &io);
+    if (status != MODBUS_ERROR_NONE) {
+        return status;
     }
 
-    return MODBUS_ERROR_NONE;
+    if (io.processed == (mb_size_t)frame_len) {
+        ctx->tx_reference_time = mb_transport_now(iface);
+    }
+
+    return (io.processed == (mb_size_t)frame_len) ? MODBUS_ERROR_NONE : MODBUS_ERROR_TRANSPORT;
 }
 
 /**
@@ -304,91 +293,79 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
         return MODBUS_ERROR_INVALID_ARGUMENT; // Invalid arguments
     }
 
-    /* Initialize read buffer and counters */
-    uint16_t bytes_read = 0U;
-    uint16_t frame_start_time = ctx->transport.get_reference_msec();
+    const mb_transport_if_t *iface = &ctx->transport_iface;
+    mb_size_t bytes_read = 0U;
+    uint16_t expected_length = 0U;
+    uint16_t last_activity_tick = (uint16_t)mb_transport_now(iface);
+    const uint16_t frame_origin_tick = last_activity_tick;
 
-    /* Continuously read until a complete frame is received or a timeout occurs */
-    while (bytes_read < out_size) {
-        int32_t r = ctx->transport.read(&out_buffer[bytes_read], out_size - bytes_read);
-        if (r < 0) {
-            return MODBUS_ERROR_TRANSPORT; // Transport layer error
-        } else if (r == 0) {
-            /* No data read; check for timeout */
-            uint16_t current_time = ctx->transport.get_reference_msec();
-            if ((current_time - frame_start_time) > MODBUS_INTERFRAME_TIMEOUT_MS) {
-                return MODBUS_ERROR_TIMEOUT; // Inter-frame timeout
-            }
-            continue; // Continue waiting for data
-        }
+    while (bytes_read < (mb_size_t)out_size) {
+        mb_transport_io_result_t io = {0};
+        const mb_err_t status = mb_transport_recv(iface,
+                                                  &out_buffer[bytes_read],
+                                                  (mb_size_t)(out_size - (uint16_t)bytes_read),
+                                                  &io);
 
-        bytes_read += (uint16_t)r;
+        if (status == MODBUS_ERROR_NONE && io.processed > 0U) {
+            bytes_read += io.processed;
+            last_activity_tick = (uint16_t)mb_transport_now(iface);
 
-        /* Check if enough data has been read to determine frame length */
-        uint16_t expected_length = 0U;
-        if (bytes_read >= 3U) {
-            /* Extract expected frame length based on function code and data */
-            uint8_t function_code = out_buffer[1];
-
-            switch (function_code) {
-                case MODBUS_FUNC_READ_COILS:
-                case MODBUS_FUNC_READ_DISCRETE_INPUTS:
-                case MODBUS_FUNC_READ_HOLDING_REGISTERS:
-                case MODBUS_FUNC_READ_INPUT_REGISTERS:
-                    /* For read functions: address(1) + function(1) + byte count(1) + data + CRC(2) */
-                    if (bytes_read >= 3U) {
-                        uint8_t byte_count = out_buffer[2];
+            if (bytes_read >= 3U && expected_length == 0U) {
+                const uint8_t function_code = out_buffer[1];
+                if ((function_code & MODBUS_FUNC_ERROR_FRAME_HEADER) != 0U) {
+                    expected_length = 1U + 1U + 1U + 2U;
+                } else {
+                    switch (function_code) {
+                    case MODBUS_FUNC_READ_COILS:
+                    case MODBUS_FUNC_READ_DISCRETE_INPUTS:
+                    case MODBUS_FUNC_READ_HOLDING_REGISTERS:
+                    case MODBUS_FUNC_READ_INPUT_REGISTERS:
+                    case MODBUS_FUNC_WRITE_MULTIPLE_COILS:
+                    case MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS:
+                    case MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS: {
+                        const uint8_t byte_count = out_buffer[2];
                         expected_length = (uint16_t)(3U + byte_count + 2U);
+                        break;
                     }
-                    break;
-                case MODBUS_FUNC_WRITE_SINGLE_COIL:
-                case MODBUS_FUNC_WRITE_SINGLE_REGISTER:
-                    /* For write single: address(1) + function(1) + data(2) + CRC(2) */
-                    expected_length = 1U + 1U + 2U + 2U;
-                    break;
-                case MODBUS_FUNC_WRITE_MULTIPLE_COILS:
-                case MODBUS_FUNC_WRITE_MULTIPLE_REGISTERS:
-                case MODBUS_FUNC_READ_WRITE_MULTIPLE_REGISTERS:
-                    /* For write multiple: address(1) + function(1) + byte count(1) + data + CRC(2) */
-                    if (bytes_read >= 3U) {
-                        uint8_t byte_count = out_buffer[2];
-                        expected_length = (uint16_t)(3U + byte_count + 2U);
+                    case MODBUS_FUNC_WRITE_SINGLE_COIL:
+                    case MODBUS_FUNC_WRITE_SINGLE_REGISTER:
+                        expected_length = 1U + 1U + 2U + 2U;
+                        break;
+                    case MODBUS_FUNC_READ_DEVICE_INFORMATION:
+                        expected_length = 1U + 1U + 1U + 2U;
+                        break;
+                    default:
+                        expected_length = 1U + 1U + 2U;
+                        break;
                     }
-                    break;
-                case MODBUS_FUNC_READ_DEVICE_INFORMATION:
-                    /* Device information responses vary; assume a minimum length */
-                    expected_length = 1U + 1U + 1U + 2U; // Adjust as needed
-                    break;
-                default:
-                    /* For unknown function codes, expect at least address + function + CRC */
-                    expected_length = 1U + 1U + 2U;
-                    break;
+                }
             }
+
+            if (expected_length > 0U && bytes_read >= expected_length) {
+                break;
+            }
+
+            continue;
         }
 
-        if (expected_length > 0U && bytes_read >= expected_length) {
-            /* Frame is complete */
-            break;
+        if (status == MODBUS_ERROR_TIMEOUT || (status == MODBUS_ERROR_NONE && io.processed == 0U)) {
+            const uint16_t now_tick = (uint16_t)mb_transport_now(iface);
+            if (((uint16_t)(now_tick - last_activity_tick) > MODBUS_BYTE_TIMEOUT_MS) ||
+                ((uint16_t)(now_tick - frame_origin_tick) > MODBUS_INTERFRAME_TIMEOUT_MS)) {
+                return MODBUS_ERROR_TIMEOUT;
+            }
+            mb_transport_yield(iface);
+            continue;
         }
 
-        /* Update frame start time for inter-byte timeout when awaiting more bytes */
-        if (expected_length == 0U || bytes_read < expected_length) {
-            frame_start_time = ctx->transport.get_reference_msec();
-        }
+        return status;
     }
 
     if (bytes_read == 0U) {
         return MODBUS_ERROR_TIMEOUT; // No data received
     }
 
-    /* Parse the received frame */
-    // modbus_error_t parse_result = modbus_parse_rtu_frame(out_buffer, bytes_read, &ctx->last_address, &ctx->last_function,
-    //                                                      &ctx->last_payload, &ctx->last_payload_len);
-    // if (parse_result != MODBUS_ERROR_NONE) {
-    //     return parse_result; // Return the parsing error
-    // }
-
-    *out_length = bytes_read;
+    *out_length = (uint16_t)bytes_read;
     return MODBUS_ERROR_NONE;
 }
 

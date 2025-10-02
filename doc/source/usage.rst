@@ -100,6 +100,107 @@ Fixed-size memory pool
        mb_mempool_release(&pool, ptr);
    }
 
+PDU helpers (Gate 2)
+--------------------
+
+The `modbus/pdu.h` façade keeps the Modbus protocol codecs in one place.  Gate 2
+starts with Function Codes 0x03, 0x06 and 0x10, covering register reads and
+writes.
+
+.. code-block:: c
+
+   #include <modbus/pdu.h>
+
+   mb_u8 request[MB_PDU_MAX];
+   mb_pdu_build_read_holding_request(request, sizeof request, 0x0000, 4);
+
+   // later, parse the response
+   const mb_u8 *payload = NULL;
+   mb_u16 register_count = 0;
+   if (mb_pdu_parse_read_holding_response(response_pdu, response_len,
+                                          &payload, &register_count) == MODBUS_ERROR_NONE) {
+       // payload now points to 2 * register_count bytes with big-endian values
+   }
+
+For robustness testing, enable the optional libFuzzer target with
+``-DMODBUS_BUILD_FUZZERS=ON`` (Clang required).  The harness exercises each
+decoder (`mb_pdu_parse_*`) continuously, catching malformed frames early in the
+pipeline.
+
+Transport abstraction (Gate 3)
+------------------------------
+
+Gate 3 introduces a compact, non-blocking transport interface that both client
+and server code can depend on without pulling in platform specifics.  The
+``mb_transport_if_t`` façade groups ``send``/``recv`` callbacks together with a
+monotonic ``now_ms`` helper and an optional ``yield`` hook.  Mock transports used
+by the tests are also exposed through this interface, making it trivial to wire
+integration scenarios.
+
+.. code-block:: c
+
+   #include <modbus/transport_if.h>
+   #include <modbus/frame.h>
+
+   static mb_err_t uart_send(void *ctx, const mb_u8 *buf, mb_size_t len,
+                             mb_transport_io_result_t *out)
+   {
+       (void)ctx;
+       const int32_t written = platform_uart_write(buf, (uint16_t)len);
+       if (written < 0) {
+           return MODBUS_ERROR_TRANSPORT;
+       }
+       if (out) {
+           out->processed = (mb_size_t)written;
+       }
+       return (written == (int32_t)len) ? MODBUS_ERROR_NONE : MODBUS_ERROR_TRANSPORT;
+   }
+
+   static mb_err_t uart_recv(void *ctx, mb_u8 *buf, mb_size_t cap,
+                             mb_transport_io_result_t *out)
+   {
+       (void)ctx;
+       const int32_t read_count = platform_uart_read(buf, (uint16_t)cap);
+       if (read_count < 0) {
+           return MODBUS_ERROR_TRANSPORT;
+       }
+       if (out) {
+           out->processed = (mb_size_t)read_count;
+       }
+       return (read_count > 0) ? MODBUS_ERROR_NONE : MODBUS_ERROR_TIMEOUT;
+   }
+
+   static mb_time_ms_t app_now(void *ctx)
+   {
+       (void)ctx;
+       return platform_monotonic_ticks();
+   }
+
+   static const mb_transport_if_t uart_iface = {
+       .ctx = NULL,
+       .send = uart_send,
+       .recv = uart_recv,
+       .now = app_now,
+       .yield = NULL,
+   };
+
+   // Encode a PDU into an RTU frame and push it through the transport
+   const mb_u8 pdu_payload[] = {0x00, 0x02};
+   const mb_adu_view_t adu = {
+       .unit_id = 1,
+       .function = MB_PDU_FC_READ_HOLDING_REGISTERS,
+       .payload = pdu_payload,
+       .payload_len = sizeof pdu_payload,
+   };
+   mb_u8 adu_buffer[16];
+   mb_size_t adu_len = 0U;
+   if (mb_frame_rtu_encode(&adu, adu_buffer, sizeof adu_buffer, &adu_len) == MODBUS_ERROR_NONE) {
+       mb_transport_send(&uart_iface, adu_buffer, adu_len, NULL);
+   }
+
+``mb_frame_rtu_decode`` performs the inverse operation, validating the CRC and
+returning an ``mb_adu_view_t`` that points directly into the received buffer.
+
 ## Initialization
 
 Before utilizing the Master or Slave functionalities, it is essential to initialize the corresponding context with the appropriate transport configurations and device settings.

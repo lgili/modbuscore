@@ -27,6 +27,75 @@ static uint16_t tx_mock_count = 0;  /* Number of bytes written to TX buffer */
 
 static uint16_t mock_time_reference = 0; /* Mock time reference counter */
 
+/* Forward declarations for internal helpers used by the shims */
+static int32_t mock_read(uint8_t *buf, uint16_t count);
+static int32_t mock_write(const uint8_t *buf, uint16_t count);
+
+static mb_err_t mock_send_shim(void *ctx, const mb_u8 *buf, mb_size_t len, mb_transport_io_result_t *out)
+{
+    (void)ctx;
+    if (!buf) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (len > UINT16_MAX) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    const int32_t written = mock_write(buf, (uint16_t)len);
+    if (written < 0) {
+        return MODBUS_ERROR_TRANSPORT;
+    }
+
+    if (out) {
+        out->processed = (mb_size_t)written;
+    }
+
+    return (written == (int32_t)len) ? MODBUS_ERROR_NONE : MODBUS_ERROR_TRANSPORT;
+}
+
+static mb_err_t mock_recv_shim(void *ctx, mb_u8 *buf, mb_size_t cap, mb_transport_io_result_t *out)
+{
+    (void)ctx;
+    if (!buf || cap == 0U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (cap > UINT16_MAX) {
+        cap = UINT16_MAX;
+    }
+
+    const int32_t read_count = mock_read(buf, (uint16_t)cap);
+    if (read_count < 0) {
+        return MODBUS_ERROR_TRANSPORT;
+    }
+
+    if (out) {
+        out->processed = (mb_size_t)read_count;
+    }
+
+    return (read_count > 0) ? MODBUS_ERROR_NONE : MODBUS_ERROR_TIMEOUT;
+}
+
+static mb_time_ms_t mock_now_shim(void *ctx)
+{
+    (void)ctx;
+    return mock_time_reference;
+}
+
+static void mock_yield_shim(void *ctx)
+{
+    (void)ctx;
+}
+
+static const mb_transport_if_t mock_transport_iface = {
+    .ctx = NULL,
+    .send = mock_send_shim,
+    .recv = mock_recv_shim,
+    .now = mock_now_shim,
+    .yield = mock_yield_shim,
+};
+
 /**
  * @brief Mock read function.
  *
@@ -150,6 +219,7 @@ void mock_clear_tx_buffer(void);
 void mock_advance_time(uint16_t ms);
 void modbus_transport_init_mock(modbus_transport_t *transport);
 uint16_t get_current_time_ms(void);
+const mb_transport_if_t *mock_transport_get_iface(void);
 
 /* 
  * Public Functions to Control the Mock 
@@ -232,4 +302,9 @@ void modbus_transport_init_mock(modbus_transport_t *transport) {
 
 uint16_t get_current_time_ms(void) {
     return mock_time_reference;
+}
+
+const mb_transport_if_t *mock_transport_get_iface(void)
+{
+    return &mock_transport_iface;
 }

@@ -30,6 +30,8 @@
 #include <modbus/mb_log.h>
 #include <modbus/base.h>
 #include <modbus/transport.h>
+#include <modbus/transport_if.h>
+#include <modbus/frame.h>
 #include <modbus/utils.h>
 #include <modbus/fsm.h>
 #include <modbus/core.h>

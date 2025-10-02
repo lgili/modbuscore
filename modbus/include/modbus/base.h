@@ -51,6 +51,7 @@ extern "C"{
 #include <modbus/conf.h>
 #include <modbus/mb_err.h>
 #include <modbus/transport.h>  /**< For modbus_transport_t and related definitions */
+#include <modbus/transport_if.h>
 
 /* -------------------------------------------------------------------------- */
 /*                          Modbus Protocol Constants                         */
@@ -204,7 +205,8 @@ typedef struct {
  * ```
  */
 typedef struct {
-    modbus_transport_t transport; /**< Platform-specific I/O and timing functions */
+    modbus_transport_t transport;      /**< Platform-specific I/O and timing functions */
+    mb_transport_if_t transport_iface; /**< Lightweight, non-blocking transport shim */
 
     modbus_role_t role;           /**< Client or Server role */
 
@@ -219,9 +221,9 @@ typedef struct {
     uint8_t tx_buffer[64];        /**< Processed buffer for outgoing data */
     uint16_t tx_index;            /**< Current index in the processed buffer */
 
-    uint16_t rx_reference_time;   /**< Timestamp for receiving data, used in timeouts */
-    uint16_t tx_reference_time;   /**< Timestamp for transmitting data, used in timeouts */
-    uint16_t error_timer;         /**< Timer for tracking errors */
+    mb_time_ms_t rx_reference_time;   /**< Timestamp for receiving data, used in timeouts */
+    mb_time_ms_t tx_reference_time;   /**< Timestamp for transmitting data, used in timeouts */
+    mb_time_ms_t error_timer;         /**< Timer for tracking errors */
 
     void *user_data;              /**< Pointer for user-specific context */
 } modbus_context_t;

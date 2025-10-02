@@ -22,6 +22,10 @@
 #include <modbus/modbus.h>
 #include "gtest/gtest.h"
 
+extern "C" {
+extern void mock_advance_time(uint16_t ms);
+}
+
 // Define some custom events
 enum {
     TEST_EVENT_START = 1,
@@ -48,6 +52,7 @@ static bool action_error_called = false;
 static bool guard_deny_called = false;
 static bool guard_result = true;
 static bool default_action_called = false;
+static bool timeout_action_called = false;
 
 static void reset_test_flags() {
     action_start_called = false;
@@ -56,6 +61,7 @@ static void reset_test_flags() {
     guard_deny_called = false;
     guard_result = true;
     default_action_called = false;
+    timeout_action_called = false;
 }
 
 // Actions
@@ -77,6 +83,11 @@ static void action_error_state(fsm_t *fsm) {
 static void default_action(fsm_t *fsm) {
     (void)fsm;
     default_action_called = true;
+}
+
+static void timeout_default_action(fsm_t *fsm) {
+    (void)fsm;
+    timeout_action_called = true;
 }
 
 // Guards
@@ -177,5 +188,50 @@ TEST_F(FsmTest, ErrorTransition) {
     reset_test_flags();
     fsm_run(&fsm);
     EXPECT_TRUE(default_action_called);
+}
+
+TEST(FsmMisc, HandleEventWithNullFsm) {
+    fsm_handle_event(nullptr, 0x42U);
+    SUCCEED();
+}
+
+TEST(FsmMisc, RunWithNullFsm) {
+    fsm_run(nullptr);
+    SUCCEED();
+}
+
+TEST_F(FsmTest, QueueFullDropsEvents) {
+    const uint8_t initial_tail = fsm.event_queue.tail;
+    for (uint8_t i = 0; i < (FSM_EVENT_QUEUE_SIZE - 1U); ++i) {
+        fsm_handle_event(&fsm, static_cast<uint8_t>(i));
+    }
+
+    const uint8_t tail_after_fill = fsm.event_queue.tail;
+    EXPECT_NE(initial_tail, tail_after_fill);
+
+    fsm_handle_event(&fsm, 0xAAU);
+    EXPECT_EQ(tail_after_fill, fsm.event_queue.tail);
+}
+
+TEST(FsmTimeout, TimeoutTriggersEvent) {
+    reset_test_flags();
+
+    static const fsm_state_t timeout_state = {
+        "TIMEOUT",
+        0xA0,
+        nullptr,
+        0,
+        timeout_default_action,
+        5U
+    };
+
+    fsm_t timeout_fsm{};
+    fsm_init(&timeout_fsm, &timeout_state, nullptr);
+
+    mock_advance_time(6U);
+    fsm_run(&timeout_fsm);
+
+    EXPECT_TRUE(timeout_fsm.has_timeout);
+    EXPECT_TRUE(timeout_action_called);
 }
 

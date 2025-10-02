@@ -76,7 +76,7 @@ typedef struct {
     uint16_t read_data_count;            /**< Number of registers read */
     
     /* Reference timer for handling timeouts */
-    uint16_t request_time_ref;           /**< Reference time for the current request */
+    mb_time_ms_t request_time_ref;       /**< Reference time for the current request */
 } modbus_client_data_t;
 
 /* -------------------------------------------------------------------------- */

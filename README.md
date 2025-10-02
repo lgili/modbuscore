@@ -32,6 +32,10 @@ The **Modbus Master/Slave Library in C** is an efficient and lightweight library
   
 - **Comprehensive Documentation and Examples**
   - Detailed documentation and practical examples are provided to assist developers in quickly integrating and utilizing the library in their projects.
+- **Pluggable Transport Abstraction (Gate 3)**
+  - A lightweight `mb_transport_if_t` interface decouples the Modbus core from the physical link, enabling UART, TCP, or custom back-ends with consistent timeout handling.
+- **Reusable RTU Framing Helpers (Gate 3)**
+  - Shared encode/decode logic via `mb_frame_rtu_encode`/`mb_frame_rtu_decode` keeps CRC enforcement and bounds checks centralized for both master and slave stacks.
 
 ## Build-time configuration
 
@@ -47,6 +51,8 @@ CMake):
 | `MB_LOG_DEFAULT_THRESHOLD` | Set the initial log severity threshold (default `MB_LOG_INFO_LEVEL`). |
 | `MB_LOG_STDOUT_SYNC_FLUSH` | Flush the stdio stream after each message (default `1`). |
 | `MB_LOG_RTT_CHANNEL` | Configure the RTT down-channel used for logs (default `0`). |
+| `MODBUS_BUILD_FUZZERS` | Build libFuzzer harnesses (requires Clang with `-fsanitize=fuzzer`). |
+| `MODBUS_ENABLE_COVERAGE` | Instrument builds with GCOV-style coverage (GCC/Clang). |
 
 Example: enable RTT logging while keeping stdout silent on a release profile:
 
@@ -55,6 +61,21 @@ target_compile_definitions(my_app PRIVATE
     MB_LOG_ENABLE_STDIO=0
     MB_LOG_ENABLE_SEGGER_RTT=1
     MB_LOG_DEFAULT_THRESHOLD=MB_LOG_WARNING_LEVEL)
+```
+
+To exercise the Gate 2 fuzz harness locally:
+
+```bash
+cmake -S . -B build/fuzz -DMODBUS_BUILD_FUZZERS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build/fuzz --target modbus_pdu_fuzz
+```
+
+Generate a coverage report (requires `lcov`/`genhtml`):
+
+```bash
+cmake -S . -B build/coverage -DMODBUS_ENABLE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/coverage
+cmake --build build/coverage --target coverage
 ```
 
 ## Utilities (Gate 1)
@@ -68,6 +89,8 @@ and FSM work:
 - **Fixed-size memory pool** – `modbus/mempool.h` supplies deterministic block
   allocation without `malloc`, supporting reset, containment checks and
   double-free detection.
+- **PDU codec helpers** – `modbus/pdu.h` encodes/decodes the core register
+  function codes (0x03/0x06/0x10) with strict bounds checking.
 - **CRC helpers** – table-driven and bitwise implementations live in
   `modbus/utils.h` with accompanying tests.
 - **Logging façade** – `modbus/mb_log.h` standardises the logging interface and

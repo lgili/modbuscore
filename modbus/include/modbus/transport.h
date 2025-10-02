@@ -77,6 +77,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <modbus/mb_err.h>
+#include <modbus/transport_if.h>
+
 #ifdef __cplusplus
 extern "C"{
 #endif 
@@ -282,6 +285,7 @@ typedef struct {
      * typedef struct {
      *     UART_HandleTypeDef uart_handle;
      *     GPIO_TypeDef *gpio_port;
+
      *     uint16_t gpio_pin;
      * } transport_context_t;
      * 
@@ -307,6 +311,21 @@ typedef struct {
      */
     void* arg;
 } modbus_transport_t;
+
+/**
+ * @brief Binds a legacy transport descriptor to the lightweight interface.
+ *
+ * This helper wires the classic blocking callbacks into an ``mb_transport_if_t``
+ * shim so newer code paths can rely on the non-blocking façade while existing
+ * platforms keep the richer ``modbus_transport_t`` structure.
+ *
+ * @param[out] iface   Interface instance to populate.
+ * @param[in]  legacy  Legacy transport descriptor to bridge.
+ *
+ * @return ``MODBUS_ERROR_NONE`` when the shim was installed successfully or an
+ *         error code if the legacy descriptor is incomplete.
+ */
+mb_err_t modbus_transport_bind_legacy(mb_transport_if_t *iface, modbus_transport_t *legacy);
 
 #ifdef __cplusplus
 }

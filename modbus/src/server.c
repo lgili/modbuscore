@@ -33,6 +33,8 @@
 #include <modbus/utils.h>
 #include <modbus/fsm.h>
 #include <string.h>
+#include <stdint.h>
+#include <inttypes.h>
 
 #include <modbus/mb_log.h>
 
@@ -269,7 +271,8 @@ const fsm_state_t modbus_server_state_error = FSM_STATE("ERROR", MODBUS_SERVER_S
  *
  * @warning
  * - Ensure that `modbus`, `platform_conf`, `device_address`, and `baudrate` are valid pointers.
- * - The transport layer functions (`write`, `read`, `get_reference_msec`, `measure_time_msec`) must be properly implemented.
+ * - The transport layer must expose `write`, `read`, and a monotonic `get_reference_msec` implementation (or provide a custom
+ *   `mb_transport_if_t`).
  * 
  * @example
  * ```c
@@ -277,8 +280,7 @@ const fsm_state_t modbus_server_state_error = FSM_STATE("ERROR", MODBUS_SERVER_S
  * modbus_transport_t transport = {
  *     .write = transport_write_function,       // User-defined transport write function
  *     .read = transport_read_function,         // User-defined transport read function
- *     .get_reference_msec = get_msec_function, // User-defined function to get current time in ms
- *     .measure_time_msec = measure_time_function // User-defined function to measure elapsed time
+ *     .get_reference_msec = get_msec_function  // User-defined function to get current time in ms
  * };
  * 
  * uint16_t device_addr = 10;
@@ -302,7 +304,7 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    if (!platform_conf->read || !platform_conf->write || !platform_conf->get_reference_msec || !platform_conf->measure_time_msec)
+    if (!platform_conf->read || !platform_conf->write || !platform_conf->get_reference_msec)
     {
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
@@ -317,10 +319,16 @@ modbus_error_t modbus_server_create(modbus_context_t *modbus, modbus_transport_t
     g_server.device_info.baudrate = baudrate;
     modbus->transport = *platform_conf;
 
+    modbus_error_t bind_status = modbus_transport_bind_legacy(&modbus->transport_iface, &modbus->transport);
+    if (bind_status != MODBUS_ERROR_NONE) {
+        return bind_status;
+    }
+
     /* Initialize reference times */
-    modbus->rx_reference_time = modbus->transport.get_reference_msec();
-    modbus->tx_reference_time = modbus->transport.get_reference_msec();
-    modbus->error_timer = modbus->transport.get_reference_msec();
+    const mb_time_ms_t now = mb_transport_now(&modbus->transport_iface);
+    modbus->rx_reference_time = now;
+    modbus->tx_reference_time = now;
+    modbus->error_timer = now;
 
     /* Initialize FSM */
     fsm_init(&g_server.fsm, &modbus_server_state_idle, &g_server);
@@ -391,7 +399,7 @@ void modbus_server_receive_data_from_uart_event(fsm_t *fsm, uint8_t data) {
     modbus_context_t *ctx = server->ctx;
 
     /* Update reference time for RX on every byte to track inter-character timing */
-    ctx->rx_reference_time = ctx->transport.get_reference_msec();
+    ctx->rx_reference_time = mb_transport_now(&ctx->transport_iface);
 
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
@@ -414,7 +422,7 @@ void modbus_server_receive_buffer_from_uart_event(fsm_t *fsm, uint8_t *data, uin
 
     if (fsm->current_state->id != MODBUS_SERVER_STATE_RECEIVING) {
         /* Update reference time for RX */
-        ctx->rx_reference_time = ctx->transport.get_reference_msec();
+    ctx->rx_reference_time = mb_transport_now(&ctx->transport_iface);
 
         ctx->rx_count = lenght;
         for (uint8_t i = 0; i < ctx->rx_count; i++)
@@ -1055,9 +1063,10 @@ static bool guard_receive_finished(fsm_t *fsm) {
     modbus_context_t *ctx = server->ctx;
     LOG_TRACE("--> guard_receive_finished  <--");
 
-    uint16_t rx_position_length_time;
-    rx_position_length_time = ctx->transport.measure_time_msec(ctx->rx_reference_time);
-    LOG_TRACE("RX count=%d elapsed=%d", ctx->rx_count, rx_position_length_time);
+    const mb_time_ms_t rx_position_length_time =
+        mb_transport_elapsed_since(&ctx->transport_iface, ctx->rx_reference_time);
+    LOG_TRACE("RX count=%d elapsed=%" PRIu64, ctx->rx_count,
+              (uint64_t)rx_position_length_time);
     if (rx_position_length_time >= MODBUS_CONVERT_CHAR_INTERVAL_TO_MS(3.5, *server->device_info.baudrate)) {
         if (ctx->rx_count >= 1U && ctx->rx_count <= 3U) {
             fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
@@ -1083,8 +1092,8 @@ static bool guard_send_finished(fsm_t *fsm) {
     modbus_context_t *ctx = server->ctx;
     LOG_TRACE("--> guard_send_finished  <--");
 
-    uint16_t tx_position_length_time;
-    tx_position_length_time = ctx->transport.measure_time_msec(ctx->tx_reference_time);
+    const mb_time_ms_t tx_position_length_time =
+        mb_transport_elapsed_since(&ctx->transport_iface, ctx->tx_reference_time);
     if (tx_position_length_time >= MODBUS_CONVERT_CHAR_INTERVAL_TO_MS(3.5, *server->device_info.baudrate)) {
         return true;
     }

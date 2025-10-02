@@ -2,6 +2,9 @@
 set(SOURCES
   src/ringbuf.c
   src/mempool.c
+  src/pdu.c
+  src/frame.c
+  src/transport.c
   src/mb_log.c
   src/log.c
   src/utils.c
@@ -15,6 +18,8 @@ set(SOURCES
 set(HEADERS_PUBLIC  
   include/modbus/log.h
   include/modbus/mempool.h
+  include/modbus/pdu.h
+  include/modbus/frame.h
   include/modbus/mb_types.h
   include/modbus/ringbuf.h
   include/modbus/mb_err.h
@@ -22,6 +27,7 @@ set(HEADERS_PUBLIC
   include/modbus/modbus.h
   include/modbus/conf.h
   include/modbus/transport.h
+  include/modbus/transport_if.h
   include/modbus/base.h
   include/modbus/utils.h
   include/modbus/fsm.h

@@ -26,6 +26,7 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ringbuf.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mempool.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_pdu_codec.cpp
 )
 
 if(MODBUS_ENABLE_INTEGRATION_TESTS)
@@ -37,8 +38,10 @@ if(MODBUS_ENABLE_INTEGRATION_TESTS)
 endif()
 
 # Iterate over each test source file and create an executable
+set(MODBUS_TEST_TARGETS)
+
 foreach(TEST_SRC ${TEST_SOURCES})
-    get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
+  get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
   add_executable(${TEST_NAME} ${TEST_SRC} modbus_transport.c)
 
   set_target_properties(${TEST_NAME}
@@ -58,4 +61,37 @@ foreach(TEST_SRC ${TEST_SOURCES})
   endif()
 
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    list(APPEND MODBUS_TEST_TARGETS ${TEST_NAME})
 endforeach()
+
+if(MODBUS_BUILD_FUZZERS)
+  add_subdirectory(fuzz)
+endif()
+
+if(MODBUS_ENABLE_COVERAGE)
+  find_program(LCOV_EXECUTABLE lcov)
+  find_program(GENHTML_EXECUTABLE genhtml)
+
+  if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
+  set(_coverage_ignore_errors "inconsistent,unsupported,format,unused")
+    set(_coverage_capture_directories
+      --directory ${CMAKE_BINARY_DIR}/modbus
+    )
+
+    add_custom_target(coverage
+      COMMAND ${LCOV_EXECUTABLE} --directory ${CMAKE_BINARY_DIR} --zerocounters
+      COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+  COMMAND ${LCOV_EXECUTABLE} --capture ${_coverage_capture_directories} --output-file coverage.info --ignore-errors ${_coverage_ignore_errors}
+      COMMAND ${GENHTML_EXECUTABLE} coverage.info --output-directory coverage_html
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+      USES_TERMINAL
+      COMMENT "Running unit tests and generating coverage report"
+    )
+
+    if(MODBUS_TEST_TARGETS)
+      add_dependencies(coverage ${MODBUS_TEST_TARGETS})
+    endif()
+  else()
+    message(WARNING "Coverage reports require both 'lcov' and 'genhtml' in PATH.")
+  endif()
+endif()

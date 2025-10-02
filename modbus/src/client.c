@@ -199,7 +199,8 @@ const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_S
  *
  * @warning
  * - Ensure that `modbus`, `platform_conf`, and `baudrate` are valid pointers.
- * - The transport layer functions (`write`, `read`, `get_reference_msec`, `measure_time_msec`) must be properly implemented.
+ * - The transport layer must expose `write`, `read`, and a monotonic `get_reference_msec` implementation (or provide a custom
+ *   `mb_transport_if_t`).
  * 
  * @example
  * ```c
@@ -207,8 +208,7 @@ const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_S
  * modbus_transport_t transport = {
  *     .write = transport_write_function,        // User-defined transport write function
  *     .read = transport_read_function,          // User-defined transport read function
- *     .get_reference_msec = get_msec_function,  // User-defined function to get current time in ms
- *     .measure_time_msec = measure_time_function // User-defined function to measure elapsed time
+ *     .get_reference_msec = get_msec_function  // User-defined function to get current time in ms
  * };
  * 
  * uint16_t baud = 19200;
@@ -225,7 +225,7 @@ modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    if (!platform_conf->read || !platform_conf->write || !platform_conf->get_reference_msec || !platform_conf->measure_time_msec)
+    if (!platform_conf->read || !platform_conf->write || !platform_conf->get_reference_msec)
     {
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
@@ -238,9 +238,15 @@ modbus_error_t modbus_client_create(modbus_context_t *modbus, modbus_transport_t
     g_client.device_info.baudrate = baudrate;
     modbus->transport = *platform_conf;
 
+    modbus_error_t bind_status = modbus_transport_bind_legacy(&modbus->transport_iface, &modbus->transport);
+    if (bind_status != MODBUS_ERROR_NONE) {
+        return bind_status;
+    }
+
     /* Initialize reference times */
-    modbus->rx_reference_time = modbus->transport.get_reference_msec();
-    modbus->tx_reference_time = modbus->transport.get_reference_msec();
+    const mb_time_ms_t now = mb_transport_now(&modbus->transport_iface);
+    modbus->rx_reference_time = now;
+    modbus->tx_reference_time = now;
 
     /* Initialize default timeout */
     g_client.timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
@@ -281,7 +287,9 @@ void modbus_client_poll(modbus_context_t *ctx) {
 
     /* Check for timeout in WAITING_RESPONSE state */
     if (client->fsm.current_state->id == MODBUS_CLIENT_STATE_WAITING_RESPONSE) {
-        if (ctx->transport.measure_time_msec(client->request_time_ref) > client->timeout_ms) {
+        const mb_time_ms_t elapsed = mb_transport_elapsed_since(&ctx->transport_iface,
+                                                                client->request_time_ref);
+        if (elapsed > (mb_time_ms_t)client->timeout_ms) {
             fsm_handle_event(&client->fsm, MODBUS_CLIENT_EVENT_TIMEOUT);
         }
     }
@@ -362,8 +370,9 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
     modbus_context_t *ctx = client->ctx;
 
     /* Update reference time for RX */
-    ctx->rx_reference_time = ctx->transport.get_reference_msec();
-    MB_LOG_TRACE("RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
+    ctx->rx_reference_time = mb_transport_now(&ctx->transport_iface);
+    MB_LOG_TRACE("RECEIVED Byte %u on %llu ms", data,
+                 (unsigned long long)ctx->rx_reference_time);
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
         ctx->rx_buffer[ctx->rx_count++] = data;
@@ -531,7 +540,7 @@ static void action_wait_response(fsm_t *fsm) {
     MB_LOG_TRACE("action_wait_response");
 
     /* Mark reference time for timeout */
-    client->request_time_ref = ctx->transport.get_reference_msec();
+    client->request_time_ref = mb_transport_now(&ctx->transport_iface);
     /* Now waiting for bytes from the response */
 }
 
