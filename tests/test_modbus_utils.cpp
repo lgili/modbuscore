@@ -103,3 +103,29 @@ TEST(ModbusUtilsTest, BinarySearchNotFound) {
     EXPECT_EQ(idx, -1); // Não encontrado
 }
 
+TEST(ModbusUtilsTest, CrcImplementationsMatchKnownVector) {
+    const uint8_t frame[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02};
+    const uint16_t expected_crc = 0x0BC4;
+
+    uint16_t bitwise_crc = modbus_calculate_crc(frame, sizeof(frame));
+    uint16_t table_crc = modbus_crc_with_table(frame, sizeof(frame));
+
+    EXPECT_EQ(bitwise_crc, expected_crc);
+    EXPECT_EQ(table_crc, expected_crc);
+}
+
+TEST(ModbusUtilsTest, CrcValidateAcceptsCorrectTrailer) {
+    uint8_t frame_with_crc[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC4, 0x0B};
+    EXPECT_TRUE(modbus_crc_validate(frame_with_crc, sizeof(frame_with_crc)));
+}
+
+TEST(ModbusUtilsTest, CrcValidateRejectsCorruptedTrailer) {
+    uint8_t frame_with_crc[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00};
+    EXPECT_FALSE(modbus_crc_validate(frame_with_crc, sizeof(frame_with_crc)));
+}
+
+TEST(ModbusUtilsTest, CrcValidateRejectsShortFrame) {
+    const uint8_t frame[] = {0x01};
+    EXPECT_FALSE(modbus_crc_validate(frame, sizeof(frame)));
+}
+

@@ -332,4 +332,20 @@ uint16_t modbus_crc_with_table(const uint8_t *data, uint16_t length)
     return crc;
 }
 
+/**
+ * @brief Validates the trailing CRC of the provided frame.
+ */
+bool modbus_crc_validate(const uint8_t *frame, uint16_t length)
+{
+    if (!frame || length < 2U) {
+        return false;
+    }
+
+    const uint16_t payload_len = (uint16_t)(length - 2U);
+    const uint16_t expected_crc = (uint16_t)((uint16_t)frame[payload_len] | ((uint16_t)frame[payload_len + 1U] << 8U));
+    const uint16_t computed_crc = modbus_crc_with_table(frame, payload_len);
+
+    return (computed_crc == expected_crc);
+}
+
 /** @} */

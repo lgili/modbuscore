@@ -33,6 +33,50 @@ The **Modbus Master/Slave Library in C** is an efficient and lightweight library
 - **Comprehensive Documentation and Examples**
   - Detailed documentation and practical examples are provided to assist developers in quickly integrating and utilizing the library in their projects.
 
+## Build-time configuration
+
+Key behaviours can be toggled through preprocessor definitions so each target
+selects the right balance between visibility and footprint.  Add the desired
+options via your build system (for example `target_compile_definitions` in
+CMake):
+
+| Macro | Description |
+| --- | --- |
+| `MB_LOG_ENABLE_STDIO` | Enable the default stdio logging sink (default `1`). |
+| `MB_LOG_ENABLE_SEGGER_RTT` | Enable the SEGGER RTT sink when the SDK is available (default `0`). |
+| `MB_LOG_DEFAULT_THRESHOLD` | Set the initial log severity threshold (default `MB_LOG_INFO_LEVEL`). |
+| `MB_LOG_STDOUT_SYNC_FLUSH` | Flush the stdio stream after each message (default `1`). |
+| `MB_LOG_RTT_CHANNEL` | Configure the RTT down-channel used for logs (default `0`). |
+
+Example: enable RTT logging while keeping stdout silent on a release profile:
+
+```cmake
+target_compile_definitions(my_app PRIVATE
+    MB_LOG_ENABLE_STDIO=0
+    MB_LOG_ENABLE_SEGGER_RTT=1
+    MB_LOG_DEFAULT_THRESHOLD=MB_LOG_WARNING_LEVEL)
+```
+
+## Utilities (Gate 1)
+
+Gate 1 introduces reusable, heap-free utilities that underpin future transport
+and FSM work:
+
+- **Single-producer/single-consumer ring buffer** – `modbus/ringbuf.h` offers a
+  lock-free FIFO ideal for UART RX pipelines.  It requires a power-of-two
+  capacity and uses caller-provided storage.
+- **Fixed-size memory pool** – `modbus/mempool.h` supplies deterministic block
+  allocation without `malloc`, supporting reset, containment checks and
+  double-free detection.
+- **CRC helpers** – table-driven and bitwise implementations live in
+  `modbus/utils.h` with accompanying tests.
+- **Logging façade** – `modbus/mb_log.h` standardises the logging interface and
+  optional sinks, keeping legacy `LOG_*` usage isolated.
+
+Each helper ships with targeted GoogleTests so behaviour remains stable across
+toolchains.  See `tests/test_ringbuf.cpp` and `tests/test_mempool.cpp` for usage
+examples.
+
 ## Installation
 
 ### Prerequisites

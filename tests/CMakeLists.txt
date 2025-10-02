@@ -24,6 +24,8 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_core.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_crc.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_ringbuf.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mempool.cpp
 )
 
 if(MODBUS_ENABLE_INTEGRATION_TESTS)

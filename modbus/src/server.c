@@ -34,7 +34,7 @@
 #include <modbus/fsm.h>
 #include <string.h>
 
-#include <modbus/log.h>
+#include <modbus/mb_log.h>
 
 /* -------------------------------------------------------------------------- */
 /*                             Global Variables                                */
@@ -653,7 +653,7 @@ static void print_buffer(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
     if(ctx->rx_count > 0) {
-        LOG_DEBUG("Buffer data:");
+    MB_LOG_DEBUG("Buffer data:");
         for(int8_t i = 0; i <  ctx->rx_count; i++)
         {
             // ctx->rx_buffer, &idx,
@@ -682,7 +682,7 @@ static void action_idle(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
     if(ft == 0) {        
-        LOG_TRACE("--> action_idle  <--");
+    MB_LOG_TRACE("--> action_idle  <--");
         ft= 1;
     }
     modbus_reset_buffers(ctx);
@@ -711,7 +711,7 @@ static void action_start_receiving(fsm_t *fsm) {
         fsm_handle_event(fsm, MODBUS_EVENT_PARSE_ADDRESS);
     }
     full_cycle = false;
-    LOG_TRACE("--> action_start_receiving  <--");
+    MB_LOG_TRACE("--> action_start_receiving  <--");
     print_buffer(fsm);
 }
 
@@ -727,7 +727,7 @@ static void action_parse_address(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
     ft= 0;
-    LOG_TRACE("--> action_parse_address  <--");
+    MB_LOG_TRACE("--> action_parse_address  <--");
     print_buffer(fsm);
     // reset_message(server);
 
@@ -740,7 +740,7 @@ static void action_parse_address(fsm_t *fsm) {
     }
     server->msg.slave_address = slave_address;
     ctx->rx_index = idx;
-    LOG_TRACE("--> slave_address %d <--", slave_address);
+    MB_LOG_TRACE("--> slave_address %d <--", slave_address);
 
     /* Check if the message is for this server or is a broadcast */
     if ((server->msg.slave_address == *server->device_info.address) ||
@@ -766,7 +766,7 @@ static void action_parse_address(fsm_t *fsm) {
 static void action_parse_function(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_parse_function  <--");
+    MB_LOG_TRACE("--> action_parse_function  <--");
     print_buffer(fsm);
 
     uint8_t function_code;
@@ -777,7 +777,7 @@ static void action_parse_function(fsm_t *fsm) {
     }
     server->msg.function_code = function_code;
     fsm_handle_event(fsm, MODBUS_EVENT_PROCESS_FRAME);
-    LOG_TRACE("--> function %d <--", function_code);
+    MB_LOG_TRACE("--> function %d <--", function_code);
 }
 
 /**
@@ -789,18 +789,18 @@ static void action_parse_function(fsm_t *fsm) {
  */
 static void action_process_frame(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
-    LOG_TRACE("--> action_process_frame  <--");
+    MB_LOG_TRACE("--> action_process_frame  <--");
     print_buffer(fsm);
 
     modbus_error_t err = parse_request(server);
     if (err != MODBUS_ERROR_NONE) {
         server->msg.error = err;
         if (err == MODBUS_OTHERS_REQUESTS) {
-            LOG_ERROR("MODBUS_EVENT_BOOTLOADER");
+            MB_LOG_ERROR("MODBUS_EVENT_BOOTLOADER");
             fsm_handle_event(fsm, MODBUS_EVENT_BOOTLOADER);
         } else {
             fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-            LOG_ERROR("MODBUS_EVENT_ERROR_DETECTED");
+            MB_LOG_ERROR("MODBUS_EVENT_ERROR_DETECTED");
         }
         return;
     }
@@ -817,18 +817,17 @@ static void action_process_frame(fsm_t *fsm) {
 static void action_validate_frame(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_validate_frame  <--");
+    MB_LOG_TRACE("--> action_validate_frame  <--");
 
     /* Verify CRC */
-    if ((ctx->rx_index + 2U) > ctx->rx_count) {
+    const uint16_t frame_length = (uint16_t)(ctx->rx_index + 2U);
+    if (frame_length > ctx->rx_count) {
         server->msg.error = MODBUS_ERROR_CRC;
         fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
         return;
     }
 
-    uint16_t calc_crc = modbus_crc_with_table(ctx->rx_buffer, ctx->rx_index);
-    uint16_t recv_crc = (uint16_t)((ctx->rx_buffer[ctx->rx_index + 1U] << 8U) | ctx->rx_buffer[ctx->rx_index]);
-    if (calc_crc != recv_crc) {
+    if (!modbus_crc_validate(ctx->rx_buffer, frame_length)) {
         server->msg.error = MODBUS_ERROR_CRC;
         fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
         return;
@@ -848,7 +847,7 @@ static void action_validate_frame(fsm_t *fsm) {
 static void action_build_response(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_build_response (current_read_index: %d, read_quantity: %d)  <--", server->msg.current_read_index, server->msg.read_quantity);
+    MB_LOG_TRACE("--> action_build_response (current_read_index: %d, read_quantity: %d)  <--", server->msg.current_read_index, server->msg.read_quantity);
 
     handle_function(server);
 
@@ -880,25 +879,25 @@ static void action_build_response(fsm_t *fsm) {
     if (operation_complete) {
         if (server->msg.broadcast && server->msg.function_code != MODBUS_FUNC_READ_DEVICE_INFORMATION) { // Broadcast não responde, exceto talvez para algumas funções específicas
             fsm_handle_event(fsm, MODBUS_EVENT_BROADCAST_DONT_ANSWER);
-            LOG_TRACE("Broadcast: não respondendo.");
+            MB_LOG_TRACE("Broadcast: não respondendo.");
         } else {
-            LOG_TRACE("Operação completa, prosseguindo para PUT_DATA_ON_BUFFER.");
+            MB_LOG_TRACE("Operação completa, prosseguindo para PUT_DATA_ON_BUFFER.");
             fsm_handle_event(fsm, MODBUS_EVENT_PUT_DATA_ON_BUFFER);
         }
         build_error_count = 0;
     } else if (read_operation && (server->msg.current_read_index < server->msg.read_quantity)) {
         // Ainda há registradores para ler
-        LOG_TRACE("Ainda lendo registradores (lidos: %d de %d), re-acionando BUILD_RESPONSE.", server->msg.current_read_index, server->msg.read_quantity);
+    MB_LOG_TRACE("Ainda lendo registradores (lidos: %d de %d), re-acionando BUILD_RESPONSE.", server->msg.current_read_index, server->msg.read_quantity);
         fsm_handle_event(fsm, MODBUS_EVENT_BUILD_RESPONSE); // Dispara evento para continuar lendo
     } else {
         // Caso onde a operação não está completa e não é uma leitura continuada
         // Isso pode indicar um problema na lógica de handle_function para escritas ou device_info se precisarem de múltiplas passagens
         build_error_count++;
-        LOG_WARNING("Build response não completo e não é leitura continuada. build_error_count: %d", build_error_count);
+    MB_LOG_WARNING("Build response não completo e não é leitura continuada. build_error_count: %d", build_error_count);
         if (build_error_count >= 3) { // Limite para evitar loop infinito em caso de bug
             server->msg.error = MODBUS_ERROR_TRANSPORT;
             fsm_handle_event(fsm, MODBUS_EVENT_ERROR_DETECTED);
-            LOG_ERROR("Erro de build persistente, forçando erro.");
+            MB_LOG_ERROR("Erro de build persistente, forçando erro.");
             build_error_count = 0;
         }
     }
@@ -914,7 +913,7 @@ static void action_build_response(fsm_t *fsm) {
 static void action_put_data_on_buffer(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_put_data_on_buffer  <--");
+    MB_LOG_TRACE("--> action_put_data_on_buffer  <--");
 
     uint16_t quantity_to_send = 0;
     if(server->msg.function_code == MODBUS_FUNC_READ_COILS) {
@@ -950,7 +949,7 @@ static void action_put_data_on_buffer(fsm_t *fsm) {
 static void action_calculate_crc_response(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_calculate_crc_response  <--");
+    MB_LOG_TRACE("--> action_calculate_crc_response  <--");
 
     uint16_t crc = modbus_crc_with_table(ctx->tx_buffer, ctx->tx_index);
     ctx->tx_buffer[ctx->tx_index++] = GET_LOW_BYTE(crc);
@@ -973,7 +972,7 @@ static void action_calculate_crc_response(fsm_t *fsm) {
  * @param[in,out] fsm Pointer to the FSM instance.
  */
 static void action_send_response(fsm_t *fsm) {
-    LOG_TRACE("--> action_send_response  <--");
+    MB_LOG_TRACE("--> action_send_response  <--");
 
     
     fsm_handle_event(fsm, MODBUS_EVENT_TX_COMPLETE);
@@ -989,7 +988,7 @@ static void action_send_response(fsm_t *fsm) {
 static void action_handle_error(fsm_t *fsm) {
     modbus_server_data_t *server = (modbus_server_data_t *)fsm->user_data;
     modbus_context_t *ctx = server->ctx;
-    LOG_TRACE("--> action_handle_error  <--");
+    MB_LOG_TRACE("--> action_handle_error  <--");
     if(fsm->has_timeout) {
         LOG_TRACE("--> action_handle_error TIMEOUT  <--");
         uint8_t exception_function = server->msg.function_code | 0x80;

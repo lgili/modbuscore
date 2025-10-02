@@ -34,7 +34,7 @@
 #include <modbus/fsm.h>
 #include <string.h>
 
-#include <modbus/log.h>
+#include <modbus/mb_log.h>
 
 /* -------------------------------------------------------------------------- */
 /*                           Global Variables                                  */
@@ -363,7 +363,7 @@ void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
 
     /* Update reference time for RX */
     ctx->rx_reference_time = ctx->transport.get_reference_msec();
-    LOG_TRACE("RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
+    MB_LOG_TRACE("RECEIVED Byte %d on %d ms", data, ctx->rx_reference_time);
     /* Store received byte in RX buffer */
     if (ctx->rx_count < sizeof(ctx->rx_buffer)) {
         ctx->rx_buffer[ctx->rx_count++] = data;
@@ -528,7 +528,7 @@ static void action_send_request(fsm_t *fsm) {
 static void action_wait_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG_TRACE("action_wait_response");
+    MB_LOG_TRACE("action_wait_response");
 
     /* Mark reference time for timeout */
     client->request_time_ref = ctx->transport.get_reference_msec();
@@ -546,7 +546,7 @@ static void action_wait_response(fsm_t *fsm) {
 static void action_process_response(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG_TRACE("action_process_response");
+    MB_LOG_TRACE("action_process_response");
 
     /* Parse the received frame */
     uint8_t address, function;
@@ -644,7 +644,7 @@ static bool guard_tx_complete(fsm_t *fsm) {
     /* Assuming transmission is synchronous and completes immediately */
     /* If transmission is asynchronous, implement appropriate checks */
     (void)fsm;
-    LOG_TRACE("guard_tx_complete");
+    MB_LOG_TRACE("guard_tx_complete");
     return true;
 }
 
@@ -660,16 +660,13 @@ static bool guard_tx_complete(fsm_t *fsm) {
 static bool guard_response_complete(fsm_t *fsm) {
     modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
     modbus_context_t *ctx = client->ctx;
-    LOG_TRACE("guard_response_complete");
+    MB_LOG_TRACE("guard_response_complete");
 
     /* Verify CRC and minimum size */
     if (ctx->rx_count < 4) {
         return false;
     }
-    /* Calculate CRC */
-    uint16_t calc_crc = modbus_crc_with_table(ctx->rx_buffer, (uint16_t)(ctx->rx_count - 2));
-    uint16_t recv_crc = (uint16_t)((ctx->rx_buffer[ctx->rx_count - 1] << 8) | ctx->rx_buffer[ctx->rx_count - 2]);
-    if (calc_crc == recv_crc) {
+    if (modbus_crc_validate(ctx->rx_buffer, (uint16_t)ctx->rx_count)) {
         return true; /* Frame is complete and valid */
     }
     return false;

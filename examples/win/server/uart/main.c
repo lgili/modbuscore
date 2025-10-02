@@ -5,21 +5,21 @@
 
 #include "uart_windows.h"
 #include <modbus/modbus.h>
-#include <modbus/log.h>
+#include <modbus/mb_log.h>
 
 
 uart_handle_t uart;
 modbus_context_t ctx;
 uint16_t baudrate = 19200;
 
-void my_console_logger(log_level_t severity, char *msg) {
+void my_console_logger(mb_log_level_t severity, char *msg) {
     SYSTEMTIME t;
     GetSystemTime(&t); // or GetLocalTime(&t)
     // printf("The system time is: %02d:%02d:%02d.%03d\n", 
     //     t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
      printf("%02d:%02d:%02d.%03d [%s]: %s\n",
          t.wHour, t.wMinute, t.wSecond, t.wMilliseconds,    // user defined function
-         log_level_name(severity),
+         MB_LOG_LEVEL_NAME(severity),
          msg);
 }
 
@@ -36,12 +36,12 @@ uint16_t measure_elapsed_time(uint16_t start_time) {
 
 // Transport write function
 int32_t transport_write(const uint8_t *data, uint16_t length) {
-    LOG_DEBUG("tamanho enviado para uart %d", length);
+    MB_LOG_DEBUG("tamanho enviado para uart %d", length);
     int result = uart_write(&uart, data, length);
     if (result < 0) {
-        LOG_ERROR("Falha ao escrever na UART.");
+        MB_LOG_ERROR("Falha ao escrever na UART.");
     } else {
-        LOG_DEBUG("Escrito %d bytes na UART.", result);
+        MB_LOG_DEBUG("Escrito %d bytes na UART.", result);
     }
     modbus_server_data_t *server = (modbus_server_data_t *)ctx.user_data;
     //ctx.tx_reference_time = ctx.transport.get_reference_msec();
@@ -60,7 +60,7 @@ int init_uart() {
     uint16_t baud_rate = baudrate;
 
     if (uart_init(&uart, com_port, (int)baud_rate) != 0) {
-        LOG_ERROR("UART initialization failed.\n");
+    MB_LOG_ERROR("UART initialization failed.\n");
         return 1;
     }
     return 0;
@@ -84,7 +84,7 @@ void uart_interrupt() {
         if(size_read > 0) {
             printf("[Info] Receiving data on uart\n");
             for (size_t i = 0; i < size_read; i++) {
-                LOG_DEBUG("Data %d", data[i]);
+                MB_LOG_DEBUG("Data %d", data[i]);
                 // modbus_server_receive_data_from_uart_event(&server->fsm, data[i]);
             }
             printf("\n");
@@ -95,7 +95,7 @@ void uart_interrupt() {
 
 // interrupt from uart
 int on_byte_received(uint8_t *data, uint16_t lenght) {
-    LOG_DEBUG("Slave recebeu byte: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
+    MB_LOG_DEBUG("Slave recebeu byte: %d %d %d %d %d", data[0], data[1], data[2], data[3], data[4]);
     modbus_server_data_t *server = (modbus_server_data_t *)ctx.user_data;
     // modbus_server_receive_data_from_uart_event(&server->fsm, data);
     modbus_server_receive_buffer_from_uart_event(&server->fsm, data, lenght);
@@ -103,8 +103,8 @@ int on_byte_received(uint8_t *data, uint16_t lenght) {
 }
 
 int main(void) {    
-    LOG_INIT();
-    LOG_SUBSCRIBE(my_console_logger, LOG_TRACE_LEVEL);
+    MB_LOG_INIT();
+    MB_LOG_SUBSCRIBE(my_console_logger, MB_LOG_TRACE_LEVEL);
     // LOG_TRACE("Critical, arg=%d", arg); 
     // LOG_DEBUG("Critical, arg=%d", arg);
     // LOG_INFO("Critical, arg=%d", arg);
@@ -113,7 +113,7 @@ int main(void) {
     // LOG_CRITICAL("Critical, arg=%d", arg);
     
     // Initialize logging
-    LOG_INFO("Initializing Modbus Slave Example...\n");
+    MB_LOG_INFO("Initializing Modbus Slave Example...\n");
 
     // Initialize UART
     init_uart();
@@ -134,12 +134,12 @@ int main(void) {
 
     modbus_error_t error = modbus_server_create(&ctx, &transport, &device_address, &baudrate);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to initialize Modbus Slave. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to initialize Modbus Slave. Error code: %d\n", error);
         uart_close(&uart);
         return 1;
     }
 
-    LOG_INFO("Modbus Slave initialized successfully.\n");
+    MB_LOG_INFO("Modbus Slave initialized successfully.\n");
 
     // Register holding registers
     int16_t reg1 = 100;
@@ -150,46 +150,46 @@ int main(void) {
 
     error = modbus_set_holding_register(&ctx, 0x0000, &reg1, true, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0005, &reg1, true, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0000. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0001, &reg2, false, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0002, &reg3, false, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0003, &reg4, false, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
     }
 
     error = modbus_set_holding_register(&ctx, 0x0004, &reg5, false, NULL, NULL);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to register holding register 0x0001. Error code: %d\n", error);
     }
 
-    LOG_INFO("Holding registers registered successfully.\n");
+    MB_LOG_INFO("Holding registers registered successfully.\n");
 
     // Add device information    
     error = modbus_server_add_device_info(&ctx, "SECOP", 5);
     if (error != MODBUS_ERROR_NONE) {
-        LOG_ERROR("Failed to add device information. Error code: %d\n", error);
+    MB_LOG_ERROR("Failed to add device information. Error code: %d\n", error);
     }
 
-    LOG_INFO("Device information added successfully.\n");
+    MB_LOG_INFO("Device information added successfully.\n");
 
     // Main polling loop
-    LOG_INFO("Entering main polling loop. Press Ctrl+C to exit.\n");    
+    MB_LOG_INFO("Entering main polling loop. Press Ctrl+C to exit.\n");    
     while (1) {       
         uart_interrupt(); // manual calling
         modbus_server_poll(&ctx);

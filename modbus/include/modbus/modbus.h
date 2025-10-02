@@ -26,6 +26,8 @@
 #include <modbus/conf.h>
 
 /* Include the rest of the library headers */
+#include <modbus/mb_err.h>
+#include <modbus/mb_log.h>
 #include <modbus/base.h>
 #include <modbus/transport.h>
 #include <modbus/utils.h>

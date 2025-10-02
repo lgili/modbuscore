@@ -1,0 +1,71 @@
+/**
+ * @file mb_err.h
+ * @brief Centralized error codes and helpers for the Modbus library.
+ *
+ * This header consolidates the error enumeration and related utilities that were
+ * previously scattered across legacy headers.  It provides a single place for
+ * the common status codes used by both client and server components, laying the
+ * groundwork for Gate 1 cleanups.
+ */
+
+#ifndef MODBUS_MB_ERR_H
+#define MODBUS_MB_ERR_H
+
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Unified Modbus error / status codes.
+ *
+ * The values preserve the legacy names used throughout the codebase so the
+ * existing implementation keeps compiling while the headers get reorganized.
+ */
+typedef enum modbus_error {
+    MODBUS_ERROR_NONE = 0,                /**< No error. */
+    MODBUS_ERROR_INVALID_ARGUMENT = -1,   /**< Invalid argument provided. */
+    MODBUS_ERROR_TIMEOUT = -2,            /**< Read/write timeout occurred. */
+    MODBUS_ERROR_TRANSPORT = -3,          /**< Transport layer error. */
+    MODBUS_ERROR_CRC = -4,                /**< CRC check failed. */
+    MODBUS_ERROR_INVALID_REQUEST = -5,    /**< Received invalid request frame. */
+    MODBUS_ERROR_OTHER_REQUESTS = -6,     /**< Received other types of requests. */
+    MODBUS_OTHERS_REQUESTS = -7,          /**< Placeholder for additional request types. */
+    MODBUS_ERROR_OTHER = -8,              /**< Other unspecified error. */
+
+    /* Modbus exceptions (positive values) */
+    MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,      /**< Exception 1: Illegal function. */
+    MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS = 2,  /**< Exception 2: Illegal data address. */
+    MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE = 3,    /**< Exception 3: Illegal data value. */
+    MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE = 4  /**< Exception 4: Server device failure. */
+} modbus_error_t;
+
+/**
+ * @brief Convenience alias aligned with the Gate 1 naming scheme.
+ */
+typedef modbus_error_t mb_err_t;
+
+/**
+ * @brief Determines if the given error code represents a Modbus exception.
+ *
+ * @param err Error code to inspect.
+ * @return `true` when the code is a protocol exception (1–4), `false` otherwise.
+ */
+static inline bool mb_err_is_exception(modbus_error_t err)
+{
+    return (err >= MODBUS_EXCEPTION_ILLEGAL_FUNCTION && err <= MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE);
+}
+
+/* Backward-compatible helpers ------------------------------------------------ */
+
+static inline bool modbus_error_is_exception(modbus_error_t err)
+{
+    return mb_err_is_exception(err);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MODBUS_MB_ERR_H */

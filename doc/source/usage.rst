@@ -1,6 +1,105 @@
 Usage
 =====
 
+Logging
+-------
+
+Gate 1 introduces the `mb_log.h` façade so applications rely on `MB_LOG_*`
+macros instead of the legacy `LOG_*` names.  The helper below wires the
+default stdout sink and keeps thresholds consistent across platforms.
+
+.. code-block:: c
+
+   #include <modbus/mb_log.h>
+
+   void app_init_logging(void) {
+       mb_log_bootstrap_defaults();
+       MB_LOG_INFO("Modbus logging ready");
+   }
+
+Compile-time toggles control how the façade behaves.  They can be passed via
+your build system (for example `-DMB_LOG_ENABLE_STDIO=0`) before including any
+Modbus headers:
+
+============================ ===============================================
+Macro                         Purpose
+============================ ===============================================
+``MB_LOG_ENABLE_STDIO``       Enable the stdio sink (default ``1``)
+``MB_LOG_ENABLE_SEGGER_RTT``  Enable the SEGGER RTT sink when the SDK is found
+``MB_LOG_DEFAULT_THRESHOLD``  Set the initial minimum severity (default INFO)
+``MB_LOG_STDOUT_SYNC_FLUSH``  Flush after each stdio log (default ``1``)
+``MB_LOG_RTT_CHANNEL``        Select the RTT down-channel (default ``0``)
+============================ ===============================================
+
+With these defines you can, for example, ship a silent release build that only
+logs to RTT when the SEGGER probe is present:
+
+.. code-block:: c
+
+   target_compile_definitions(app PRIVATE
+       MB_LOG_ENABLE_STDIO=0
+       MB_LOG_ENABLE_SEGGER_RTT=1
+       MB_LOG_DEFAULT_THRESHOLD=MB_LOG_WARNING_LEVEL)
+
+Utilities
+---------
+
+Gate 1 also adds heap-free utilities that can be mixed and matched depending on
+the target.
+
+Ring buffer (single producer / single consumer)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+   #include <modbus/ringbuf.h>
+
+   #define UART_RX_CAP 128U
+   static uint8_t uart_rx_storage[UART_RX_CAP];
+   static mb_ringbuf_t uart_rx_fifo;
+
+   void uart_init_fifo(void)
+   {
+       MB_STATIC_ASSERT(MB_IS_POWER_OF_TWO(UART_RX_CAP), "capacity must be power of two");
+       mb_ringbuf_init(&uart_rx_fifo, uart_rx_storage, UART_RX_CAP);
+   }
+
+   void uart_rx_isr(uint8_t byte)
+   {
+       mb_ringbuf_push(&uart_rx_fifo, byte);
+   }
+
+   bool uart_rx_pop(uint8_t *out)
+   {
+       return mb_ringbuf_pop(&uart_rx_fifo, out);
+   }
+
+Fixed-size memory pool
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: c
+
+   #include <modbus/mempool.h>
+
+   enum { BLOCKS = 8, BLOCK_BYTES = 32 };
+   static uint8_t pool_storage[BLOCKS][MB_ALIGN_UP(BLOCK_BYTES, sizeof(void*))];
+   static mb_mempool_t pool;
+
+   void app_pool_init(void)
+   {
+       mb_mempool_init(&pool, pool_storage, sizeof pool_storage[0], BLOCKS);
+   }
+
+   void *app_alloc(void)
+   {
+       return mb_mempool_acquire(&pool);
+   }
+
+   void app_free(void *ptr)
+   {
+       mb_mempool_release(&pool, ptr);
+   }
+
 ## Initialization
 
 Before utilizing the Master or Slave functionalities, it is essential to initialize the corresponding context with the appropriate transport configurations and device settings.

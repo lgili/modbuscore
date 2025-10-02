@@ -236,6 +236,23 @@ uint16_t modbus_calculate_crc(const uint8_t *data, uint16_t length);
  */
 uint16_t modbus_crc_with_table(const uint8_t *data, uint16_t length);
 
+/**
+ * @brief Validates the trailing Modbus CRC-16 in a frame.
+ *
+ * This helper verifies that the last two bytes of @p frame match the CRC of the
+ * preceding bytes. The check uses the table-driven CRC implementation for
+ * performance and accepts frames with at least two bytes reserved for the CRC
+ * trailer. The CRC stored in the frame is expected in little-endian order
+ * (least significant byte first), as defined by the Modbus specification.
+ *
+ * @param[in] frame   Pointer to the full Modbus frame (PDU/ADU) including CRC.
+ * @param[in] length  Total frame length in bytes, including the CRC trailer.
+ *
+ * @return `true` if the frame pointer is valid, the length is >= 2, and the
+ *         CRC matches the calculated value; `false` otherwise.
+ */
+bool modbus_crc_validate(const uint8_t *frame, uint16_t length);
+
 #ifdef __cplusplus
 }
 #endif
