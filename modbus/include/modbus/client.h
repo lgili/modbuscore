@@ -27,7 +27,9 @@ extern "C" {
 struct mb_client;
 struct mb_client_txn;
 
-#define MB_CLIENT_REQUEST_NO_RESPONSE (1u << 0)
+#define MB_CLIENT_REQUEST_NO_RESPONSE   (1u << 0)
+#define MB_CLIENT_REQUEST_HIGH_PRIORITY (1u << 1)
+#define MB_CLIENT_REQUEST_POISON        (1u << 2)
 
 typedef void (*mb_client_callback_t)(struct mb_client *client,
                                      const struct mb_client_txn *txn,
@@ -52,6 +54,8 @@ typedef struct mb_client_txn {
     bool cancelled;
     bool callback_pending;
     bool expect_response;
+    bool high_priority;
+    bool poison;
     mb_client_request_t cfg;
     mb_err_t status;
     mb_u8 retry_count;
@@ -62,6 +66,7 @@ typedef struct mb_client_txn {
     mb_time_ms_t deadline;
     mb_time_ms_t watchdog_deadline;
     mb_time_ms_t next_attempt_ms;
+    mb_time_ms_t start_time;
     mb_adu_view_t request_view;
     mb_adu_view_t response_view;
     mb_u8 request_storage[MB_PDU_MAX];
@@ -81,6 +86,20 @@ typedef enum {
     MB_CLIENT_TRANSPORT_TCP
 } mb_client_transport_t;
 
+typedef struct {
+    mb_u64 submitted;
+    mb_u64 completed;
+    mb_u64 retries;
+    mb_u64 timeouts;
+    mb_u64 errors;
+    mb_u64 cancelled;
+    mb_u64 poison_triggers;
+    mb_u64 bytes_tx;
+    mb_u64 bytes_rx;
+    mb_u64 response_count;
+    mb_u64 response_latency_total_ms;
+} mb_client_metrics_t;
+
 typedef struct mb_client {
     const mb_transport_if_t *iface;
     mb_rtu_transport_t rtu;
@@ -94,6 +113,10 @@ typedef struct mb_client {
     mb_client_state_t state;
     mb_time_ms_t watchdog_ms;
     mb_u16 next_tid;
+    mb_size_t queue_capacity;
+    mb_size_t pending_count;
+    mb_time_ms_t fc_timeouts[256];
+    mb_client_metrics_t metrics;
 } mb_client_t;
 
 mb_err_t mb_client_init(mb_client_t *client,
@@ -110,6 +133,8 @@ mb_err_t mb_client_submit(mb_client_t *client,
                           const mb_client_request_t *request,
                           mb_client_txn_t **out_txn);
 
+mb_err_t mb_client_submit_poison(mb_client_t *client);
+
 mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn);
 
 mb_err_t mb_client_poll(mb_client_t *client);
@@ -119,6 +144,16 @@ void mb_client_set_watchdog(mb_client_t *client, mb_time_ms_t watchdog_ms);
 bool mb_client_is_idle(const mb_client_t *client);
 
 mb_size_t mb_client_pending(const mb_client_t *client);
+
+void mb_client_set_queue_capacity(mb_client_t *client, mb_size_t capacity);
+
+mb_size_t mb_client_queue_capacity(const mb_client_t *client);
+
+void mb_client_set_fc_timeout(mb_client_t *client, mb_u8 function, mb_time_ms_t timeout_ms);
+
+void mb_client_get_metrics(const mb_client_t *client, mb_client_metrics_t *out_metrics);
+
+void mb_client_reset_metrics(mb_client_t *client);
 
 #ifdef __cplusplus
 }

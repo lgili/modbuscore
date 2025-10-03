@@ -20,6 +20,28 @@ static mb_time_ms_t client_now(const mb_client_t *client)
     return mb_transport_now(client->iface);
 }
 
+static mb_size_t client_total_inflight(const mb_client_t *client)
+{
+    if (client == NULL) {
+        return 0U;
+    }
+
+    mb_size_t count = 0U;
+    if (client->current != NULL && client->current->in_use && !client->current->cancelled) {
+        count = 1U;
+    }
+
+    const mb_client_txn_t *node = client->pending_head;
+    while (node != NULL) {
+        if (node->in_use && !node->cancelled) {
+            count += 1U;
+        }
+        node = node->next;
+    }
+
+    return count;
+}
+
 static mb_time_ms_t client_base_timeout_ms(const mb_client_txn_t *txn)
 {
     const mb_time_ms_t base = (txn->base_timeout_ms == 0U) ? MB_CLIENT_TIMEOUT_DEFAULT : txn->base_timeout_ms;
@@ -109,12 +131,21 @@ static void client_start_next(mb_client_t *client);
 static void client_enqueue(mb_client_t *client, mb_client_txn_t *txn)
 {
     txn->next = NULL;
-    if (client->pending_tail) {
-        client->pending_tail->next = txn;
-    } else {
+    if (txn->high_priority) {
+        txn->next = client->pending_head;
         client->pending_head = txn;
+        if (client->pending_tail == NULL) {
+            client->pending_tail = txn;
+        }
+    } else {
+        if (client->pending_tail) {
+            client->pending_tail->next = txn;
+        } else {
+            client->pending_head = txn;
+        }
+        client->pending_tail = txn;
     }
-    client->pending_tail = txn;
+    client->pending_count += 1U;
 }
 
 static bool client_remove_from_queue(mb_client_t *client, mb_client_txn_t *target)
@@ -139,6 +170,9 @@ static bool client_remove_from_queue(mb_client_t *client, mb_client_txn_t *targe
 
             node->next = NULL;
             node->queued = false;
+            if (client->pending_count > 0U) {
+                client->pending_count -= 1U;
+            }
             return true;
         }
 
@@ -161,6 +195,9 @@ static mb_client_txn_t *client_dequeue(mb_client_t *client)
         discard->queued = false;
         discard->in_use = false;
         discard->next_attempt_ms = 0U;
+        if (client->pending_count > 0U) {
+            client->pending_count -= 1U;
+        }
     }
 
     mb_client_txn_t *txn = client->pending_head;
@@ -171,6 +208,9 @@ static mb_client_txn_t *client_dequeue(mb_client_t *client)
         }
         txn->next = NULL;
         txn->queued = false;
+        if (client->pending_count > 0U) {
+            client->pending_count -= 1U;
+        }
     }
     return txn;
 }
@@ -199,6 +239,30 @@ static void client_finalize(mb_client_t *client,
                             mb_err_t status,
                             const mb_adu_view_t *response)
 {
+    const mb_time_ms_t now = client_now(client);
+
+    client->metrics.completed += 1U;
+    if (status == MB_OK) {
+        client->metrics.response_count += 1U;
+        if (txn->start_time > 0U && now >= txn->start_time) {
+            client->metrics.response_latency_total_ms += (now - txn->start_time);
+        }
+    } else if (status == MB_ERR_TIMEOUT) {
+        client->metrics.timeouts += 1U;
+    } else if (status == MB_ERR_CANCELLED) {
+        client->metrics.cancelled += 1U;
+    } else {
+        client->metrics.errors += 1U;
+    }
+
+    if (txn->poison) {
+        client->metrics.poison_triggers += 1U;
+    }
+
+    if (response && response->payload) {
+        (void)response;
+    }
+
     txn->status = status;
     txn->completed = true;
     txn->callback_pending = true;
@@ -217,6 +281,9 @@ static void client_finalize(mb_client_t *client,
     txn->deadline = 0U;
     txn->watchdog_deadline = 0U;
     txn->tid = 0U;
+    txn->high_priority = false;
+    txn->poison = false;
+    txn->start_time = 0U;
 }
 
 static void client_prepare_response(mb_client_txn_t *txn, const mb_adu_view_t *adu)
@@ -247,9 +314,14 @@ static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *tx
         return MB_ERR_INVALID_ARGUMENT;
     }
 
+    mb_err_t status = MB_ERR_INVALID_ARGUMENT;
+    mb_size_t frame_len = 0U;
+
     switch (client->transport) {
     case MB_CLIENT_TRANSPORT_RTU:
-        return mb_rtu_submit(&client->rtu, &txn->request_view);
+        frame_len = 1U + 1U + txn->request_view.payload_len + 2U;
+        status = mb_rtu_submit(&client->rtu, &txn->request_view);
+        break;
     case MB_CLIENT_TRANSPORT_TCP:
         if (txn->tid == 0U) {
             txn->tid = client->next_tid++;
@@ -257,10 +329,18 @@ static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *tx
                 client->next_tid = 1U;
             }
         }
-        return mb_tcp_submit(&client->tcp, &txn->request_view, txn->tid);
+        frame_len = MB_TCP_HEADER_SIZE + 1U + txn->request_view.payload_len;
+        status = mb_tcp_submit(&client->tcp, &txn->request_view, txn->tid);
+        break;
     default:
         return MB_ERR_INVALID_ARGUMENT;
     }
+
+    if (status == MB_OK) {
+        client->metrics.bytes_tx += frame_len;
+    }
+
+    return status;
 }
 
 static mb_err_t client_transport_poll(mb_client_t *client)
@@ -309,6 +389,11 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
         client_remove_from_queue(client, txn);
     }
 
+    if (status == MB_OK && adu != NULL) {
+        const mb_size_t adu_len = MB_TCP_HEADER_SIZE + 1U + adu->payload_len;
+        client->metrics.bytes_rx += adu_len;
+    }
+
     if (status == MB_OK) {
         client_prepare_response(txn, adu);
         client_finalize(client, txn, MB_OK, adu ? &txn->response_view : NULL);
@@ -335,6 +420,15 @@ static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
     txn->deadline = now + txn->timeout_ms;
     txn->watchdog_deadline = (client->watchdog_ms > 0U) ? (now + client->watchdog_ms) : 0U;
     txn->next_attempt_ms = 0U;
+    txn->start_time = now;
+
+    if (txn->poison) {
+        client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
+        client->current = NULL;
+        client->state = MB_CLIENT_STATE_IDLE;
+        client_start_next(client);
+        return;
+    }
 
     mb_err_t status = client_transport_submit(client, txn);
     if (status != MB_OK) {
@@ -386,6 +480,7 @@ static void client_retry(mb_client_t *client)
     }
 
     txn->retry_count += 1U;
+    client->metrics.retries += 1U;
     const mb_time_ms_t now = client_now(client);
     const mb_time_ms_t base_backoff = client_retry_backoff_ms(txn);
     const mb_time_ms_t delay = client_backoff_with_jitter(txn, base_backoff, now);
@@ -406,6 +501,11 @@ static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
     mb_client_txn_t *txn = client->current;
     if (txn == NULL) {
         return;
+    }
+
+    if (status == MB_OK && adu != NULL) {
+        const mb_size_t adu_len = 1U + adu->payload_len + 2U;
+        client->metrics.bytes_rx += adu_len;
     }
 
     if (status == MB_OK) {
@@ -440,6 +540,10 @@ static mb_err_t mb_client_init_common(mb_client_t *client,
     client->state = MB_CLIENT_STATE_IDLE;
     client->watchdog_ms = MB_CLIENT_DEFAULT_WATCHDOG_MS;
     client->next_tid = 1U;
+    client->queue_capacity = txn_pool_len;
+    client->pending_count = 0U;
+    memset(client->fc_timeouts, 0, sizeof(client->fc_timeouts));
+    memset(&client->metrics, 0, sizeof(client->metrics));
 
     for (mb_size_t i = 0U; i < txn_pool_len; ++i) {
         memset(&txn_pool[i], 0, sizeof(mb_client_txn_t));
@@ -488,6 +592,14 @@ mb_err_t mb_client_submit(mb_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
+    const bool is_poison = ((request->flags & MB_CLIENT_REQUEST_POISON) != 0U);
+    if (!is_poison && client->queue_capacity > 0U) {
+        const mb_size_t inflight = client_total_inflight(client);
+        if (inflight >= client->queue_capacity) {
+            return MB_ERR_NO_RESOURCES;
+        }
+    }
+
     mb_client_txn_t *txn = NULL;
     for (mb_size_t i = 0U; i < client->pool_size; ++i) {
         if (!client->pool[i].in_use) {
@@ -497,16 +609,25 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (txn == NULL) {
-        return MB_ERR_OTHER;
+        return MB_ERR_NO_RESOURCES;
     }
 
     memset(txn, 0, sizeof(*txn));
     txn->in_use = true;
     txn->queued = true;
     txn->cfg = *request;
-    txn->expect_response = ((request->flags & MB_CLIENT_REQUEST_NO_RESPONSE) == 0U);
-    txn->timeout_ms = (request->timeout_ms == 0U) ? MB_CLIENT_TIMEOUT_DEFAULT : request->timeout_ms;
-    txn->base_timeout_ms = txn->timeout_ms;
+    txn->poison = is_poison;
+    txn->high_priority = ((request->flags & MB_CLIENT_REQUEST_HIGH_PRIORITY) != 0U) || txn->poison;
+    txn->expect_response = ((request->flags & MB_CLIENT_REQUEST_NO_RESPONSE) == 0U) && !txn->poison;
+
+    mb_time_ms_t base_timeout = request->timeout_ms;
+    if (base_timeout == 0U) {
+        const mb_u8 function = request->request.function;
+        const mb_time_ms_t fc_override = client->fc_timeouts[function];
+        base_timeout = (fc_override != 0U) ? fc_override : MB_CLIENT_TIMEOUT_DEFAULT;
+    }
+    txn->timeout_ms = base_timeout;
+    txn->base_timeout_ms = base_timeout;
     txn->retry_backoff_ms = (request->retry_backoff_ms == 0U) ? MB_CLIENT_BACKOFF_DEFAULT : request->retry_backoff_ms;
     txn->max_retries = request->max_retries;
     txn->retry_count = 0U;
@@ -524,6 +645,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     client_enqueue(client, txn);
+    client->metrics.submitted += 1U;
 
     if (out_txn) {
         *out_txn = txn;
@@ -534,6 +656,18 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     return MB_OK;
+}
+
+mb_err_t mb_client_submit_poison(mb_client_t *client)
+{
+    if (client == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    mb_client_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.flags = MB_CLIENT_REQUEST_POISON | MB_CLIENT_REQUEST_NO_RESPONSE | MB_CLIENT_REQUEST_HIGH_PRIORITY;
+    return mb_client_submit(client, &request, NULL);
 }
 
 mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn)
@@ -623,17 +757,53 @@ bool mb_client_is_idle(const mb_client_t *client)
 
 mb_size_t mb_client_pending(const mb_client_t *client)
 {
+    return client_total_inflight(client);
+}
+
+void mb_client_set_queue_capacity(mb_client_t *client, mb_size_t capacity)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    if (capacity == 0U || capacity > client->pool_size) {
+        client->queue_capacity = client->pool_size;
+    } else {
+        client->queue_capacity = capacity;
+    }
+}
+
+mb_size_t mb_client_queue_capacity(const mb_client_t *client)
+{
     if (client == NULL) {
         return 0U;
     }
+    return client->queue_capacity;
+}
 
-    mb_size_t count = (client->current != NULL) ? 1U : 0U;
-    const mb_client_txn_t *node = client->pending_head;
-    while (node != NULL) {
-        if (node->in_use && !node->cancelled) {
-            count += 1U;
-        }
-        node = node->next;
+void mb_client_set_fc_timeout(mb_client_t *client, mb_u8 function, mb_time_ms_t timeout_ms)
+{
+    if (client == NULL) {
+        return;
     }
-    return count;
+
+    client->fc_timeouts[function] = timeout_ms;
+}
+
+void mb_client_get_metrics(const mb_client_t *client, mb_client_metrics_t *out_metrics)
+{
+    if (client == NULL || out_metrics == NULL) {
+        return;
+    }
+
+    *out_metrics = client->metrics;
+}
+
+void mb_client_reset_metrics(mb_client_t *client)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    memset(&client->metrics, 0, sizeof(client->metrics));
 }

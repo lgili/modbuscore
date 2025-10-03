@@ -85,7 +85,7 @@ TEST(PduFc03, BuildResponse)
     const std::array<mb_u16, 5> registers{0x1111U, 0x2222U, 0x3333U, 0x4444U, 0x5555U};
 
     ASSERT_EQ(MODBUS_ERROR_NONE,
-              mb_pdu_build_read_holding_response(buffer, sizeof buffer, registers.data(), registers.size()));
+              mb_pdu_build_read_holding_response(buffer, sizeof buffer, registers.data(), static_cast<mb_u16>(registers.size())));
 
     EXPECT_EQ(MB_PDU_FC_READ_HOLDING_REGISTERS, buffer[0]);
     EXPECT_EQ(registers.size() * 2U, buffer[1]);
@@ -118,7 +118,7 @@ TEST(PduFc03, BuildResponseRejectsSmallBuffer)
     mb_u8 buffer[2]{};
     const std::array<mb_u16, 1> registers{0xAAAAU};
     EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
-              mb_pdu_build_read_holding_response(buffer, sizeof buffer, registers.data(), registers.size()));
+              mb_pdu_build_read_holding_response(buffer, sizeof buffer, registers.data(), static_cast<mb_u16>(registers.size())));
 }
 
 TEST(PduFc03, ParseResponse)
@@ -209,7 +209,7 @@ TEST(PduFc16, BuildRequest)
     mb_u8 buffer[6 + 6]{};
     const std::array<mb_u16, 3> regs{0x0102U, 0x0304U, 0x0506U};
     ASSERT_EQ(MODBUS_ERROR_NONE,
-              mb_pdu_build_write_multiple_request(buffer, sizeof buffer, 0x1234U, regs.data(), regs.size()));
+              mb_pdu_build_write_multiple_request(buffer, sizeof buffer, 0x1234U, regs.data(), static_cast<mb_u16>(regs.size())));
 
     EXPECT_EQ(MB_PDU_FC_WRITE_MULTIPLE_REGISTERS, buffer[0]);
     EXPECT_EQ(0x12U, buffer[1]);
@@ -253,7 +253,7 @@ TEST(PduFc16, BuildRequestRejectsSmallBuffer)
     mb_u8 buffer[4]{};
     const std::array<mb_u16, 1> regs{0xAAAAU};
     EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
-              mb_pdu_build_write_multiple_request(buffer, sizeof buffer, 0x0000U, regs.data(), regs.size()));
+              mb_pdu_build_write_multiple_request(buffer, sizeof buffer, 0x0000U, regs.data(), static_cast<mb_u16>(regs.size())));
 }
 
 TEST(PduFc16, ParseRequest)

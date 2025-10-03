@@ -1,46 +1,42 @@
-# Configuration file for the Sphinx documentation builder.
-#
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
-
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
 import os
-import sys
-sys.path.insert(0, os.path.abspath('../..'))  # Ajuste o caminho conforme necessário
+from datetime import datetime
 
 
-project = 'modbus'
-copyright = '2025, Luiz Carlos Gili'
-author = 'Luiz Carlos Gili'
-release = '0.1v'
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+project = "Modbus C Library"
+author = "Luiz Carlos Gili"
+copyright = f"{datetime.now():%Y}, {author}"
+release = os.environ.get("MODBUS_DOC_VERSION", "0.7.0")
 
 extensions = [
-    'breathe',
-    'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.viewcode',
+    "breathe",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.todo",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.intersphinx",
 ]
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = []
 
-# Configuração do Breathe
-breathe_projects = {
-    "Modbus": "xml"
+autosectionlabel_prefix_document = True
+autosummary_generate = True
+todo_include_todos = True
+
+doxygen_xml_dir = os.environ.get("DOXYGEN_XML_DIR", os.path.abspath(os.path.join("..", "..", "build", "doxygen", "xml")))
+breathe_projects = {"modbus": doxygen_xml_dir}
+breathe_default_project = "modbus"
+
+html_theme = "sphinx_rtd_theme"
+static_dir = os.path.join(os.path.dirname(__file__), "_static")
+html_static_path = ["_static"] if os.path.isdir(static_dir) else []
+html_theme_options = {
+    "navigation_depth": 3,
+    "collapse_navigation": False,
 }
-breathe_default_project = "Modbus"
 
-import subprocess
-doxygen_output = os.path.join(os.path.abspath('../..'), 'doc', 'xml')
-breathe_projects["Modbus"] = doxygen_output
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
-html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}

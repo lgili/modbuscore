@@ -51,7 +51,8 @@
             "description": "Debug build with documentation enabled",
             "inherits": "host-base",
             "cacheVariables": {
-                "MODBUS_BUILD_DOCS": "ON"
+                "MODBUS_BUILD_DOCS": "ON",
+                "MODBUS_ENABLE_TESTS": "OFF"
             }
         },
         {

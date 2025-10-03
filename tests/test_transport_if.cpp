@@ -1,4 +1,5 @@
 #include <array>
+#include <limits>
 
 #include <gtest/gtest.h>
 
@@ -45,15 +46,20 @@ TEST_F(TransportIfTest, SendAndReceiveFrame)
     EXPECT_EQ(frame_len, io.processed);
 
     std::array<uint8_t, 32> tx_buffer{};
-    EXPECT_EQ(frame_len, mock_get_tx_data(tx_buffer.data(), tx_buffer.size()));
+    static_assert(tx_buffer.size() <= std::numeric_limits<uint16_t>::max(),
+        "tx_buffer capacity must fit into uint16_t");
+    EXPECT_EQ(frame_len, mock_get_tx_data(tx_buffer.data(), static_cast<uint16_t>(tx_buffer.size())));
     EXPECT_TRUE(std::equal(frame.begin(), frame.begin() + frame_len, tx_buffer.begin()));
 
     mock_clear_tx_buffer();
 
     ASSERT_EQ(0, mock_inject_rx_data(frame.data(), static_cast<uint16_t>(frame_len)));
     std::array<uint8_t, 32> rx_buffer{};
+    static_assert(rx_buffer.size() <= std::numeric_limits<uint16_t>::max(),
+        "rx_buffer capacity must fit into uint16_t");
     mb_transport_io_result_t rx_io{};
-    ASSERT_EQ(MODBUS_ERROR_NONE, mb_transport_recv(iface_, rx_buffer.data(), rx_buffer.size(), &rx_io));
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+        mb_transport_recv(iface_, rx_buffer.data(), static_cast<uint16_t>(rx_buffer.size()), &rx_io));
     EXPECT_EQ(frame_len, rx_io.processed);
     EXPECT_TRUE(std::equal(frame.begin(), frame.begin() + frame_len, rx_buffer.begin()));
 }

@@ -1,24 +1,47 @@
 Installation
 ============
 
-## Prerequisites
+Prerequisites
+-------------
 
-Before you begin, ensure you have the following installed on your system:
+* C11-capable toolchain (tested with GCC, Clang, MSVC, MinGW).
+* CMake 3.20 or newer.
+* Ninja (recommended) or another generator.
+* Optional: Doxygen + Sphinx for documentation, sanitizers, etc.
 
-- **C Compiler**: Compatible with the C99 standard or later (e.g., GCC, Clang).
-- **Python 3**: Required for generating documentation with Sphinx and Breathe.
-- **Doxygen**: Used to generate documentation from the source code.
-- **Sphinx**: A powerful documentation generator.
-- **Breathe**: An extension that integrates Doxygen-generated XML with Sphinx.
+Build Presets
+-------------
 
-## Step-by-Step Guide
+Use the provided CMake presets (``CMakePresets.json``):
 
-Follow these steps to set up and build the **Modbus Master/Slave Library in C** along with its documentation.
+* ``host-debug`` – Debug build with unit tests.
+* ``host-release`` – Optimised build without tests.
+* ``host-asan`` – Debug build with Address/Undefined sanitizers.
+* ``mingw-*`` – Windows cross builds via MinGW.
+* ``docs`` – Documentation (Doxygen + Sphinx).
 
-### 1. Clone the Repository
+Example (Linux/macOS):
 
-Start by cloning the repository to your local machine:
+.. code-block:: bash
 
-```bash
-git clone https://github.com/yourusername/modbus-library.git
-cd modbus-library
+   cmake --preset host-debug
+   cmake --build --preset host-debug
+   ctest --output-on-failure --test-dir build/host-debug
+
+To generate docs:
+
+.. code-block:: bash
+
+   cmake --preset host-docs
+   cmake --build --preset docs
+
+Installation
+------------
+
+After building, install by running:
+
+.. code-block:: bash
+
+   cmake --install build/host-debug --prefix /desired/install/prefix
+
+Adjust the preset (``host-release``) and prefix as required.

@@ -135,23 +135,26 @@ if(MODBUS_BUILD_DOCS)
     find_package(Doxygen REQUIRED)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-    set(DOXYGEN_INPUT "${CMAKE_SOURCE_DIR}/modbus/include" "${CMAKE_SOURCE_DIR}/modbus/src")
-    set(DOXYGEN_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/doc/xml")
     set(DOXYGEN_CONFIG "${CMAKE_BINARY_DIR}/Doxyfile")
 
     configure_file(${CMAKE_SOURCE_DIR}/Doxyfile.in ${DOXYGEN_CONFIG} @ONLY)
 
+    set(DOXYGEN_XML_DIR "${CMAKE_BINARY_DIR}/doxygen/xml")
+    set(SPHINX_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/html")
+
     add_custom_target(doc_doxygen
         COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_CONFIG}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Generating Doxygen XML documentation"
         VERBATIM
     )
 
     add_custom_target(doc_sphinx
-        COMMAND ${Python3_EXECUTABLE} -m sphinx -b html ${CMAKE_SOURCE_DIR}/doc/source ${CMAKE_SOURCE_DIR}/doc/build
+        COMMAND ${CMAKE_COMMAND} -E env DOXYGEN_XML_DIR=${DOXYGEN_XML_DIR}
+                ${Python3_EXECUTABLE} -m sphinx -b html
+                ${CMAKE_SOURCE_DIR}/doc/source ${SPHINX_OUTPUT_DIR}
         DEPENDS doc_doxygen
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Generating Sphinx HTML documentation"
         VERBATIM
     )
@@ -161,4 +164,3 @@ if(MODBUS_BUILD_DOCS)
         COMMENT "Generating full project documentation"
     )
 endif()
-

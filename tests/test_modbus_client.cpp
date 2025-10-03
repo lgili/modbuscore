@@ -229,6 +229,150 @@ TEST_F(MbClientTest, QueuesMultipleTransactions)
     EXPECT_EQ(3U, second.response.payload_len);
 }
 
+TEST_F(MbClientTest, BackpressureLimitsQueue)
+{
+    mb_client_set_queue_capacity(&client_, 1U);
+    EXPECT_EQ(1U, mb_client_queue_capacity(&client_));
+
+    CallbackCapture first{};
+    mb_client_txn_t *first_txn = nullptr;
+    auto req1 = make_request(0x0000, 0x0001, &first);
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &req1, &first_txn));
+    ASSERT_NE(nullptr, first_txn);
+    (void)mb_client_poll(&client_);
+
+    CallbackCapture second{};
+    mb_client_txn_t *second_txn = nullptr;
+    auto req2 = make_request(0x0002, 0x0001, &second);
+    EXPECT_EQ(MB_ERR_NO_RESOURCES, mb_client_submit(&client_, &req2, &second_txn));
+    EXPECT_EQ(nullptr, second_txn);
+
+    EXPECT_EQ(1U, mb_client_queue_capacity(&client_));
+}
+
+TEST_F(MbClientTest, HighPriorityBypassesQueue)
+{
+    CallbackCapture first{};
+    CallbackCapture second{};
+    CallbackCapture high{};
+    mb_client_txn_t *first_txn = nullptr;
+    auto req1 = make_request(0x0000, 0x0001, &first);
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &req1, &first_txn));
+    ASSERT_NE(nullptr, first_txn);
+
+    (void)mb_client_poll(&client_);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    ASSERT_GT(mock_get_tx_data(frame.data(), frame.size()), 0U);
+    mock_clear_tx_buffer();
+
+    mb_client_txn_t *second_txn = nullptr;
+    auto req2 = make_request(0x0010, 0x0001, &second);
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &req2, &second_txn));
+    ASSERT_NE(nullptr, second_txn);
+
+    mb_client_txn_t *high_txn = nullptr;
+    auto req3 = make_request(0x0020, 0x0001, &high);
+    req3.flags |= MB_CLIENT_REQUEST_HIGH_PRIORITY;
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &req3, &high_txn));
+    ASSERT_NE(nullptr, high_txn);
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_size_t resp_len = 0U;
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+
+    for (int i = 0; i < 10 && !first.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(2U);
+    }
+    EXPECT_TRUE(first.invoked);
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> next_frame{};
+    auto next_len = mock_get_tx_data(next_frame.data(), next_frame.size());
+    ASSERT_GT(next_len, 0U);
+    EXPECT_EQ(req3.request.unit_id, next_frame[0]);
+    EXPECT_EQ(req3.request.function, next_frame[1]);
+    EXPECT_EQ(0x00U, next_frame[2]);
+    EXPECT_EQ(0x20U, next_frame[3]);
+    mock_clear_tx_buffer();
+
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+    for (int i = 0; i < 10 && !high.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(2U);
+    }
+    EXPECT_TRUE(high.invoked);
+
+    auto final_len = mock_get_tx_data(next_frame.data(), next_frame.size());
+    ASSERT_GT(final_len, 0U);
+    EXPECT_EQ(req2.request.unit_id, next_frame[0]);
+    EXPECT_EQ(req2.request.function, next_frame[1]);
+    EXPECT_EQ(0x00U, next_frame[2]);
+    EXPECT_EQ(0x10U, next_frame[3]);
+
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+    for (int i = 0; i < 10 && !second.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(2U);
+    }
+    EXPECT_TRUE(second.invoked);
+}
+
+TEST_F(MbClientTest, PoisonPillFlushesQueue)
+{
+    mb_client_reset_metrics(&client_);
+    mb_client_set_queue_capacity(&client_, 1U);
+
+    CallbackCapture first{};
+    mb_client_txn_t *first_txn = nullptr;
+    auto req1 = make_request(0x0000, 0x0001, &first);
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &req1, &first_txn));
+    ASSERT_NE(nullptr, first_txn);
+
+    (void)mb_client_poll(&client_);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    ASSERT_GT(mock_get_tx_data(frame.data(), frame.size()), 0U);
+    mock_clear_tx_buffer();
+
+    CallbackCapture blocked{};
+    auto blocked_req = make_request(0x0004, 0x0001, &blocked);
+    EXPECT_EQ(MB_ERR_NO_RESOURCES, mb_client_submit(&client_, &blocked_req, nullptr));
+
+    ASSERT_EQ(MB_OK, mb_client_submit_poison(&client_));
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_size_t resp_len = 0U;
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+
+    for (int i = 0; i < 10 && !first.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(2U);
+    }
+    EXPECT_TRUE(first.invoked);
+    EXPECT_EQ(MB_OK, first.status);
+
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+
+    for (int i = 0; i < 4; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(1U);
+    }
+
+    EXPECT_TRUE(mb_client_is_idle(&client_));
+    EXPECT_EQ(0U, mb_client_pending(&client_));
+
+    mb_client_metrics_t metrics{};
+    mb_client_get_metrics(&client_, &metrics);
+    EXPECT_EQ(2U, metrics.submitted);
+    EXPECT_EQ(1U, metrics.poison_triggers);
+    EXPECT_GE(metrics.cancelled, 1U);
+}
+
 TEST_F(MbClientTest, CancelTransaction)
 {
     CallbackCapture capture{};
@@ -319,6 +463,23 @@ TEST_F(MbClientTest, RetryBackoffDelaysResend)
     EXPECT_TRUE(capture.invoked);
     EXPECT_EQ(MODBUS_ERROR_TIMEOUT, capture.status);
     EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+}
+
+TEST_F(MbClientTest, FcSpecificTimeoutOverridesDefault)
+{
+    mb_client_set_fc_timeout(&client_, MODBUS_FUNC_READ_HOLDING_REGISTERS, 250U);
+
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    request.timeout_ms = 0U;
+
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, &txn));
+    ASSERT_NE(nullptr, txn);
+    EXPECT_EQ(250U, txn->base_timeout_ms);
+    EXPECT_EQ(250U, txn->timeout_ms);
+
+    EXPECT_EQ(MB_OK, mb_client_cancel(&client_, txn));
 }
 
 TEST_F(MbClientTest, StressSequentialTransactions)
@@ -570,6 +731,48 @@ TEST_F(MbClientTest, RecoversFromSinglePacketLoss)
 
     EXPECT_TRUE(capture.invoked);
     EXPECT_EQ(MB_OK, capture.status);
+}
+
+TEST_F(MbClientTest, MetricsResetClearsCounters)
+{
+    mb_client_reset_metrics(&client_);
+
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, &txn));
+    ASSERT_NE(nullptr, txn);
+
+    (void)mb_client_poll(&client_);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    ASSERT_GT(mock_get_tx_data(frame.data(), frame.size()), 0U);
+    mock_clear_tx_buffer();
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_size_t resp_len = 0U;
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+
+    for (int i = 0; i < 10 && !capture.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(1U);
+    }
+
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MB_OK, capture.status);
+
+    mb_client_metrics_t metrics{};
+    mb_client_get_metrics(&client_, &metrics);
+    EXPECT_EQ(1U, metrics.submitted);
+    EXPECT_EQ(1U, metrics.completed);
+    EXPECT_EQ(1U, metrics.response_count);
+
+    mb_client_reset_metrics(&client_);
+    mb_client_get_metrics(&client_, &metrics);
+    EXPECT_EQ(0U, metrics.submitted);
+    EXPECT_EQ(0U, metrics.completed);
+    EXPECT_EQ(0U, metrics.response_count);
 }
 
 } // namespace

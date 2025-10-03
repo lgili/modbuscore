@@ -68,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@v3
       - name: Install documentation dependencies
@@ -75,14 +77,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y doxygen graphviz python3-pip
           python3 -m pip install --upgrade pip
-          python3 -m pip install sphinx breathe
+          python3 -m pip install sphinx breathe sphinx-rtd-theme
         shell: bash
       - name: Configure docs preset
-        run: cmake --preset docs
+        run: cmake --preset host-docs
         shell: bash
       - name: Build documentation
-        run: cmake --build --preset docs --target doc
+        run: cmake --build --preset docs
         shell: bash
+      - name: Deploy GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/docs/html
+          publish_branch: gh-pages
+          force_orphan: true
 
   tcp-integration:
     runs-on: ubuntu-latest

@@ -1,5 +1,6 @@
 #include <array>
 #include <cstring>
+#include <limits>
 
 #include <gtest/gtest.h>
 
@@ -116,7 +117,9 @@ TEST_F(RtuTransportTest, SubmitSendsFrame)
     ASSERT_EQ(MODBUS_ERROR_NONE, mb_rtu_submit(&rtu_, &adu));
 
     std::array<uint8_t, MB_RTU_BUFFER_SIZE> buffer{};
-    const auto written = mock_get_tx_data(buffer.data(), buffer.size());
+    static_assert(buffer.size() <= std::numeric_limits<uint16_t>::max(),
+        "RTU buffer capacity must fit into uint16_t");
+    const auto written = mock_get_tx_data(buffer.data(), static_cast<uint16_t>(buffer.size()));
     ASSERT_GT(written, 0U);
 
     mb_adu_view_t decoded{};

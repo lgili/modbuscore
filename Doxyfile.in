@@ -1,6 +1,6 @@
 PROJECT_NAME           = "Modbus"
-OUTPUT_DIRECTORY       = doc
-INPUT                  = modbus/include modbus/src
+OUTPUT_DIRECTORY       = "@CMAKE_BINARY_DIR@/doxygen"
+INPUT                  = "@CMAKE_SOURCE_DIR@/modbus/include" "@CMAKE_SOURCE_DIR@/modbus/src"
 RECURSIVE              = YES
 GENERATE_XML           = YES
 XML_OUTPUT             = xml
