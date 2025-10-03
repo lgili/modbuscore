@@ -1,6 +1,6 @@
 /**
  * @file server.h
- * @brief Non-blocking Modbus server handling for holding registers (Gate 6).
+ * @brief Non-blocking Modbus server handling for holding registers (Gate 8).
  */
 
 #ifndef MODBUS_SERVER_H
@@ -14,6 +14,12 @@
 #include <modbus/pdu.h>
 #include <modbus/transport_if.h>
 #include <modbus/transport/rtu.h>
+
+#define MB_SERVER_DEFAULT_TIMEOUT_MS 200U
+#define MB_SERVER_MAX_TIMEOUT_MS     60000U
+
+#define MB_SERVER_REQUEST_HIGH_PRIORITY (1u << 0)
+#define MB_SERVER_REQUEST_POISON        (1u << 1)
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +46,38 @@ typedef mb_err_t (*mb_server_write_fn)(mb_u16 start_addr,
                                        const mb_u16 *values,
                                        mb_u16 quantity,
                                        void *user_ctx);
+
+typedef struct mb_server_request mb_server_request_t;
+
+struct mb_server_request {
+    bool in_use;
+    bool queued;
+    bool high_priority;
+    bool poison;
+    bool broadcast;
+    mb_u8 unit_id;
+    mb_u8 flags;
+    mb_u8 function;
+    mb_size_t pdu_len;
+    mb_time_ms_t enqueue_time;
+    mb_time_ms_t start_time;
+    mb_time_ms_t deadline;
+    mb_adu_view_t request_view;
+    mb_u8 storage[MB_PDU_MAX];
+    mb_server_request_t *next;
+};
+
+typedef struct {
+    mb_u64 received;
+    mb_u64 responded;
+    mb_u64 broadcasts;
+    mb_u64 exceptions;
+    mb_u64 dropped;
+    mb_u64 poison_triggers;
+    mb_u64 errors;
+    mb_u64 timeouts;
+    mb_u64 latency_total_ms;
+} mb_server_metrics_t;
 
 /**
  * @brief Register mapping entry.
@@ -70,6 +108,16 @@ typedef struct {
     mb_size_t region_cap;
     mb_size_t region_count;
 
+    mb_server_request_t *pool;
+    mb_size_t pool_size;
+    mb_server_request_t *pending_head;
+    mb_server_request_t *pending_tail;
+    mb_server_request_t *current;
+    mb_size_t queue_capacity;
+    mb_size_t pending_count;
+    mb_time_ms_t fc_timeouts[256];
+    mb_server_metrics_t metrics;
+
     mb_u8 rx_buffer[MB_PDU_MAX];
     mb_u8 tx_buffer[MB_PDU_MAX];
 } mb_server_t;
@@ -81,7 +129,9 @@ mb_err_t mb_server_init(mb_server_t *server,
                         const mb_transport_if_t *iface,
                         mb_u8 unit_id,
                         mb_server_region_t *regions,
-                        mb_size_t region_capacity);
+                        mb_size_t region_capacity,
+                        mb_server_request_t *request_pool,
+                        mb_size_t request_pool_len);
 
 /**
  * @brief Clears all registered regions.
@@ -112,6 +162,24 @@ mb_err_t mb_server_add_storage(mb_server_t *server,
  * @brief Advances the server FSM.
  */
 mb_err_t mb_server_poll(mb_server_t *server);
+
+mb_size_t mb_server_pending(const mb_server_t *server);
+
+bool mb_server_is_idle(const mb_server_t *server);
+
+void mb_server_set_queue_capacity(mb_server_t *server, mb_size_t capacity);
+
+mb_size_t mb_server_queue_capacity(const mb_server_t *server);
+
+void mb_server_set_fc_timeout(mb_server_t *server, mb_u8 function, mb_time_ms_t timeout_ms);
+
+mb_err_t mb_server_submit_poison(mb_server_t *server);
+
+void mb_server_get_metrics(const mb_server_t *server, mb_server_metrics_t *out_metrics);
+
+void mb_server_reset_metrics(mb_server_t *server);
+
+mb_err_t mb_server_inject_adu(mb_server_t *server, const mb_adu_view_t *adu);
 
 #ifdef __cplusplus
 }

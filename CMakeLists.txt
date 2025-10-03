@@ -110,11 +110,7 @@ add_subdirectory(${LIBRARY_FOLDER})
 # Examples
 # ---------------------------------------------------------------------------
 if(MODBUS_BUILD_EXAMPLES)
-    if(WIN32)
-        add_subdirectory(examples/win)
-    else()
-        message(WARNING "Examples are currently only available for Windows builds.")
-    endif()
+    add_subdirectory(examples)
 endif()
 
 # ---------------------------------------------------------------------------

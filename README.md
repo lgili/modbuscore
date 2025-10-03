@@ -12,11 +12,14 @@ HALs can evolve independently.
 ## Highlights
 
 - **Non-blocking client and server FSMs** – queue-based transaction manager with
-  retry/backoff, watchdog and cancellation (Gate 5).
+  retry/backoff, watchdog and cancellation (Gate 5 + Gate 8).
 - **Extensible server registry** – contiguous register regions backed by either
   user callbacks or static storage, with strict bounds checking (Gate 6).
 - **RTU and TCP transports** – shared MBAP encoder/decoder, optional
   multi-connection helper for Modbus TCP, and reusable RTU framing utilities.
+- **Backpressure & observability** – configurable queue capacity, per-function
+  timeouts, poison-pill flush and latency/response metrics for both client and
+  server paths (Gate 8).
 - **Heap-free utilities** – ring buffers, memory pool, CRC helpers and logging
   façade ready for embedded targets.
 - **Comprehensive tests** – unit, integration, fuzzing harnesses and CI jobs
@@ -35,6 +38,7 @@ HALs can evolve independently.
 | 5 | Client FSM (Idle→Done/Timeout/Retry/Abort) | ✅ |
 | 6 | Server register mapping & exceptions | ✅ |
 | 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
+| 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
 hardening.  See `update_plan.md` for the full roadmap.
@@ -84,11 +88,11 @@ to GitHub Pages (`gh-pages` branch) by the CI workflow.
 ## Examples
 
 Examples are disabled by default.  Enable them explicitly when configuring and
-build the desired target:
+build the desired target (a dedicated CMake preset is provided for convenience):
 
 ```bash
-cmake --preset host-release -DMODBUS_BUILD_EXAMPLES=ON
-cmake --build --preset host-release --target modbus_tcp_client_cli
+cmake --preset host-debug-examples
+cmake --build --preset host-debug-examples --target modbus_tcp_client_cli
 ```
 
 The CLI can be exercised against the CI Modbus TCP server or any compatible

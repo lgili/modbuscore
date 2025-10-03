@@ -32,7 +32,13 @@ protected:
         iface_ = mock_transport_get_iface();
         ASSERT_NE(nullptr, iface_);
 
-        mb_err_t err = mb_server_init(&server_, iface_, kUnitId, regions_.data(), regions_.size());
+        mb_err_t err = mb_server_init(&server_,
+                                      iface_,
+                                      kUnitId,
+                                      regions_.data(),
+                                      regions_.size(),
+                                      request_pool_.data(),
+                                      request_pool_.size());
         ASSERT_EQ(MB_OK, err);
 
         // Map holding registers 0x0010..0x0014 (5 registers) as read/write storage.
@@ -71,6 +77,19 @@ protected:
         ASSERT_EQ(0, mock_inject_rx_data(frame.data(), static_cast<uint16_t>(frame_len)));
     }
 
+    mb_err_t injectAdu(const mb_u8 *pdu, mb_size_t pdu_len, mb_u8 unit_id)
+    {
+        if (pdu == nullptr || pdu_len == 0U) {
+            return MB_ERR_INVALID_ARGUMENT;
+        }
+        mb_adu_view_t adu{};
+        adu.unit_id = unit_id;
+        adu.function = pdu[0];
+        adu.payload = (pdu_len > 1U) ? &pdu[1] : nullptr;
+        adu.payload_len = (pdu_len > 0U) ? (pdu_len - 1U) : 0U;
+        return mb_server_inject_adu(&server_, &adu);
+    }
+
     void pump(unsigned iterations = 8)
     {
         for (unsigned i = 0; i < iterations; ++i) {
@@ -79,17 +98,26 @@ protected:
         }
     }
 
+    void step()
+    {
+        mock_advance_time(1U);
+        (void)mb_server_poll(&server_);
+    }
+
     bool fetchResponse(mb_adu_view_t &out)
     {
         last_frame_len_ = mock_get_tx_data(last_frame_.data(), last_frame_.size());
         if (last_frame_len_ == 0U) {
             return false;
         }
-        return mb_err_is_ok(mb_frame_rtu_decode(last_frame_.data(), last_frame_len_, &out));
+        const bool ok = mb_err_is_ok(mb_frame_rtu_decode(last_frame_.data(), last_frame_len_, &out));
+        mock_clear_tx_buffer();
+        return ok;
     }
 
     mb_server_t server_{};
     std::array<mb_server_region_t, 8> regions_{};
+    std::array<mb_server_request_t, 4> request_pool_{};
     std::array<mb_u16, 5> storage_rw_{};
     std::array<mb_u16, 2> storage_ro_{};
     const mb_transport_if_t *iface_ = nullptr;
@@ -106,7 +134,7 @@ TEST_F(MbServerTest, ServesReadHoldingRegisters)
     ASSERT_EQ(storage_rw_[3], static_cast<mb_u16>(0x4444U));
 
     sendPdu(req_pdu, 5U, kUnitId);
-    pump();
+    pump(16);
 
     EXPECT_EQ(storage_rw_[3], static_cast<mb_u16>(0x4444U));
 
@@ -137,7 +165,7 @@ TEST_F(MbServerTest, WritesSingleRegister)
     ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0010U, 0xABCDU));
 
     sendPdu(req_pdu, 5U, kUnitId);
-    pump();
+    pump(16);
 
     mb_adu_view_t response{};
     ASSERT_TRUE(fetchResponse(response));
@@ -152,7 +180,7 @@ TEST_F(MbServerTest, RejectsWriteToReadOnlyRegion)
     ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0020U, 0x0F0FU));
 
     sendPdu(req_pdu, 5U, kUnitId);
-    pump();
+    pump(16);
 
     mb_adu_view_t response{};
     ASSERT_TRUE(fetchResponse(response));
@@ -171,7 +199,7 @@ TEST_F(MbServerTest, WritesMultipleRegisters)
 
     const mb_size_t pdu_len = 6U + new_values.size() * 2U;
     sendPdu(req_pdu, pdu_len, kUnitId);
-    pump();
+    pump(16);
 
     mb_adu_view_t response{};
     ASSERT_TRUE(fetchResponse(response));
@@ -188,7 +216,7 @@ TEST_F(MbServerTest, BroadcastWriteDoesNotRespond)
     ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0010U, 0x9999U));
 
     sendPdu(req_pdu, 5U, 0U);
-    pump();
+    pump(16);
 
     mb_adu_view_t response{};
     EXPECT_FALSE(fetchResponse(response));
@@ -201,7 +229,7 @@ TEST_F(MbServerTest, IgnoresRequestsForDifferentUnit)
     ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 1U));
 
     sendPdu(req_pdu, 5U, 0x22U);
-    pump();
+    pump(16);
 
     mb_adu_view_t response{};
     EXPECT_FALSE(fetchResponse(response));
@@ -218,6 +246,133 @@ TEST_F(MbServerTest, UnsupportedFunctionRaisesException)
     EXPECT_EQ(response.function, 0x45U | MB_PDU_EXCEPTION_BIT);
     ASSERT_EQ(response.payload_len, 1U);
     EXPECT_EQ(response.payload[0], MB_EX_ILLEGAL_FUNCTION);
+}
+
+TEST_F(MbServerTest, BackpressureLimitsQueue)
+{
+    mb_server_reset_metrics(&server_);
+    mb_server_set_queue_capacity(&server_, 1U);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    EXPECT_EQ(0U, mb_server_pending(&server_));
+    EXPECT_EQ(0U, server_.pending_count);
+    EXPECT_EQ(nullptr, server_.current);
+    EXPECT_EQ(MB_OK, injectAdu(req_pdu, 5U, kUnitId));
+    EXPECT_EQ(MB_ERR_NO_RESOURCES, injectAdu(req_pdu, 5U, kUnitId));
+
+    step();
+
+    mb_server_metrics_t metrics{};
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(1U, metrics.received);
+    EXPECT_EQ(1U, metrics.responded);
+    EXPECT_EQ(1U, metrics.dropped);
+    EXPECT_GE(metrics.exceptions, 1U);
+}
+
+TEST_F(MbServerTest, HighPriorityWriteBypassesReads)
+{
+    mb_server_reset_metrics(&server_);
+
+    mb_u8 read_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(read_pdu, sizeof read_pdu, 0x0010U, 0x0001U));
+
+    mb_u8 write_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(write_pdu, sizeof write_pdu, 0x0010U, 0x1234U));
+
+    EXPECT_EQ(0U, mb_server_pending(&server_));
+    EXPECT_EQ(0U, server_.pending_count);
+    EXPECT_EQ(nullptr, server_.current);
+    EXPECT_EQ(MB_OK, injectAdu(read_pdu, 5U, kUnitId));
+    EXPECT_EQ(MB_OK, injectAdu(write_pdu, 5U, kUnitId));
+
+    step();
+    step();
+
+    EXPECT_EQ(static_cast<mb_u16>(0x1234U), storage_rw_[0]);
+
+    mb_server_metrics_t metrics{};
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(2U, metrics.received);
+    EXPECT_EQ(2U, metrics.responded);
+    EXPECT_EQ(0U, metrics.dropped);
+}
+
+TEST_F(MbServerTest, FcTimeoutDropsStaleRequests)
+{
+    mb_server_reset_metrics(&server_);
+    mb_server_set_fc_timeout(&server_, MB_PDU_FC_READ_HOLDING_REGISTERS, 2U);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    EXPECT_EQ(0U, mb_server_pending(&server_));
+    EXPECT_EQ(0U, server_.pending_count);
+    EXPECT_EQ(nullptr, server_.current);
+    EXPECT_EQ(MB_OK, injectAdu(req_pdu, 5U, kUnitId));
+    EXPECT_EQ(MB_OK, injectAdu(req_pdu, 5U, kUnitId));
+
+    step();
+    mock_advance_time(10U);
+    step();
+
+    mb_server_metrics_t metrics{};
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(2U, metrics.received);
+    EXPECT_EQ(1U, metrics.responded);
+    EXPECT_EQ(1U, metrics.timeouts);
+    EXPECT_EQ(1U, metrics.dropped);
+    EXPECT_GE(metrics.exceptions, 1U);
+}
+
+TEST_F(MbServerTest, PoisonFlushesQueue)
+{
+    mb_server_reset_metrics(&server_);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    EXPECT_EQ(0U, mb_server_pending(&server_));
+    EXPECT_EQ(0U, server_.pending_count);
+    EXPECT_EQ(nullptr, server_.current);
+    EXPECT_EQ(MB_OK, injectAdu(req_pdu, 5U, kUnitId));
+    EXPECT_EQ(MB_OK, injectAdu(req_pdu, 5U, kUnitId));
+
+    step();
+    ASSERT_EQ(MB_OK, mb_server_submit_poison(&server_));
+    step();
+
+    mb_server_metrics_t metrics{};
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(2U, metrics.received);
+    EXPECT_EQ(1U, metrics.responded);
+    EXPECT_EQ(1U, metrics.poison_triggers);
+    EXPECT_GE(metrics.exceptions, 1U);
+    EXPECT_TRUE(mb_server_is_idle(&server_));
+}
+
+TEST_F(MbServerTest, MetricsResetClearsCounters)
+{
+    mb_server_reset_metrics(&server_);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump();
+
+    mb_server_metrics_t metrics{};
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(1U, metrics.received);
+    EXPECT_EQ(1U, metrics.responded);
+
+    mb_server_reset_metrics(&server_);
+    mb_server_get_metrics(&server_, &metrics);
+    EXPECT_EQ(0U, metrics.received);
+    EXPECT_EQ(0U, metrics.responded);
+    EXPECT_EQ(0U, metrics.exceptions);
 }
 
 } // namespace

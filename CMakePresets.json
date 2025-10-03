@@ -26,6 +26,15 @@
             "inherits": "host-base"
         },
         {
+            "name": "host-debug-examples",
+            "displayName": "Host Debug (examples)",
+            "description": "Debug build with examples enabled",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
             "name": "host-release",
             "displayName": "Host Release",
             "description": "Optimised build without tests",
@@ -90,6 +99,11 @@
             "name": "host-debug",
             "displayName": "Build Host Debug",
             "configurePreset": "host-debug"
+        },
+        {
+            "name": "host-debug-examples",
+            "displayName": "Build Host Debug (examples)",
+            "configurePreset": "host-debug-examples"
         },
         {
             "name": "host-release",

@@ -128,7 +128,14 @@ protected:
         server_iface_.yield = loop_yield;
 
         ASSERT_EQ(MB_OK, mb_client_init(&client_, &client_iface_, txn_pool_.data(), txn_pool_.size()));
-        ASSERT_EQ(MB_OK, mb_server_init(&server_, &server_iface_, kUnitId, regions_.data(), regions_.size()));
+        ASSERT_EQ(MB_OK,
+                  mb_server_init(&server_,
+                                  &server_iface_,
+                                  kUnitId,
+                                  regions_.data(),
+                                  regions_.size(),
+                                  request_pool_.data(),
+                                  request_pool_.size()));
 
         ASSERT_EQ(MB_OK, mb_server_add_storage(&server_, 0x0000U, static_cast<mb_u16>(rw_storage_.size()), false, rw_storage_.data()));
         ASSERT_EQ(MB_OK, mb_server_add_storage(&server_, 0x0100U, static_cast<mb_u16>(ro_storage_.size()), true, ro_storage_.data()));
@@ -156,6 +163,7 @@ protected:
 
     mb_server_t server_{};
     std::array<mb_server_region_t, 4> regions_{};
+    std::array<mb_server_request_t, 4> request_pool_{};
     std::array<mb_u16, 8> rw_storage_{0x1111U, 0x2222U, 0x3333U, 0x4444U, 0x5555U, 0x6666U, 0x7777U, 0x8888U};
     std::array<mb_u16, 4> ro_storage_{0xAAAAU, 0xBBBBU, 0xCCCCU, 0xDDDDU};
 };
