@@ -49,6 +49,9 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_pdu_codec.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_err.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_port_posix.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_port_bare.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_transport.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_transport.cpp

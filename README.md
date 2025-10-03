@@ -20,6 +20,9 @@ HALs can evolve independently.
 - **Backpressure & observability** – configurable queue capacity, per-function
   timeouts, poison-pill flush and latency/response metrics for both client and
   server paths (Gate 8).
+- **Portable HAL** – POSIX sockets, bare-metal tick adapters and FreeRTOS
+  stream/queue bridges expose ready-made transports with optional mutex
+  helpers (Gate 9).
 - **Heap-free utilities** – ring buffers, memory pool, CRC helpers and logging
   façade ready for embedded targets.
 - **Comprehensive tests** – unit, integration, fuzzing harnesses and CI jobs
@@ -39,6 +42,7 @@ HALs can evolve independently.
 | 6 | Server register mapping & exceptions | ✅ |
 | 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
 | 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
+| 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
 hardening.  See `update_plan.md` for the full roadmap.
@@ -95,8 +99,16 @@ cmake --preset host-debug-examples
 cmake --build --preset host-debug-examples --target modbus_tcp_client_cli
 ```
 
+Once configured, the following example binaries become available:
+
+- `modbus_tcp_client_cli` – CLI driver for Modbus TCP endpoints using the POSIX port.
+- `modbus_posix_sim` – socketpair demo wrapping a POSIX descriptor via `mb_port_posix_socket_init`.
+- `modbus_freertos_sim` – FreeRTOS-style stream/queue simulation backed by `mb_port_freertos_transport_init`.
+- `modbus_bare_sim` – bare-metal loop example using `mb_port_bare_transport_init` with a synthetic tick source.
+
 The CLI can be exercised against the CI Modbus TCP server or any compatible
-PLC/simulator.
+PLC/simulator, while the simulation binaries provide minimal host-side sanity
+checks for each HAL adapter.
 
 ## Documentation
 

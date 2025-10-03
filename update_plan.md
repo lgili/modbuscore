@@ -99,6 +99,7 @@ Cada etapa tem Objetivo, Entregáveis e Gate (aceitação). Só segue se o gate 
 
 9) Port/HALs
 	•	Entregáveis: port_posix, port_freertos, port_bare (tick + UART/TCP), locks opcionais (C11 atomics fallback).
+	•	Status: ✅ POSIX sockets, bare-metal tick adapter, FreeRTOS stream/queue shim e mutex portátil entregues.
 	•	Gate: exemplos rodando em POSIX e FreeRTOS (simulado).
 
 10) ASCII (opcional) + FCs extras

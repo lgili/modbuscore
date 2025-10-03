@@ -16,6 +16,10 @@ set(SOURCES
   src/core.c
   src/server.c
   src/client.c
+  src/port/bare.c
+  src/port/freertos.c
+  src/port/posix.c
+  src/port/mutex.c
 )
 
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
@@ -41,6 +45,10 @@ set(HEADERS_PUBLIC
   include/modbus/core.h
   include/modbus/server.h
   include/modbus/client.h
+  include/modbus/port/mutex.h
+  include/modbus/port/posix.h
+  include/modbus/port/freertos.h
+  include/modbus/port/bare.h
   
 )
 
@@ -62,4 +70,3 @@ if(SEGGER_RTT_FOUND)
 else()
   message(STATUS "SEGGER RTT not found: MB_LOG_ENABLE_SEGGER_RTT defaults to 0")
 endif()
-

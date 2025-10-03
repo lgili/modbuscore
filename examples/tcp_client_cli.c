@@ -1,111 +1,17 @@
-#include <errno.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include <modbus/client.h>
 #include <modbus/mb_err.h>
 #include <modbus/pdu.h>
-#include <modbus/transport_if.h>
+#include <modbus/port/posix.h>
 
 #define CLI_DEFAULT_TIMEOUT_MS 1000U
 #define CLI_DEFAULT_RETRIES 1U
-
-typedef struct {
-    int fd;
-    mb_time_ms_t start_ms;
-} tcp_context_t;
-
-static mb_time_ms_t monotonic_ms(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (mb_time_ms_t)tv.tv_sec * 1000ULL + (mb_time_ms_t)(tv.tv_usec / 1000);
-}
-
-static mb_err_t tcp_send(void *ctx, const mb_u8 *buf, mb_size_t len, mb_transport_io_result_t *out)
-{
-    tcp_context_t *tcp = (tcp_context_t *)ctx;
-    if (!tcp || tcp->fd < 0 || !buf) {
-        return MB_ERR_INVALID_ARGUMENT;
-    }
-
-    ssize_t written = send(tcp->fd, buf, len, 0);
-    if (written < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            if (out) {
-                out->processed = 0U;
-            }
-            return MB_ERR_TIMEOUT;
-        }
-        return MB_ERR_TRANSPORT;
-    }
-
-    if (out) {
-        out->processed = (mb_size_t)written;
-    }
-
-    return (written == (ssize_t)len) ? MB_OK : MB_ERR_TRANSPORT;
-}
-
-static mb_err_t tcp_recv(void *ctx, mb_u8 *buf, mb_size_t cap, mb_transport_io_result_t *out)
-{
-    tcp_context_t *tcp = (tcp_context_t *)ctx;
-    if (!tcp || tcp->fd < 0 || !buf || cap == 0U) {
-        return MB_ERR_INVALID_ARGUMENT;
-    }
-
-    ssize_t received = recv(tcp->fd, buf, cap, 0);
-    if (received < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            if (out) {
-                out->processed = 0U;
-            }
-            return MB_ERR_TIMEOUT;
-        }
-        return MB_ERR_TRANSPORT;
-    }
-
-    if (received == 0) {
-        if (out) {
-            out->processed = 0U;
-        }
-        return MB_ERR_TRANSPORT;
-    }
-
-    if (out) {
-        out->processed = (mb_size_t)received;
-    }
-
-    return MB_OK;
-}
-
-static mb_time_ms_t tcp_now(void *ctx)
-{
-    (void)ctx;
-    return monotonic_ms();
-}
-
-static int set_nonblocking(int fd)
-{
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) {
-        return -1;
-    }
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        return -1;
-    }
-    return 0;
-}
 
 static void usage(const char *prog)
 {
@@ -224,57 +130,28 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        perror("socket");
+    mb_port_posix_socket_t tcp_sock;
+    if (mb_port_posix_tcp_client(&tcp_sock, host, (uint16_t)port, CLI_DEFAULT_TIMEOUT_MS) != MB_OK) {
+        fprintf(stderr, "Failed to connect to %s:%d\n", host, port);
         return EXIT_FAILURE;
     }
 
-    if (set_nonblocking(fd) < 0) {
-        perror("fcntl");
-        close(fd);
+    const mb_transport_if_t *iface = mb_port_posix_socket_iface(&tcp_sock);
+    if (!iface) {
+        fprintf(stderr, "Invalid POSIX transport\n");
+        mb_port_posix_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        perror("inet_pton");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    int rc = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
-    if (rc < 0 && errno != EINPROGRESS) {
-        perror("connect");
-        close(fd);
-        return EXIT_FAILURE;
-    }
-
-    tcp_context_t tcp_ctx = {
-        .fd = fd,
-        .start_ms = monotonic_ms(),
-    };
-
-    mb_transport_if_t iface = {
-        .ctx = &tcp_ctx,
-        .send = tcp_send,
-        .recv = tcp_recv,
-        .now = tcp_now,
-        .yield = NULL,
-    };
 
     mb_client_t client;
     memset(&client, 0, sizeof(client));
     mb_client_txn_t tx_pool[2];
     memset(tx_pool, 0, sizeof(tx_pool));
 
-    mb_err_t err = mb_client_init_tcp(&client, &iface, tx_pool, MB_COUNTOF(tx_pool));
+    mb_err_t err = mb_client_init_tcp(&client, iface, tx_pool, MB_COUNTOF(tx_pool));
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to initialize client: %s\n", mb_err_str(err));
-        close(fd);
+        mb_port_posix_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
@@ -285,7 +162,7 @@ int main(int argc, char **argv)
     err = mb_pdu_build_read_holding_request(pdu, pdu_len, (mb_u16)reg_addr, (mb_u16)reg_count);
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to build request: %s\n", mb_err_str(err));
-        close(fd);
+        mb_port_posix_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
@@ -315,7 +192,7 @@ int main(int argc, char **argv)
     err = mb_client_submit(&client, &request, &txn);
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to submit transaction: %s\n", mb_err_str(err));
-        close(fd);
+        mb_port_posix_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
@@ -327,13 +204,13 @@ int main(int argc, char **argv)
         }
         if (!mb_err_is_ok(err)) {
             fprintf(stderr, "Polling error: %s\n", mb_err_str(err));
-            close(fd);
+            mb_port_posix_socket_close(&tcp_sock);
             return EXIT_FAILURE;
         }
         usleep(1000);
     }
 
-    close(fd);
+    mb_port_posix_socket_close(&tcp_sock);
 
     if (!mb_err_is_ok(result.status)) {
         fprintf(stderr, "Transaction failed: %s\n", mb_err_str(result.status));

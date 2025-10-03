@@ -94,6 +94,38 @@ requests have been drained, e.g. before entering low-power modes.  The helper
 :func:`mb_server_inject_adu` is provided primarily for tests and simulations
 where the transport path is bypassed.
 
+POSIX transport helper
+----------------------
+
+Gate 9 completes the first pass of the HAL layer with adapters for POSIX,
+bare-metal loops and FreeRTOS environments.  On POSIX platforms a thin wrapper
+exposes a ready-to-use :c:type:`mb_transport_if_t` from a socket descriptor:
+
+.. code-block:: c
+
+   mb_port_posix_socket_t tcp;
+   if (mb_port_posix_tcp_client(&tcp, "192.0.2.10", 502, 1000U) != MB_OK) {
+       /* handle connect error */
+   }
+
+   const mb_transport_if_t *iface = mb_port_posix_socket_iface(&tcp);
+   mb_client_t client;
+   mb_client_txn_t tx_pool[4];
+   mb_client_init_tcp(&client, iface, tx_pool, MB_COUNTOF(tx_pool));
+
+   /* ... issue requests ... */
+
+    mb_port_posix_socket_close(&tcp);
+
+Bare-metal targets can bind their UART/RTU primitives with
+:c:func:`mb_port_bare_transport_init`, which turns a tick-based time source and
+callbacks into a Modbus transport without pulling in an RTOS.  For FreeRTOS
+systems, :c:func:`mb_port_freertos_transport_init` wraps stream buffers or
+queues (``xStreamBufferSend`` / ``xStreamBufferReceive``) using the scheduler's
+tick rate, providing the same non-blocking contract expected by the client and
+server FSMs.  Optional helpers for cooperative yield and mutexes round off the
+portability layer.
+
 Advanced Features
 -----------------
 
