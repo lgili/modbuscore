@@ -257,12 +257,7 @@ TEST(ModbusCoreStandalone, ReceiveFrameRejectsInvalidArgs) {
 TEST(ModbusFrame, EncodeRtu)
 {
     const mb_u8 payload[]{0x00U, 0x02U};
-    const mb_adu_view_t adu{
-        .unit_id = 0x11U,
-        .function = MODBUS_FUNC_READ_HOLDING_REGISTERS,
-        .payload = payload,
-        .payload_len = MB_COUNTOF(payload)
-    };
+    const mb_adu_view_t adu{0x11U, MODBUS_FUNC_READ_HOLDING_REGISTERS, payload, MB_COUNTOF(payload)};
 
     mb_u8 frame[32]{};
     mb_size_t frame_len = 0U;

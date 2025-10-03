@@ -76,6 +76,13 @@
 #endif
 
 /**
+ * @brief Maximum number of simultaneous Modbus TCP connections handled by helper utilities.
+ */
+#ifndef MB_TCP_MAX_CONNECTIONS
+#define MB_TCP_MAX_CONNECTIONS 4
+#endif
+
+/**
  * @brief If you want to enable or disable certain functions, you can define
  * macros here. For example:
  * #define ENABLE_BOOTLOADER 1

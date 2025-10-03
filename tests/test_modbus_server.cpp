@@ -1,286 +1,223 @@
-/**
- * @file test_modbus_server.cpp
- * @brief Unit tests for the Modbus Server (Slave) using Google Test.
- *
- * This file tests:
- * - Initializing the server.
- * - Registering holding registers (both read/write and read-only).
- * - Handling valid read (0x03) and write single register (0x06) requests.
- * - Responding correctly to broadcast requests.
- * - Generating exception responses for invalid data address or attempts to write read-only registers.
- * - Ensuring the FSM transitions correctly and the final response is sent via the mock transport.
- *
- * We assume the server uses the mock transport. The server FSM is progressed by calling
- * modbus_server_poll() periodically, and incoming data is simulated by injecting bytes
- * into the mock transport.
- *
- * Author:
- * Date: 2024-12-20
- */
+#include <array>
+#include <cstring>
+#include <vector>
 
-#include <modbus/modbus.h>
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-extern void modbus_transport_init_mock(modbus_transport_t *transport);
-extern int mock_inject_rx_data(const uint8_t *data, uint16_t length);
-extern uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
-extern void mock_clear_tx_buffer(void);
-extern void mock_advance_time(uint16_t ms);
-#ifdef __cplusplus
+extern "C" {
+#include <modbus/frame.h>
+#include <modbus/pdu.h>
+#include <modbus/server.h>
+#include <modbus/transport.h>
 }
-#endif
 
-// We need a global context as per our previous assumption
-modbus_context_t g_modbus_ctx;
-static modbus_transport_t mock_transport;
-static modbus_server_data_t g_server;
+extern "C" {
+void modbus_transport_init_mock(modbus_transport_t *transport);
+int mock_inject_rx_data(const uint8_t *data, uint16_t length);
+uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
+void mock_clear_tx_buffer(void);
+void mock_advance_time(uint16_t ms);
+const mb_transport_if_t *mock_transport_get_iface(void);
+}
 
-// Let's define some holding registers to be used in tests
-static int16_t test_reg_100;   // RW
-static int16_t test_reg_200;   // RO
-static int16_t test_reg_array[3]; // RW array
+namespace {
 
-class ModbusServerTest : public ::testing::Test {
+constexpr mb_u8 kUnitId = 0x11U;
+
+class MbServerTest : public ::testing::Test {
 protected:
-    uint16_t device_addr_{};
-    uint16_t baud_{};
+    void SetUp() override
+    {
+        modbus_transport_init_mock(&legacy_transport_);
+        iface_ = mock_transport_get_iface();
+        ASSERT_NE(nullptr, iface_);
 
-    void SetUp() override {
-        modbus_transport_init_mock(&mock_transport);
-        memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
+        mb_err_t err = mb_server_init(&server_, iface_, kUnitId, regions_.data(), regions_.size());
+        ASSERT_EQ(MB_OK, err);
 
-        device_addr_ = 10;
-        baud_ = 19200;
+        // Map holding registers 0x0010..0x0014 (5 registers) as read/write storage.
+        storage_rw_ = {0x1111, 0x2222, 0x3333, 0x4444, 0x5555};
+        err = mb_server_add_storage(&server_, 0x0010U, static_cast<mb_u16>(storage_rw_.size()), false, storage_rw_.data());
+        ASSERT_EQ(MB_OK, err);
 
-        modbus_error_t err = modbus_server_create(&g_modbus_ctx, &mock_transport, &device_addr_, &baud_, &g_server);
-        ASSERT_EQ(err, MODBUS_ERROR_NONE);
+        // Map read-only block 0x0020..0x0021 (2 registers).
+        storage_ro_ = {0xAAAA, 0xBBBB};
+        err = mb_server_add_storage(&server_, 0x0020U, static_cast<mb_u16>(storage_ro_.size()), true, storage_ro_.data());
+        ASSERT_EQ(MB_OK, err);
 
-
-        // Initialize registers
-        test_reg_100 = 0x1234;
-        test_reg_200 = 0x7777;
-        test_reg_array[0] = 0x1111;
-        test_reg_array[1] = 0x2222;
-        test_reg_array[2] = 0x3333;
-
-
-        // Register test_reg_100 at address 100 (RW)
-        err = modbus_set_holding_register(&g_modbus_ctx, 30, &test_reg_100, false, NULL, NULL);
-        EXPECT_EQ(err, MODBUS_ERROR_NONE);
-
-        // Register test_reg_200 at address 200 (RO)
-        err = modbus_set_holding_register(&g_modbus_ctx, 10, &test_reg_200, true, NULL, NULL);
-        EXPECT_EQ(err, MODBUS_ERROR_NONE);
-
-        // Register test_reg_array at addresses 300,301,302 (RW)
-        err = modbus_set_array_holding_register(&g_modbus_ctx, 20, 3, test_reg_array, false, NULL, NULL);
-        EXPECT_EQ(err, MODBUS_ERROR_NONE);
-
-
-        
+        mock_clear_tx_buffer();
     }
 
-    void TearDown() override {
-        // Nothing special
+    void TearDown() override
+    {
+        mock_clear_tx_buffer();
+        mb_server_reset(&server_);
     }
 
-    void pollServer(unsigned times=1) {
-        for (unsigned iteration = 0; iteration < times; ++iteration) {
-            mock_advance_time(50);
-            modbus_server_data_t *server = (modbus_server_data_t *)g_modbus_ctx.user_data;
-            uint8_t data[64];
+    void sendPdu(const mb_u8 *pdu, mb_size_t pdu_len, mb_u8 unit_id)
+    {
+        ASSERT_NE(nullptr, pdu);
+        ASSERT_GT(pdu_len, 0U);
 
-            // simulating rx interrupt
-            if(server->fsm.current_state->id == MODBUS_SERVER_STATE_IDLE || server->fsm.current_state->id == MODBUS_SERVER_STATE_RECEIVING) {
-                uint8_t size_read = server->ctx->transport.read(data, 64); // read max size
-                if(size_read > 0) {
-                    for (uint8_t idx = 0; idx < size_read; ++idx)
-                    {
-                        modbus_server_receive_data_from_uart_event(&server->fsm, data[idx]);
-                        mock_advance_time(5);
-                    }
-                    
-                }
-            }
+        mb_adu_view_t adu{};
+        adu.unit_id = unit_id;
+        adu.function = pdu[0];
+        adu.payload = (pdu_len > 1U) ? &pdu[1] : nullptr;
+        adu.payload_len = pdu_len - 1U;
 
-            modbus_server_poll(&g_modbus_ctx);
+        std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+        mb_size_t frame_len = 0U;
+        ASSERT_EQ(MB_OK, mb_frame_rtu_encode(&adu, frame.data(), frame.size(), &frame_len));
+        ASSERT_EQ(0, mock_inject_rx_data(frame.data(), static_cast<uint16_t>(frame_len)));
+    }
+
+    void pump(unsigned iterations = 8)
+    {
+        for (unsigned i = 0; i < iterations; ++i) {
+            mock_advance_time(1U);
+            (void)mb_server_poll(&server_);
         }
     }
+
+    bool fetchResponse(mb_adu_view_t &out)
+    {
+        last_frame_len_ = mock_get_tx_data(last_frame_.data(), last_frame_.size());
+        if (last_frame_len_ == 0U) {
+            return false;
+        }
+        return mb_err_is_ok(mb_frame_rtu_decode(last_frame_.data(), last_frame_len_, &out));
+    }
+
+    mb_server_t server_{};
+    std::array<mb_server_region_t, 8> regions_{};
+    std::array<mb_u16, 5> storage_rw_{};
+    std::array<mb_u16, 2> storage_ro_{};
+    const mb_transport_if_t *iface_ = nullptr;
+    modbus_transport_t legacy_transport_{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> last_frame_{};
+    uint16_t last_frame_len_ = 0U;
 };
 
-TEST_F(ModbusServerTest, ValidReadRequest) {
-    // Build a read holding registers request (0x03) for address=100, quantity=1
-    uint8_t req_payload[4] = {0x00, 0x0A, 0x00, 0x01}; // start=10, qty=1
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(10, 0x03, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, ServesReadHoldingRegisters)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0011U, 0x0003U));
 
-    // Inject request
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    ASSERT_EQ(storage_rw_[3], static_cast<mb_u16>(0x4444U));
 
-    // Check response: should return 2 bytes of data: test_reg_100=0x1234
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    ASSERT_GT(resp_len, 0);
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump();
 
-    // Parse response to verify correctness
-    uint8_t address, function;
-    const uint8_t *payload;
-    uint16_t payload_len = 0;
-    modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
-    EXPECT_EQ(address, 10);
-    EXPECT_EQ(function, 0x03);
-    EXPECT_EQ(payload_len, 3); // byte_count=2 + 2 data bytes
-    EXPECT_EQ(payload[0], 2);  // byte_count=2
-    // Data
-    uint16_t val = (payload[1] << 8) | payload[2];
-    EXPECT_EQ(val, 0x7777);
+    EXPECT_EQ(storage_rw_[3], static_cast<mb_u16>(0x4444U));
+
+    mb_adu_view_t response{};
+    ASSERT_TRUE(fetchResponse(response));
+    EXPECT_EQ(response.unit_id, kUnitId);
+    EXPECT_EQ(response.function, MB_PDU_FC_READ_HOLDING_REGISTERS);
+    ASSERT_EQ(response.payload_len, static_cast<mb_size_t>(1U + 3U * 2U));
+    EXPECT_EQ(response.payload[0], 6U);
+    ASSERT_GE(last_frame_len_, static_cast<uint16_t>(9U));
+    EXPECT_EQ(last_frame_[0], kUnitId);
+    EXPECT_EQ(last_frame_[1], MB_PDU_FC_READ_HOLDING_REGISTERS);
+    EXPECT_EQ(last_frame_[2], 6U);
+    EXPECT_EQ(last_frame_[3], 0x22U);
+    EXPECT_EQ(last_frame_[4], 0x22U);
+    EXPECT_EQ(last_frame_[5], 0x33U);
+    EXPECT_EQ(last_frame_[6], 0x33U);
+    EXPECT_EQ(last_frame_[7], 0x44U);
+    EXPECT_EQ(last_frame_[8], 0x44U);
+    EXPECT_EQ((response.payload[1] << 8) | response.payload[2], 0x2222U);
+    EXPECT_EQ((response.payload[3] << 8) | response.payload[4], 0x3333U);
+    EXPECT_EQ((response.payload[5] << 8) | response.payload[6], 0x4444U);
 }
 
-TEST_F(ModbusServerTest, WriteSingleRegisterRW) {
-    // Write to address=30, value=0x5555
-    uint8_t req_payload[4] = {0x00, 0x1E, 0x55, 0x55};
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(10, 0x06, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, WritesSingleRegister)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0010U, 0xABCDU));
 
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump();
 
-    // Check response: should echo the same address and value
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    ASSERT_GT(resp_len, 0);
-
-    uint8_t address, function;
-    const uint8_t *payload;
-    uint16_t payload_len = 0;
-    modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
-    EXPECT_EQ(address, 10);
-    EXPECT_EQ(function, 0x06);
-    EXPECT_EQ(payload_len, 4); 
-    EXPECT_EQ((payload[0]<<8)|payload[1], 30);
-    EXPECT_EQ((payload[2]<<8)|payload[3], 0x5555);
-
-    // Verify register changed
-    EXPECT_EQ(test_reg_100, 0x5555);
+    mb_adu_view_t response{};
+    ASSERT_TRUE(fetchResponse(response));
+    EXPECT_EQ(response.function, MB_PDU_FC_WRITE_SINGLE_REGISTER);
+    ASSERT_EQ(response.payload_len, 4U);
+    EXPECT_EQ(storage_rw_[0], 0xABCDU);
 }
 
-TEST_F(ModbusServerTest, WriteSingleRegisterRO) {
-    // Attempt to write read-only register at address=200
-    uint8_t req_payload[4] = {0x00, 0x0A, 0x12, 0x12}; // addr=10, value=0x1212
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(10, 0x06, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, RejectsWriteToReadOnlyRegion)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0020U, 0x0F0FU));
 
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump();
 
-    // Should respond with an exception
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_GT(resp_len, 0);
-
-    uint8_t address, function;
-    const uint8_t *payload;
-    uint16_t payload_len = 0;
-    modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
-    EXPECT_EQ(address, 10);
-    EXPECT_EQ(function, 0x86); // 0x06 | 0x80 = 0x86 error
-    // payload[0] is the exception code
-    EXPECT_EQ(payload_len, 0);
-    // Just check that it's an exception (code may vary in this implementation)
-    // Ensure register wasn't changed
-    EXPECT_EQ(test_reg_200, 0x7777);
+    mb_adu_view_t response{};
+    ASSERT_TRUE(fetchResponse(response));
+    EXPECT_EQ(response.function, MB_PDU_FC_WRITE_SINGLE_REGISTER | MB_PDU_EXCEPTION_BIT);
+    ASSERT_EQ(response.payload_len, 1U);
+    EXPECT_EQ(response.payload[0], MB_EX_ILLEGAL_DATA_ADDRESS);
+    EXPECT_EQ(storage_ro_[0], 0xAAAAU);
 }
 
-TEST_F(ModbusServerTest, BroadcastRequestNoResponse) {
-    // Broadcast address = 0x00, function=0x06 write single reg address=30, value=0x2222
-    uint8_t req_payload[4] = {0x00, 0x1E, 0x22, 0x22};
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(0x00, 0x06, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, WritesMultipleRegisters)
+{
+    std::array<mb_u16, 3> new_values{0x0102U, 0x0304U, 0x0506U};
 
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    mb_u8 req_pdu[MB_PDU_MAX];
+    ASSERT_EQ(MB_OK, mb_pdu_build_write_multiple_request(req_pdu, sizeof req_pdu, 0x0011U, new_values.data(), new_values.size()));
 
-    // No response should be sent
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_EQ(resp_len, 0);
+    const mb_size_t pdu_len = 6U + new_values.size() * 2U;
+    sendPdu(req_pdu, pdu_len, kUnitId);
+    pump();
 
-    // Register should have been written anyway
-    EXPECT_EQ(test_reg_100, 0x2222);
+    mb_adu_view_t response{};
+    ASSERT_TRUE(fetchResponse(response));
+    EXPECT_EQ(response.function, MB_PDU_FC_WRITE_MULTIPLE_REGISTERS);
+    ASSERT_EQ(response.payload_len, 4U);
+    EXPECT_EQ(storage_rw_[1], 0x0102U);
+    EXPECT_EQ(storage_rw_[2], 0x0304U);
+    EXPECT_EQ(storage_rw_[3], 0x0506U);
 }
 
-TEST_F(ModbusServerTest, WrongDeviceRequestNoResponse) {
-    // Broadcast address = 0x00, function=0x06 write single reg address=30, value=0x2222
-    uint8_t req_payload[4] = {0x00, 0x1E, 0x22, 0x22};
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(0x22, 0x06, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, BroadcastWriteDoesNotRespond)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_write_single_request(req_pdu, sizeof req_pdu, 0x0010U, 0x9999U));
 
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    sendPdu(req_pdu, 5U, 0U);
+    pump();
 
-    // No response should be sent
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_EQ(resp_len, 0);
-
-    // Ensure register wasn't changed
-    EXPECT_EQ(test_reg_100, 0x1234);
+    mb_adu_view_t response{};
+    EXPECT_FALSE(fetchResponse(response));
+    EXPECT_EQ(storage_rw_[0], 0x9999U);
 }
 
-TEST_F(ModbusServerTest, InvalidAddressException) {
-    // Try to read from address=9999, quantity=1 which we didn't register
-    uint8_t req_payload[4] = {0x27, 0x0F, 0x00, 0x01}; // address=9999 (0x270F), qty=1
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(10, 0x03, req_payload, 4, req_frame, 20);
-    ASSERT_GT(req_len, 0);
+TEST_F(MbServerTest, IgnoresRequestsForDifferentUnit)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 1U));
 
-    mock_inject_rx_data(req_frame, req_len);
-    pollServer(30);
+    sendPdu(req_pdu, 5U, 0x22U);
+    pump();
 
-    // Expect an exception response
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_GT(resp_len, 0);
-
-    uint8_t address, function;
-    const uint8_t *payload;
-    uint16_t payload_len = 0;
-    modbus_error_t err = modbus_parse_rtu_frame(resp, resp_len, &address, &function, &payload, &payload_len);
-    EXPECT_EQ(err, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
-    EXPECT_EQ(address, 10);
-    EXPECT_TRUE((function & 0x80) != 0); // error response
+    mb_adu_view_t response{};
+    EXPECT_FALSE(fetchResponse(response));
 }
 
+TEST_F(MbServerTest, UnsupportedFunctionRaisesException)
+{
+    mb_u8 dummy_pdu[3] = {0x45U, 0x00U, 0x01U};
+    sendPdu(dummy_pdu, 3U, kUnitId);
+    pump();
 
-TEST_F(ModbusServerTest, InvalidFrameException) {
-    // Try to read from address=10
-    // force wrong frame to simulate noise or bronken cable
-    uint8_t req_payload[2] = {0x00, 0x1E}; // address=9999 (0x270F), qty=1
-    uint8_t req_frame[20];
-    uint16_t req_len = modbus_build_rtu_frame(10, 0x06, req_payload, 2, req_frame, 20);
-    ASSERT_GT(req_len, 0);
-
-    mock_inject_rx_data(req_frame, req_len -2); // remove crc to simulate package broken
-    pollServer(30);
-
-    // Expect an exception response
-    uint8_t resp[20];
-    uint16_t resp_len = mock_get_tx_data(resp, 20);
-    EXPECT_EQ(resp_len, 0);  // wrong package, do not respond (check if this the correct behavior)
-
-       
-    // Ensure register wasn't changed
-    EXPECT_EQ(test_reg_100, 0x1234);
+    mb_adu_view_t response{};
+    ASSERT_TRUE(fetchResponse(response));
+    EXPECT_EQ(response.function, 0x45U | MB_PDU_EXCEPTION_BIT);
+    ASSERT_EQ(response.payload_len, 1U);
+    EXPECT_EQ(response.payload[0], MB_EX_ILLEGAL_FUNCTION);
 }
+
+} // namespace

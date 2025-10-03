@@ -5,8 +5,11 @@ set(SOURCES
   src/pdu.c
   src/frame.c
   src/transport.c
+  src/transport/tcp/tcp.c
+  src/transport/tcp/tcp_multi.c
   src/mb_log.c
   src/mb_err.c
+  src/transport/rtu/rtu.c
   src/log.c
   src/utils.c
   src/fsm.c
@@ -28,6 +31,9 @@ set(HEADERS_PUBLIC
   include/modbus/modbus.h
   include/modbus/conf.h
   include/modbus/transport.h
+  include/modbus/transport/rtu.h
+  include/modbus/transport/tcp.h
+  include/modbus/transport/tcp_multi.h
   include/modbus/transport_if.h
   include/modbus/base.h
   include/modbus/utils.h

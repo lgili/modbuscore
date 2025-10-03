@@ -283,5 +283,3 @@ Extras que valem ouro
 	•	Gerador de stubs (script) para FCs customizados.
 
 ⸻
-
-se curtir esse plano, eu já te entrego o esqueleto de diretórios + headers base (mb_types.h, mb_err.h, mb_log.h) e um teste de CRC16 como primeiro commit. quer que eu comece por aí?

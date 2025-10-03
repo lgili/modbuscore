@@ -21,6 +21,10 @@ const char *mb_err_str(mb_err_t err)
         return "Other request";
     case MB_ERR_OTHER:
         return "Unspecified error";
+    case MB_ERR_CANCELLED:
+        return "Cancelled";
+    case MB_ERR_NO_RESOURCES:
+        return "No resources";
     case MB_EX_ILLEGAL_FUNCTION:
         return "Illegal function";
     case MB_EX_ILLEGAL_DATA_ADDRESS:

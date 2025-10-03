@@ -1,693 +1,639 @@
-/**
- * @file modbus_master.c
- * @brief Modbus Master (Client) state and logic implementation.
- *
- * This implementation exemplifies a Modbus Master that sends read requests (Function Code 0x03)
- * and waits for responses from a Slave device.
- *
- * **Features:**
- * - Uses FSM to manage states: Idle, Sending Request, Waiting Response, etc.
- * - When the user calls `modbus_client_read_holding_registers()`, the FSM transitions to the
- *   `SENDING_REQUEST` state and sends the frame.
- * - Upon receiving response bytes, calls `modbus_client_receive_data_event()` to feed the FSM.
- * - If the response is complete and valid, the FSM transitions to `PROCESSING_RESPONSE` and then back to Idle,
- *   storing the read data in the context.
- * - In case of timeout or error, transitions to the Error state and then returns to Idle.
- * - No dynamic memory allocation.
- *
- * **Prerequisites:**
- * - `modbus_context_t` has internal space to store client data (`user_data`).
- * - The transport is already configured in `ctx->transport`.
- *
- * Adjust as needed for real application requirements.
- *
- * **Author:**
- * Luiz Carlos Gili
- * 
- * **Date:**
- * 2024-12-20
- */
-
 #include <modbus/client.h>
-#include <modbus/core.h>
-#include <modbus/utils.h>
-#include <modbus/fsm.h>
+
+#include <stdint.h>
 #include <string.h>
 
-#include <modbus/mb_log.h>
+#define MB_CLIENT_TIMEOUT_DEFAULT MB_CLIENT_DEFAULT_TIMEOUT_MS
+#define MB_CLIENT_BACKOFF_DEFAULT MB_CLIENT_DEFAULT_RETRY_BACKOFF_MS
 
-/* -------------------------------------------------------------------------- */
-/*                           Internal Prototypes                                */
-/* -------------------------------------------------------------------------- */
+static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
+                                   const mb_adu_view_t *adu,
+                                   mb_u16 transaction_id,
+                                   mb_err_t status,
+                                   void *user);
+static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *txn);
+static mb_err_t client_transport_poll(mb_client_t *client);
+static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid);
 
-/* FSM Action and Guard function prototypes */
-static void action_idle(fsm_t *fsm);
-static void action_send_request(fsm_t *fsm);
-static void action_wait_response(fsm_t *fsm);
-static void action_process_response(fsm_t *fsm);
-static void action_handle_error(fsm_t *fsm);
-
-static bool guard_tx_complete(fsm_t *fsm);
-static bool guard_response_complete(fsm_t *fsm);
-static bool guard_timeout(fsm_t *fsm);
-
-/* -------------------------------------------------------------------------- */
-/*                           FSM State Definitions                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Transition table for the Idle state.
- *
- * When the `MODBUS_CLIENT_EVENT_SEND_REQUEST` event is received, transition to
- * the `SENDING_REQUEST` state and execute `action_send_request`.
- */
-static const fsm_transition_t state_idle_transitions[] = {
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_SEND_REQUEST, modbus_client_state_sending_request, action_send_request, NULL)
-};
-
-/**
- * @brief Modbus Master FSM state: Idle.
- *
- * This state represents the idle condition of the Modbus FSM, where it is waiting
- * for a new request to be sent.
- */
-const fsm_state_t modbus_client_state_idle = FSM_STATE("IDLE", MODBUS_CLIENT_STATE_IDLE, state_idle_transitions, action_idle, 0);
-
-/**
- * @brief Transition table for the Sending Request state.
- *
- * - On `MODBUS_CLIENT_EVENT_TX_COMPLETE` with `guard_tx_complete` passing, transition to `WAITING_RESPONSE`
- *   and execute `action_wait_response`.
- * - On `MODBUS_CLIENT_EVENT_ERROR_DETECTED`, transition to `ERROR` and execute `action_handle_error`.
- */
-static const fsm_transition_t state_sending_request_transitions[] = {
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_TX_COMPLETE, modbus_client_state_waiting_response, action_wait_response, guard_tx_complete),
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_ERROR_DETECTED, modbus_client_state_error, action_handle_error, NULL)
-};
-/**
- * @brief Modbus Master FSM state: Sending Request.
- *
- * This state handles the transmission of a Modbus request to the slave device.
- */
-const fsm_state_t modbus_client_state_sending_request = FSM_STATE("SENDING_REQUEST", MODBUS_CLIENT_STATE_SENDING_REQUEST, state_sending_request_transitions, NULL, 0);
-
-
-/**
- * @brief Transition table for the Waiting Response state.
- *
- * - On `MODBUS_CLIENT_EVENT_RESPONSE_COMPLETE` with `guard_response_complete` passing, transition to `PROCESSING_RESPONSE`.
- * - On `MODBUS_CLIENT_EVENT_TIMEOUT` with `guard_timeout` passing, transition to `ERROR`.
- * - On `MODBUS_CLIENT_EVENT_ERROR_DETECTED`, transition to `ERROR` and execute `action_handle_error`.
- */
-static const fsm_transition_t state_waiting_response_transitions[] = {
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_RESPONSE_COMPLETE, modbus_client_state_processing_response, action_process_response, guard_response_complete),
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_TIMEOUT, modbus_client_state_error, action_handle_error, guard_timeout),
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_ERROR_DETECTED, modbus_client_state_error, action_handle_error, NULL)
-};
-
-/**
- * @brief Modbus Master FSM state: Waiting Response.
- *
- * This state represents the period where the Master is waiting for a response
- * from the slave device after sending a request.
- */
-const fsm_state_t modbus_client_state_waiting_response = FSM_STATE("WAITING_RESPONSE", MODBUS_CLIENT_STATE_WAITING_RESPONSE, state_waiting_response_transitions, NULL, 0);
-
-/**
- * @brief Transition table for the Processing Response state.
- *
- * - On `MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR`, transition back to `IDLE`.
- */
-static const fsm_transition_t state_processing_response_transitions[] = {
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR, modbus_client_state_idle, NULL, NULL)
-};
-/**
- * @brief Modbus Master FSM state: Processing Response.
- *
- * This state handles the processing of the received response from the slave device,
- * including parsing and validating the data.
- */
-const fsm_state_t modbus_client_state_processing_response = FSM_STATE("PROCESSING_RESPONSE", MODBUS_CLIENT_STATE_PROCESSING_RESPONSE, state_processing_response_transitions, action_process_response, 0);
-
-/**
- * @brief Transition table for the Error state.
- *
- * - On `MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR`, transition back to `IDLE`.
- */
-static const fsm_transition_t state_error_transitions[] = {
-    FSM_TRANSITION(MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR, modbus_client_state_idle, NULL, NULL)
-};
-/**
- * @brief Modbus Master FSM state: Error.
- *
- * This state represents an error condition in the Modbus FSM. The FSM can recover
- * and transition back to the idle state when a new event occurs.
- */
-const fsm_state_t modbus_client_state_error = FSM_STATE("ERROR", MODBUS_CLIENT_STATE_ERROR, state_error_transitions, NULL, 0);
-
-/* -------------------------------------------------------------------------- */
-/*                           FSM State Initialization                           */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Initializes the FSM states and their transitions.
- *
- * This function sets up the FSM by defining states and their associated transitions.
- */
-// static void initialize_fsm_states(void) {
-//     /* Define transitions for each state */
-//     fsm_state_set_transitions(&modbus_client_state_idle, state_idle_transitions, sizeof(state_idle_transitions) / sizeof(fsm_transition_t));
-//     fsm_state_set_transitions(&modbus_client_state_sending_request, state_sending_request_transitions, sizeof(state_sending_request_transitions) / sizeof(fsm_transition_t));
-//     fsm_state_set_transitions(&modbus_client_state_waiting_response, state_waiting_response_transitions, sizeof(state_waiting_response_transitions) / sizeof(fsm_transition_t));
-//     fsm_state_set_transitions(&modbus_client_state_processing_response, state_processing_response_transitions, sizeof(state_processing_response_transitions) / sizeof(fsm_transition_t));
-//     fsm_state_set_transitions(&modbus_client_state_error, state_error_transitions, sizeof(state_error_transitions) / sizeof(fsm_transition_t));
-// }
-
-/* -------------------------------------------------------------------------- */
-/*                           Public API Functions                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Creates and initializes the Modbus Master (client) context.
- *
- * This function sets up the FSM with the initial state, initializes buffers, and prepares
- * the Master to send Modbus requests and handle responses.
- *
- * @param[in,out] modbus          Pointer to the Modbus context. The context must be allocated by the user,
- *                                 and at least the `transport` and `device_info` fields must be set before calling.
- * @param[in]     platform_conf    Pointer to the transport configuration (`modbus_transport_t`).
- * @param[in]     baudrate         Pointer to the Modbus baud rate.
- * 
- * @return modbus_error_t `MODBUS_ERROR_NONE` on success, or an error code if initialization fails.
- *
- * @retval MODBUS_ERROR_NONE           Master initialized successfully.
- * @retval MODBUS_ERROR_INVALID_ARGUMENT Invalid arguments provided.
- * @retval MODBUS_ERROR_MEMORY         Memory allocation failed (if applicable).
- * @retval Others                       Various error codes as defined in `modbus_error_t`.
- *
- * @warning
- * - Ensure that `modbus`, `platform_conf`, and `baudrate` are valid pointers.
- * - The transport layer must expose `write`, `read`, and a monotonic `get_reference_msec` implementation (or provide a custom
- *   `mb_transport_if_t`).
- * 
- * @example
- * ```c
- * modbus_context_t ctx;
- * modbus_transport_t transport = {
- *     .write = transport_write_function,        // User-defined transport write function
- *     .read = transport_read_function,          // User-defined transport read function
- *     .get_reference_msec = get_msec_function  // User-defined function to get current time in ms
- * };
- * 
- * uint16_t baud = 19200;
- * 
- * modbus_error_t error = modbus_client_create(&ctx, &transport, &baud);
- * if (error != MODBUS_ERROR_NONE) {
- *     // Handle initialization error
- * }
- * ```
- */
-modbus_error_t modbus_client_create(modbus_context_t *modbus,
-                                    modbus_transport_t *platform_conf,
-                                    uint16_t *baudrate,
-                                    modbus_client_data_t *client)
+static mb_time_ms_t client_now(const mb_client_t *client)
 {
-    if (modbus == NULL || baudrate == NULL || platform_conf == NULL || client == NULL)
-    {
-        return MODBUS_ERROR_INVALID_ARGUMENT;
-    }
-
-    if (!platform_conf->read || !platform_conf->write || !platform_conf->get_reference_msec)
-    {
-        return MODBUS_ERROR_INVALID_ARGUMENT;
-    }
-
-    modbus_context_use_internal_buffers(modbus);
-    modbus_reset_buffers(modbus);
-
-    memset(client, 0, sizeof(*client));
-    client->ctx = modbus;
-
-    modbus->transport = *platform_conf;
-
-    modbus_error_t bind_status = modbus_transport_bind_legacy(&modbus->transport_iface, &modbus->transport);
-    if (bind_status != MODBUS_ERROR_NONE) {
-        return bind_status;
-    }
-
-    /* Initialize reference times */
-    const mb_time_ms_t now = mb_transport_now(&modbus->transport_iface);
-    modbus->rx_reference_time = now;
-    modbus->tx_reference_time = now;
-
-    /* Initialize default timeout */
-    client->timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
-
-    /* Initialize device information */
-    client->device_info.baudrate = baudrate;
-
-    /* Initialize FSM */
-    fsm_init(&client->fsm, &modbus_client_state_idle, client);
-    modbus->role = MODBUS_ROLE_CLIENT;
-    modbus->user_data = client;
-
-    return MODBUS_ERROR_NONE;
+    return mb_transport_now(client->iface);
 }
 
-/**
- * @brief Polls the Modbus Master state machine.
- *
- * If the Master uses an FSM, this function should be called periodically in the main loop
- * to process events, send pending requests, check for timeouts, and process responses.
- *
- * @param[in,out] ctx Pointer to the Modbus context.
- *
- * @note
- * - The polling function manages the FSM transitions based on incoming events and data.
- * - It is essential to regularly call this function to ensure timely processing of Modbus requests and responses.
- *
- * @example
- * ```c
- * while (1) {
- *     // Poll the Modbus Master FSM
- *     modbus_client_poll(&ctx);
- *     
- *     // Other application code
- * }
- * ```
- */
-void modbus_client_poll(modbus_context_t *ctx) {
-    if (!ctx) return;
-    modbus_client_data_t *client = (modbus_client_data_t *)ctx->user_data;
-    fsm_run(&client->fsm);
+static mb_time_ms_t client_base_timeout_ms(const mb_client_txn_t *txn)
+{
+    const mb_time_ms_t base = (txn->base_timeout_ms == 0U) ? MB_CLIENT_TIMEOUT_DEFAULT : txn->base_timeout_ms;
+    return (base == 0U) ? MB_CLIENT_TIMEOUT_DEFAULT : base;
+}
 
-    /* Check for timeout in WAITING_RESPONSE state */
-    if (client->fsm.current_state->id == MODBUS_CLIENT_STATE_WAITING_RESPONSE) {
-        const mb_time_ms_t elapsed = mb_transport_elapsed_since(&ctx->transport_iface,
-                                                                client->request_time_ref);
-        if (elapsed > (mb_time_ms_t)client->timeout_ms) {
-            fsm_handle_event(&client->fsm, MODBUS_CLIENT_EVENT_TIMEOUT);
+static mb_time_ms_t client_current_timeout_ms(const mb_client_txn_t *txn)
+{
+    mb_time_ms_t timeout = client_base_timeout_ms(txn);
+    mb_u8 retries = txn->retry_count;
+    while (retries > 0U && timeout < MB_CLIENT_MAX_TIMEOUT_MS) {
+        if (timeout > (MB_CLIENT_MAX_TIMEOUT_MS / 2U)) {
+            timeout = MB_CLIENT_MAX_TIMEOUT_MS;
+            break;
         }
+        timeout *= 2U;
+        retries -= 1U;
     }
+    if (timeout > MB_CLIENT_MAX_TIMEOUT_MS) {
+        timeout = MB_CLIENT_MAX_TIMEOUT_MS;
+    }
+    return timeout;
 }
 
-/**
- * @brief Sends a request to read holding registers (Function Code 0x03).
- *
- * This function constructs a Modbus frame for reading holding registers and enqueues it for transmission.
- * If using an FSM, the request will be sent according to the FSM's state management.
- * The read data will be available once the response is received and processed, accessible via `modbus_client_get_read_data()`.
- *
- * @param[in,out] ctx           Pointer to the Modbus context.
- * @param[in]     slave_address Address of the slave device from which to read the registers.
- * @param[in]     start_address Starting address of the registers to read.
- * @param[in]     quantity      Number of registers to read.
- *
- * @return modbus_error_t `MODBUS_ERROR_NONE` if the request was accepted, or an error code otherwise.
- *
- * @retval MODBUS_ERROR_NONE          Request accepted successfully.
- * @retval MODBUS_ERROR_INVALID_ARGUMENT Invalid arguments provided.
- * @retval MODBUS_ERROR_NO_MEMORY     No space available to queue the request.
- * @retval Others                      Various error codes as defined in `modbus_error_t`.
- *
- * @warning
- * - Ensure that the `slave_address` is valid and corresponds to an existing slave device.
- * - The `quantity` should not exceed `MODBUS_MAX_READ_WRITE_SIZE`.
- * 
- * @example
- * ```c
- * modbus_error_t error = modbus_client_read_holding_registers(&ctx, 0x01, 0x0000, 10);
- * if (error != MODBUS_ERROR_NONE) {
- *     // Handle request error
- * }
- * ```
- */
-modbus_error_t modbus_client_read_holding_registers(modbus_context_t *ctx, uint8_t slave_address, uint16_t start_address, uint16_t quantity) {
-    if (!ctx) return MODBUS_ERROR_INVALID_ARGUMENT;
-    if (quantity < 1 || quantity > MODBUS_MAX_READ_WRITE_SIZE) return MODBUS_ERROR_INVALID_ARGUMENT;
-
-    modbus_client_data_t *client = (modbus_client_data_t *)ctx->user_data;
-
-    /* Configure current request */
-    client->current_slave_address = slave_address;
-    client->current_function = MODBUS_FUNC_READ_HOLDING_REGISTERS;
-    client->current_start_address = start_address;
-    client->current_quantity = quantity;
-    client->read_data_count = 0;
-
-    /* Trigger event to send request */
-    fsm_handle_event(&client->fsm, MODBUS_CLIENT_EVENT_SEND_REQUEST);
-    return MODBUS_ERROR_NONE;
+static mb_time_ms_t client_base_backoff_ms(const mb_client_txn_t *txn)
+{
+    const mb_time_ms_t base = (txn->retry_backoff_ms == 0U) ? MB_CLIENT_BACKOFF_DEFAULT : txn->retry_backoff_ms;
+    return (base == 0U) ? MB_CLIENT_BACKOFF_DEFAULT : base;
 }
 
-/**
- * @brief Function called when a byte of the response is received.
- *
- * The user should call this function whenever a byte arrives from the UART/TCP.
- * It injects the `MODBUS_CLIENT_EVENT_RX_BYTE_RECEIVED` event into the FSM and stores
- * the received byte in the RX buffer.
- *
- * @param[in,out] fsm  Pointer to the FSM instance associated with the Modbus Master.
- * @param[in]     data Byte received from the transport layer.
- *
- * @warning
- * - Ensure that `fsm` is properly initialized and points to a valid FSM instance.
- * - This function is thread-safe and can be called from interrupt service routines (ISRs) if necessary.
- *
- * @example
- * ```c
- * // Assume `received_byte` is obtained from the transport layer
- * uint8_t received_byte = get_received_byte(); // User-defined function
- * modbus_client_receive_data_event(&ctx.client_data.fsm, received_byte);
- * ```
- */
-void modbus_client_receive_data_event(fsm_t *fsm, uint8_t data) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
+static mb_time_ms_t client_retry_backoff_ms(const mb_client_txn_t *txn)
+{
+    mb_time_ms_t backoff = client_base_backoff_ms(txn);
+    if (backoff == 0U) {
+        backoff = 1U;
+    }
 
-    /* Update reference time for RX */
-    ctx->rx_reference_time = mb_transport_now(&ctx->transport_iface);
-    MB_LOG_TRACE("RECEIVED Byte %u on %llu ms", data,
-                 (unsigned long long)ctx->rx_reference_time);
-    /* Store received byte in RX buffer */
-    if (ctx->rx_count < ctx->rx_capacity) {
-        ctx->rx_buffer[ctx->rx_count++] = data;
+    if (txn->retry_count == 0U) {
+        return backoff;
+    }
+
+    mb_u8 exponent = txn->retry_count - 1U;
+    while (exponent > 0U && backoff < MB_CLIENT_MAX_TIMEOUT_MS) {
+        if (backoff > (MB_CLIENT_MAX_TIMEOUT_MS / 2U)) {
+            backoff = MB_CLIENT_MAX_TIMEOUT_MS;
+            break;
+        }
+        backoff *= 2U;
+        exponent -= 1U;
+    }
+
+    if (backoff > MB_CLIENT_MAX_TIMEOUT_MS) {
+        backoff = MB_CLIENT_MAX_TIMEOUT_MS;
+    }
+
+    return backoff;
+}
+
+static mb_time_ms_t client_backoff_with_jitter(const mb_client_txn_t *txn,
+                                               mb_time_ms_t base_backoff,
+                                               mb_time_ms_t now)
+{
+    if (base_backoff <= 1U) {
+        return 1U;
+    }
+
+    mb_time_ms_t spread = base_backoff / 2U;
+    if (spread == 0U) {
+        spread = 1U;
+    }
+
+    const uintptr_t salt = (uintptr_t)txn;
+    const mb_time_ms_t pseudo = (now ^ (now >> 7)) ^ ((mb_time_ms_t)(salt >> 3)) ^ ((mb_time_ms_t)txn->retry_count * 131U);
+    const mb_time_ms_t offset = pseudo % (spread + 1U);
+    mb_time_ms_t delay = (base_backoff - spread) + offset;
+    if (delay == 0U) {
+        delay = 1U;
+    }
+    if (delay > MB_CLIENT_MAX_TIMEOUT_MS) {
+        delay = MB_CLIENT_MAX_TIMEOUT_MS;
+    }
+    return delay;
+}
+
+static void client_start_next(mb_client_t *client);
+
+static void client_enqueue(mb_client_t *client, mb_client_txn_t *txn)
+{
+    txn->next = NULL;
+    if (client->pending_tail) {
+        client->pending_tail->next = txn;
     } else {
-        /* Buffer overflow detected */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
+        client->pending_head = txn;
     }
-
-    fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_RESPONSE_COMPLETE);
-
-    /* 
-     * Here, you can implement logic to determine if a complete frame has been received.
-     * This can involve checking the expected length based on function code and data.
-     * For simplicity, this example assumes that frame completeness is handled elsewhere,
-     * possibly in the polling function.
-     */
+    client->pending_tail = txn;
 }
 
-/**
- * @brief Sets the response timeout for the Modbus Master.
- *
- * The Master will wait for a specified duration for a response from the Slave before considering it a timeout.
- *
- * @param[in,out] ctx       Pointer to the Modbus context.
- * @param[in]     timeout_ms Maximum time in milliseconds to wait for a response.
- *
- * @return modbus_error_t `MODBUS_ERROR_NONE` if configured successfully, or an error code otherwise.
- *
- * @retval MODBUS_ERROR_NONE          Timeout set successfully.
- * @retval MODBUS_ERROR_INVALID_ARGUMENT Invalid arguments provided.
- * @retval Others                      Various error codes as defined in `modbus_error_t`.
- *
- * @warning
- * - The `timeout_ms` should be sufficient to accommodate the expected response time based on the baud rate and data size.
- * 
- * @example
- * ```c
- * modbus_error_t error = modbus_client_set_timeout(&ctx, 500); // Set timeout to 500 ms
- * if (error != MODBUS_ERROR_NONE) {
- *     // Handle timeout configuration error
- * }
- * ```
- */
-modbus_error_t modbus_client_set_timeout(modbus_context_t *ctx, uint16_t timeout_ms) {
-    if (!ctx) return MODBUS_ERROR_INVALID_ARGUMENT;
-    modbus_client_data_t *client = (modbus_client_data_t *)ctx->user_data;
-    client->timeout_ms = timeout_ms;
-    return MODBUS_ERROR_NONE;
-}
-
-/**
- * @brief Retrieves the data read from the last Modbus read request.
- *
- * Depending on the implementation, the Master may store the read data internally.
- * This function allows the user to access the read data after receiving confirmation
- * that the response has been received and processed.
- *
- * @param[in,out] ctx       Pointer to the Modbus context.
- * @param[out]    buffer    Buffer where the read register values will be stored.
- * @param[in]     max_regs  Maximum number of registers to read into the buffer.
- *
- * @return uint16_t Number of registers read and copied into the buffer.
- *
- * @retval >0 Number of registers read successfully.
- * @retval 0  No data available or an error occurred.
- *
- * @warning
- * - Ensure that `buffer` has enough space to hold `max_regs` elements.
- * - This function should be called after confirming that the response has been received and processed.
- * 
- * @example
- * ```c
- * int16_t data_buffer[10];
- * uint16_t regs_read = modbus_client_get_read_data(&ctx, data_buffer, 10);
- * if (regs_read > 0) {
- *     // Process the read data
- * }
- * ```
- */
-uint16_t modbus_client_get_read_data(modbus_context_t *ctx, int16_t *buffer, uint16_t max_regs) {
-    if (!ctx || !buffer) return 0;
-    modbus_client_data_t *client = (modbus_client_data_t *)ctx->user_data;
-    uint16_t count = (client->read_data_count < max_regs) ? client->read_data_count : max_regs;
-    memcpy(buffer, client->read_data, count * sizeof(int16_t));
-    return count;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                           FSM Action Implementations                       */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Idle action for the FSM.
- *
- * This action is performed when the FSM enters the idle state. Currently, no specific action is needed.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- */
-static void action_idle(fsm_t *fsm) {
-    /* No action needed in Idle state */
-    (void)fsm;
-}
-
-/**
- * @brief Action to send a Modbus request.
- *
- * This action constructs the Modbus request frame based on the current request parameters
- * and sends it through the transport layer. It handles any errors that occur during transmission.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- */
-static void action_send_request(fsm_t *fsm) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
-
-    /* Build the request frame */
-    ctx->tx_index = 0;
-    ctx->rx_count = 0; // Clear RX buffer
-    ctx->rx_index = 0;
-
-    if (client->current_function == MODBUS_FUNC_READ_HOLDING_REGISTERS) {
-        uint8_t data[4];
-        data[0] = (uint8_t)((client->current_start_address >> 8) & 0xFF);
-        data[1] = (uint8_t)(client->current_start_address & 0xFF);
-        data[2] = (uint8_t)((client->current_quantity >> 8) & 0xFF);
-        data[3] = (uint8_t)(client->current_quantity & 0xFF);
-
-        uint16_t len = modbus_build_rtu_frame(client->current_slave_address, client->current_function,
-                                              data, 4, ctx->tx_buffer, ctx->tx_capacity);
-        if (len == 0) {
-            /* Failed to build frame */
-            fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-            return;
-        }
-        ctx->tx_index = len;
-    } else {
-        /* Unsupported function */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
-    }
-
-    /* Send the frame */
-    modbus_error_t err = modbus_send_frame(ctx, ctx->tx_buffer, ctx->tx_index);
-    if (err != MODBUS_ERROR_NONE) {
-        /* Transmission error */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
-    }
-
-    /* Trigger TX_COMPLETE event */
-    fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_TX_COMPLETE);
-}
-
-/**
- * @brief Action to wait for a response.
- *
- * This action marks the reference time for the current request to handle timeouts.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- */
-static void action_wait_response(fsm_t *fsm) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
-    MB_LOG_TRACE("action_wait_response");
-
-    /* Mark reference time for timeout */
-    client->request_time_ref = mb_transport_now(&ctx->transport_iface);
-    /* Now waiting for bytes from the response */
-}
-
-/**
- * @brief Action to process the received response.
- *
- * This action parses the received Modbus response frame, validates it, and extracts the data.
- * It handles any errors that occur during processing.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- */
-static void action_process_response(fsm_t *fsm) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
-    MB_LOG_TRACE("action_process_response");
-
-    /* Parse the received frame */
-    uint8_t address, function;
-    const uint8_t *payload;
-    uint16_t payload_len;
-    modbus_error_t err = modbus_parse_rtu_frame(ctx->rx_buffer, ctx->rx_count,
-                                                &address, &function, &payload, &payload_len);
-    if (err != MODBUS_ERROR_NONE) {
-        /* Parsing error */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
-    }
-
-    if (modbus_is_error_response(function)) {
-        /* Error response from slave */
-        /* Read exception code */
-        if (payload_len < 1) {
-            fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-            return;
-        }
-        /* Log or handle specific exception codes as needed */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
-    }
-
-    /* Handle Function Code 0x03: Read Holding Registers */
-    if (function == MODBUS_FUNC_READ_HOLDING_REGISTERS) {
-        /* payload[0] = byte_count */
-        if (payload_len < 1) {
-            fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-            return;
-        }
-        uint8_t byte_count = payload[0];
-        if (byte_count % 2 != 0 || byte_count > payload_len - 1) {
-            fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-            return;
-        }
-        uint16_t reg_count = (uint16_t)(byte_count / 2);
-        if (reg_count > MODBUS_MAX_READ_WRITE_SIZE) {
-            fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-            return;
-        }
-
-        client->read_data_count = reg_count;
-        for (uint16_t i = 0; i < reg_count; i++) {
-            uint16_t high = payload[1 + i*2];
-            uint16_t low = payload[1 + i*2 + 1];
-            int16_t val = (int16_t)((high << 8) | low);
-            client->read_data[i] = val;
-        }
-    } else {
-        /* Unsupported function */
-        fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_ERROR_DETECTED);
-        return;
-    }
-
-    /* Successfully processed response: transition back to Idle */
-    fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR);
-}
-
-/**
- * @brief Action to handle errors.
- *
- * This action handles errors by restarting the UART (if available) and transitioning back to Idle.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- */
-static void action_handle_error(fsm_t *fsm) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
-
-    /* Restart UART if available */
-    if (ctx->transport.restart_uart) {
-        ctx->transport.restart_uart();
-    }
-
-    /* Transition back to Idle */
-    fsm_handle_event(fsm, MODBUS_CLIENT_EVENT_RESTART_FROM_ERROR);
-}
-
-/* -------------------------------------------------------------------------- */
-/*                           FSM Guard Implementations                        */
-/* -------------------------------------------------------------------------- */
-
-/**
- * @brief Guard function to determine if transmission is complete.
- *
- * This guard checks if the transmission of the request has been completed.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- *
- * @return true if transmission is complete, false otherwise.
- */
-static bool guard_tx_complete(fsm_t *fsm) {
-    /* Assuming transmission is synchronous and completes immediately */
-    /* If transmission is asynchronous, implement appropriate checks */
-    (void)fsm;
-    MB_LOG_TRACE("guard_tx_complete");
-    return true;
-}
-
-/**
- * @brief Guard function to determine if the response is complete.
- *
- * This guard checks if a complete and valid Modbus response frame has been received.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- *
- * @return true if the response is complete and valid, false otherwise.
- */
-static bool guard_response_complete(fsm_t *fsm) {
-    modbus_client_data_t *client = (modbus_client_data_t *)fsm->user_data;
-    modbus_context_t *ctx = client->ctx;
-    MB_LOG_TRACE("guard_response_complete");
-
-    /* Verify CRC and minimum size */
-    if (ctx->rx_count < 4) {
+static bool client_remove_from_queue(mb_client_t *client, mb_client_txn_t *target)
+{
+    if (client == NULL || target == NULL) {
         return false;
     }
-    if (modbus_crc_validate(ctx->rx_buffer, (uint16_t)ctx->rx_count)) {
-        return true; /* Frame is complete and valid */
+
+    mb_client_txn_t *prev = NULL;
+    mb_client_txn_t *node = client->pending_head;
+    while (node != NULL) {
+        if (node == target) {
+            if (prev != NULL) {
+                prev->next = node->next;
+            } else {
+                client->pending_head = node->next;
+            }
+
+            if (client->pending_tail == node) {
+                client->pending_tail = prev;
+            }
+
+            node->next = NULL;
+            node->queued = false;
+            return true;
+        }
+
+        prev = node;
+        node = node->next;
     }
+
     return false;
 }
 
-/**
- * @brief Guard function to determine if a timeout has occurred.
- *
- * This guard is triggered when a timeout event is received.
- *
- * @param[in,out] fsm Pointer to the FSM instance.
- *
- * @return true if a timeout has occurred, false otherwise.
- */
-static bool guard_timeout(fsm_t *fsm) {
-    /* This guard is called when the EVENT_TIMEOUT occurs, indicating that a timeout has already happened */
-    (void)fsm;
-    return true;
+static mb_client_txn_t *client_dequeue(mb_client_t *client)
+{
+    while (client->pending_head && (client->pending_head->cancelled || !client->pending_head->in_use)) {
+        mb_client_txn_t *discard = client->pending_head;
+        client->pending_head = discard->next;
+        if (client->pending_head == NULL) {
+            client->pending_tail = NULL;
+        }
+        discard->next = NULL;
+        discard->queued = false;
+        discard->in_use = false;
+        discard->next_attempt_ms = 0U;
+    }
+
+    mb_client_txn_t *txn = client->pending_head;
+    if (txn != NULL) {
+        client->pending_head = txn->next;
+        if (client->pending_head == NULL) {
+            client->pending_tail = NULL;
+        }
+        txn->next = NULL;
+        txn->queued = false;
+    }
+    return txn;
+}
+
+static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid)
+{
+    if (client == NULL) {
+        return NULL;
+    }
+
+    for (mb_size_t i = 0U; i < client->pool_size; ++i) {
+        mb_client_txn_t *candidate = &client->pool[i];
+        if (!candidate->in_use) {
+            continue;
+        }
+        if (candidate->tid == tid) {
+            return candidate;
+        }
+    }
+
+    return NULL;
+}
+
+static void client_finalize(mb_client_t *client,
+                            mb_client_txn_t *txn,
+                            mb_err_t status,
+                            const mb_adu_view_t *response)
+{
+    txn->status = status;
+    txn->completed = true;
+    txn->callback_pending = true;
+
+    if (txn->cfg.callback) {
+        txn->cfg.callback(client, txn, status, response, txn->cfg.user_ctx);
+    }
+
+    txn->callback_pending = false;
+    txn->completed = false;
+    txn->cancelled = false;
+    txn->in_use = false;
+    txn->next = NULL;
+    txn->queued = false;
+    txn->next_attempt_ms = 0U;
+    txn->deadline = 0U;
+    txn->watchdog_deadline = 0U;
+    txn->tid = 0U;
+}
+
+static void client_prepare_response(mb_client_txn_t *txn, const mb_adu_view_t *adu)
+{
+    if (!txn->expect_response || adu == NULL) {
+        txn->response_view.payload_len = 0U;
+        txn->response_view.payload = NULL;
+        return;
+    }
+
+    txn->response_view.unit_id = adu->unit_id;
+    txn->response_view.function = adu->function;
+    txn->response_view.payload_len = adu->payload_len;
+    if (adu->payload && adu->payload_len > 0U) {
+        if (adu->payload_len > MB_PDU_MAX) {
+            txn->response_view.payload_len = MB_PDU_MAX;
+        }
+        memcpy(txn->response_storage, adu->payload, txn->response_view.payload_len);
+        txn->response_view.payload = txn->response_storage;
+    } else {
+        txn->response_view.payload = NULL;
+    }
+}
+
+static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *txn)
+{
+    if (client == NULL || txn == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    switch (client->transport) {
+    case MB_CLIENT_TRANSPORT_RTU:
+        return mb_rtu_submit(&client->rtu, &txn->request_view);
+    case MB_CLIENT_TRANSPORT_TCP:
+        if (txn->tid == 0U) {
+            txn->tid = client->next_tid++;
+            if (client->next_tid == 0U) {
+                client->next_tid = 1U;
+            }
+        }
+        return mb_tcp_submit(&client->tcp, &txn->request_view, txn->tid);
+    default:
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+}
+
+static mb_err_t client_transport_poll(mb_client_t *client)
+{
+    if (client == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    switch (client->transport) {
+    case MB_CLIENT_TRANSPORT_RTU:
+        return mb_rtu_poll(&client->rtu);
+    case MB_CLIENT_TRANSPORT_TCP: {
+        mb_err_t status = mb_tcp_poll(&client->tcp);
+        return (status == MB_ERR_TIMEOUT) ? MB_OK : status;
+    }
+    default:
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+}
+
+static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
+                                   const mb_adu_view_t *adu,
+                                   mb_u16 transaction_id,
+                                   mb_err_t status,
+                                   void *user)
+{
+    (void)tcp;
+    mb_client_t *client = (mb_client_t *)user;
+    if (client == NULL) {
+        return;
+    }
+
+    mb_client_txn_t *txn = NULL;
+    if (transaction_id != 0U) {
+        txn = client_find_by_tid(client, transaction_id);
+    }
+    if (txn == NULL && transaction_id == 0U) {
+        txn = client->current;
+    }
+
+    if (txn == NULL) {
+        return;
+    }
+
+    if (txn->queued) {
+        client_remove_from_queue(client, txn);
+    }
+
+    if (status == MB_OK) {
+        client_prepare_response(txn, adu);
+        client_finalize(client, txn, MB_OK, adu ? &txn->response_view : NULL);
+    } else {
+        client_finalize(client, txn, status, NULL);
+    }
+
+    if (client->current == txn) {
+        client->current = NULL;
+    }
+
+    client->state = MB_CLIENT_STATE_IDLE;
+    client_start_next(client);
+}
+
+static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
+{
+    if (client == NULL || txn == NULL) {
+        return;
+    }
+
+    const mb_time_ms_t now = client_now(client);
+    txn->timeout_ms = client_current_timeout_ms(txn);
+    txn->deadline = now + txn->timeout_ms;
+    txn->watchdog_deadline = (client->watchdog_ms > 0U) ? (now + client->watchdog_ms) : 0U;
+    txn->next_attempt_ms = 0U;
+
+    mb_err_t status = client_transport_submit(client, txn);
+    if (status != MB_OK) {
+        client_finalize(client, txn, status, NULL);
+        client->current = NULL;
+        client->state = MB_CLIENT_STATE_IDLE;
+        return;
+    }
+
+    if (!txn->expect_response) {
+        client_finalize(client, txn, MB_OK, NULL);
+        client->current = NULL;
+        client->state = MB_CLIENT_STATE_IDLE;
+        return;
+    }
+
+    client->state = MB_CLIENT_STATE_WAITING;
+}
+
+static void client_start_next(mb_client_t *client)
+{
+    while (true) {
+        client->current = client_dequeue(client);
+        if (client->current == NULL) {
+            client->state = MB_CLIENT_STATE_IDLE;
+            return;
+        }
+
+        client_attempt_send(client, client->current);
+        if (client->state == MB_CLIENT_STATE_WAITING || client->current != NULL) {
+            return;
+        }
+        /* Immediate completion, continue draining the queue. */
+    }
+}
+
+static void client_retry(mb_client_t *client)
+{
+    mb_client_txn_t *txn = client->current;
+    if (txn == NULL) {
+        return;
+    }
+
+    if (txn->retry_count >= txn->max_retries) {
+        client_finalize(client, txn, MB_ERR_TIMEOUT, NULL);
+        client->current = NULL;
+        client_start_next(client);
+        return;
+    }
+
+    txn->retry_count += 1U;
+    const mb_time_ms_t now = client_now(client);
+    const mb_time_ms_t base_backoff = client_retry_backoff_ms(txn);
+    const mb_time_ms_t delay = client_backoff_with_jitter(txn, base_backoff, now);
+    txn->next_attempt_ms = now + delay;
+    txn->deadline = 0U;
+    txn->watchdog_deadline = 0U;
+
+    client->state = MB_CLIENT_STATE_BACKOFF;
+}
+
+static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
+                                   const mb_adu_view_t *adu,
+                                   mb_err_t status,
+                                   void *user)
+{
+    (void)rtu;
+    mb_client_t *client = (mb_client_t *)user;
+    mb_client_txn_t *txn = client->current;
+    if (txn == NULL) {
+        return;
+    }
+
+    if (status == MB_OK) {
+        client_prepare_response(txn, adu);
+        client_finalize(client, txn, MB_OK, adu ? &txn->response_view : NULL);
+    } else {
+        client_finalize(client, txn, status, NULL);
+    }
+
+    client->current = NULL;
+    client->state = MB_CLIENT_STATE_IDLE;
+    client_start_next(client);
+}
+
+static mb_err_t mb_client_init_common(mb_client_t *client,
+                                      const mb_transport_if_t *iface,
+                                      mb_client_txn_t *txn_pool,
+                                      mb_size_t txn_pool_len)
+{
+    if (client == NULL || iface == NULL || txn_pool == NULL || txn_pool_len == 0U) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    if (iface->send == NULL || iface->recv == NULL || iface->now == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    memset(client, 0, sizeof(*client));
+    client->iface = iface;
+    client->pool = txn_pool;
+    client->pool_size = txn_pool_len;
+    client->state = MB_CLIENT_STATE_IDLE;
+    client->watchdog_ms = MB_CLIENT_DEFAULT_WATCHDOG_MS;
+    client->next_tid = 1U;
+
+    for (mb_size_t i = 0U; i < txn_pool_len; ++i) {
+        memset(&txn_pool[i], 0, sizeof(mb_client_txn_t));
+    }
+
+    return MB_OK;
+}
+
+mb_err_t mb_client_init(mb_client_t *client,
+                        const mb_transport_if_t *iface,
+                        mb_client_txn_t *txn_pool,
+                        mb_size_t txn_pool_len)
+{
+    mb_err_t status = mb_client_init_common(client, iface, txn_pool, txn_pool_len);
+    if (!mb_err_is_ok(status)) {
+        return status;
+    }
+
+    client->transport = MB_CLIENT_TRANSPORT_RTU;
+    return mb_rtu_init(&client->rtu, iface, mb_client_rtu_callback, client);
+}
+
+mb_err_t mb_client_init_tcp(mb_client_t *client,
+                            const mb_transport_if_t *iface,
+                            mb_client_txn_t *txn_pool,
+                            mb_size_t txn_pool_len)
+{
+    mb_err_t status = mb_client_init_common(client, iface, txn_pool, txn_pool_len);
+    if (!mb_err_is_ok(status)) {
+        return status;
+    }
+
+    client->transport = MB_CLIENT_TRANSPORT_TCP;
+    return mb_tcp_init(&client->tcp, iface, mb_client_tcp_callback, client);
+}
+
+mb_err_t mb_client_submit(mb_client_t *client,
+                          const mb_client_request_t *request,
+                          mb_client_txn_t **out_txn)
+{
+    if (client == NULL || request == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    if (request->request.payload_len > MB_PDU_MAX) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    mb_client_txn_t *txn = NULL;
+    for (mb_size_t i = 0U; i < client->pool_size; ++i) {
+        if (!client->pool[i].in_use) {
+            txn = &client->pool[i];
+            break;
+        }
+    }
+
+    if (txn == NULL) {
+        return MB_ERR_OTHER;
+    }
+
+    memset(txn, 0, sizeof(*txn));
+    txn->in_use = true;
+    txn->queued = true;
+    txn->cfg = *request;
+    txn->expect_response = ((request->flags & MB_CLIENT_REQUEST_NO_RESPONSE) == 0U);
+    txn->timeout_ms = (request->timeout_ms == 0U) ? MB_CLIENT_TIMEOUT_DEFAULT : request->timeout_ms;
+    txn->base_timeout_ms = txn->timeout_ms;
+    txn->retry_backoff_ms = (request->retry_backoff_ms == 0U) ? MB_CLIENT_BACKOFF_DEFAULT : request->retry_backoff_ms;
+    txn->max_retries = request->max_retries;
+    txn->retry_count = 0U;
+    txn->status = MB_OK;
+    txn->next_attempt_ms = 0U;
+
+    txn->request_view.unit_id = request->request.unit_id;
+    txn->request_view.function = request->request.function;
+    txn->request_view.payload_len = request->request.payload_len;
+    if (request->request.payload_len > 0U && request->request.payload != NULL) {
+        memcpy(txn->request_storage, request->request.payload, request->request.payload_len);
+        txn->request_view.payload = txn->request_storage;
+    } else {
+        txn->request_view.payload = NULL;
+    }
+
+    client_enqueue(client, txn);
+
+    if (out_txn) {
+        *out_txn = txn;
+    }
+
+    if (client->state == MB_CLIENT_STATE_IDLE && client->current == NULL) {
+        client_start_next(client);
+    }
+
+    return MB_OK;
+}
+
+mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn)
+{
+    if (client == NULL || txn == NULL || !txn->in_use) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    if (txn == client->current) {
+        client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
+        client->current = NULL;
+        client_start_next(client);
+        return MB_OK;
+    }
+
+    const bool removed = client_remove_from_queue(client, txn);
+
+    if (!removed && !txn->queued) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
+
+    if (client->state == MB_CLIENT_STATE_IDLE && client->current == NULL) {
+        client_start_next(client);
+    }
+
+    return MB_OK;
+}
+
+mb_err_t mb_client_poll(mb_client_t *client)
+{
+    if (client == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    mb_err_t status = client_transport_poll(client);
+
+    mb_client_txn_t *txn = client->current;
+    if (txn != NULL) {
+        const mb_time_ms_t now = client_now(client);
+
+        if (client->state == MB_CLIENT_STATE_BACKOFF) {
+            if (now >= txn->next_attempt_ms) {
+                client_attempt_send(client, txn);
+                txn = client->current;
+            }
+        }
+
+        if (client->state == MB_CLIENT_STATE_WAITING && txn != NULL) {
+            if (txn->deadline > 0U && now >= txn->deadline) {
+                client_retry(client);
+                return status;
+            }
+
+            if (client->watchdog_ms > 0U && txn->watchdog_deadline > 0U && now >= txn->watchdog_deadline) {
+                client_finalize(client, txn, MB_ERR_TRANSPORT, NULL);
+                client->current = NULL;
+                client_start_next(client);
+                return status;
+            }
+        }
+    }
+
+    if (client->state == MB_CLIENT_STATE_IDLE && client->current == NULL) {
+        client_start_next(client);
+    }
+
+    return status;
+}
+
+void mb_client_set_watchdog(mb_client_t *client, mb_time_ms_t watchdog_ms)
+{
+    if (client == NULL) {
+        return;
+    }
+    client->watchdog_ms = watchdog_ms;
+}
+
+bool mb_client_is_idle(const mb_client_t *client)
+{
+    if (client == NULL) {
+        return true;
+    }
+    return (client->state == MB_CLIENT_STATE_IDLE) && (client->pending_head == NULL) && (client->current == NULL);
+}
+
+mb_size_t mb_client_pending(const mb_client_t *client)
+{
+    if (client == NULL) {
+        return 0U;
+    }
+
+    mb_size_t count = (client->current != NULL) ? 1U : 0U;
+    const mb_client_txn_t *node = client->pending_head;
+    while (node != NULL) {
+        if (node->in_use && !node->cancelled) {
+            count += 1U;
+        }
+        node = node->next;
+    }
+    return count;
 }

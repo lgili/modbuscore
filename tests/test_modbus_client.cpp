@@ -1,404 +1,575 @@
-// /**
-//  * @file test_modbus_master.cpp
-//  * @brief Unit tests for the Modbus Master using Google Test.
-//  *
-//  * This file tests the Modbus Master implementation:
-//  * - Initialization and timeout configuration.
-//  * - Sending a read holding registers request (0x03).
-//  * - Handling no-response timeouts.
-//  * - Receiving a valid response and parsing data.
-//  * - Handling Modbus exception responses from the slave.
-//  *
-//  * We assume that:
-//  * - The master uses the mock transport and we've integrated it.
-//  * - The master FSM is tested by calling modbus_master_poll() regularly and
-//  *   injecting events such as received data.
-//  *
-//  * Author:
-//  * Date: 2024-12-20
-//  */
-
-// #include <modbus/modbus.h>
-// #include "gtest/gtest.h"
-
-// #ifdef __cplusplus
-// extern "C"{
-// #endif
-// extern void modbus_transport_init_mock(modbus_transport_t *transport);
-// extern int mock_inject_rx_data(const uint8_t *data, uint16_t length);
-// extern uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
-// extern void mock_clear_tx_buffer(void);
-// extern void mock_advance_time(uint16_t ms);
-// #ifdef __cplusplus
-// }
-// #endif
-
-
-// static modbus_transport_t mock_transport;
-// static modbus_context_t g_modbus_ctx; // The master context
-
-// class ModbusMasterTest : public ::testing::Test {
-// protected:
-//     void SetUp() override {
-//         modbus_transport_init_mock(&mock_transport);
-//         memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
-
-//         uint16_t baud = 19200;
-//         modbus_client_create(&g_modbus_ctx, &mock_transport, &baud, &g_client);
-//     }
-
-//     void TearDown() override {
-//         // nothing special
-//     }
-
-//     void pollMaster(unsigned times=1) {
-//         for (unsigned i=0; i<times; i++) {
-//             mock_advance_time(50);
-//             modbus_client_data_t *client = (modbus_client_data_t *)g_modbus_ctx.user_data;
-//             uint8_t data[64];
-//             // simulating rx interrupt
-//             if(client->fsm.current_state->id == MODBUS_CLIENT_STATE_WAITING_RESPONSE) {
-//                 // modbus_client_receive_data_event
-//                 uint8_t size_read = client->ctx->transport.read(data, 64); // read max size
-//                 if(size_read > 0) {
-//                     for (size_t i = 0; i < size_read; i++)
-//                     {
-//                         modbus_client_receive_data_event(&client->fsm, data[i]);
-//                         mock_advance_time(5);
-//                     }
-                    
-//                 }
-//             }
-//             //modbus_master_poll(&ctx);
-//         }
-//     }
-// };
-
-// TEST_F(ModbusMasterTest, SetTimeout) {
-//     modbus_error_t err = modbus_client_set_timeout(&g_modbus_ctx, 2000);
-//     EXPECT_EQ(err, MODBUS_ERROR_NONE);
-//     // Just trust that it's set internally, no direct getter here.
-// }
-
-// TEST_F(ModbusMasterTest, NoResponseTimeout) {
-//     // Send a read holding registers request
-//     modbus_error_t err = modbus_client_read_holding_registers(&g_modbus_ctx, 0x01, 0x0000, 2);
-//     EXPECT_EQ(err, MODBUS_ERROR_NONE);
-
-//     // After requesting, the master should send a frame immediately
-//     pollMaster();
-//     uint8_t tx_buf[20];
-//     uint16_t tx_len = mock_get_tx_data(tx_buf, 20);
-//     EXPECT_GT(tx_len, 0); // Something was sent
-
-//     // Advance time beyond default timeout (1000ms) to trigger timeout
-//     mock_advance_time(1500);
-//     pollMaster(10); // multiple polls to process the timeout
-//     // After timeout, the master should go to error and then back to idle.
-//     // We do not have direct assertions here other than no crash.
-//     // In a real scenario, we might need to inspect internal state or have hooks for error handling.
-//     // For now, just ensure no crash and no exceptions.
-// }
-
-// // TEST_F(ModbusMasterTest, ValidResponse) {
-// //     // Send request
-// //     modbus_master_read_holding_registers(&ctx, 0x01, 0x0000, 2);
-// //     pollMaster();
-// //     // Check TX
-// //     uint8_t tx_buf[20];
-// //     uint16_t tx_len = mock_get_tx_data(tx_buf, 20);
-// //     EXPECT_GT(tx_len, 0);
-
-// //     // Inject a valid response: for 2 registers, byte_count=4, values=0x1111,0x2222
-// //     // Frame: [0x01][0x03][0x04][0x11][0x11][0x22][0x22][CRC low][CRC high]
-// //     // We'll build it using modbus_build_rtu_frame for accuracy
-// //     uint8_t resp_payload[5]; 
-// //     // payload: byte_count=4, data=11 11 22 22
-// //     resp_payload[0] = 0x04; 
-// //     resp_payload[1] = 0x11; resp_payload[2] = 0x11;
-// //     resp_payload[3] = 0x22; resp_payload[4] = 0x22;
-// //     uint8_t resp_frame[20];
-// //     uint16_t resp_len = modbus_build_rtu_frame(0x01, 0x03, resp_payload, 5, resp_frame, 20);
-// //     ASSERT_GT(resp_len, 0);
-
-// //     // Inject response
-// //     mock_inject_rx_data(resp_frame, resp_len);
-
-// //     // Poll until response is processed
-// //     pollMaster(10);
-
-// //     // Now get the data from master
-// //     int16_t read_data[10];
-// //     uint16_t count = modbus_master_get_read_data(&ctx, read_data, 10);
-// //     EXPECT_EQ(count, 2);
-// //     EXPECT_EQ(read_data[0], 0x1111);
-// //     EXPECT_EQ(read_data[1], 0x2222);
-// // }
-
-// // TEST_F(ModbusMasterTest, ExceptionResponse) {
-// //     // Request read
-// //     modbus_master_read_holding_registers(&ctx, 0x01, 0x0000, 2);
-// //     pollMaster();
-// //     // Check something was sent
-// //     uint8_t tx_buf[20];
-// //     uint16_t tx_len = mock_get_tx_data(tx_buf, 20);
-// //     EXPECT_GT(tx_len, 0);
-
-// //     // Exception response: function=0x83 (error), exception code=2 (Illegal Data Address)
-// //     uint8_t exc_payload[1];
-// //     exc_payload[0] = 0x02; // exception code
-// //     uint8_t exc_frame[20];
-// //     uint16_t exc_len = modbus_build_rtu_frame(0x01, 0x83, exc_payload, 1, exc_frame, 20);
-// //     ASSERT_GT(exc_len, 0);
-
-// //     mock_inject_rx_data(exc_frame, exc_len);
-// //     pollMaster(10); 
-// //     // The master should handle exception and return to idle, no data read.
-// //     int16_t read_data[10];
-// //     uint16_t count = modbus_master_get_read_data(&ctx, read_data, 10);
-// //     EXPECT_EQ(count, 0); // no data since it was an exception
-// // }
-
-
-
-
-
-
-// test_modbus_master.cpp
-
-#include <modbus/modbus.h>
-#include "gtest/gtest.h"
+#include <array>
 #include <vector>
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-extern void modbus_transport_init_mock(modbus_transport_t *transport);
-extern int mock_inject_rx_data(const uint8_t *data, uint16_t length);
-extern uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
-extern void mock_clear_tx_buffer(void);
-extern void mock_advance_time(uint16_t ms);
-#ifdef __cplusplus
+#include <gtest/gtest.h>
+
+extern "C" {
+#include <modbus/client.h>
+#include <modbus/core.h>
+#include <modbus/pdu.h>
+#include <modbus/transport.h>
+#include <modbus/transport/tcp.h>
 }
-#endif
 
-static modbus_transport_t mock_transport;
-static modbus_context_t g_modbus_ctx; // The master context
-static modbus_client_data_t g_client;
+extern "C" {
+void modbus_transport_init_mock(modbus_transport_t *transport);
+int mock_inject_rx_data(const uint8_t *data, uint16_t length);
+uint16_t mock_get_tx_data(uint8_t *data, uint16_t maxlen);
+void mock_clear_tx_buffer(void);
+void mock_advance_time(uint16_t ms);
+const mb_transport_if_t *mock_transport_get_iface(void);
+}
 
-class ModbusMasterTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        modbus_transport_init_mock(&mock_transport);
-        memset(&g_modbus_ctx, 0, sizeof(g_modbus_ctx));
+namespace {
 
-        uint16_t baud = 19200;
-        modbus_client_create(&g_modbus_ctx, &mock_transport, &baud, &g_client);
+struct CallbackCapture {
+    bool invoked = false;
+    mb_err_t status = MODBUS_ERROR_NONE;
+    mb_adu_view_t response{};
+};
+
+static void client_callback(mb_client_t *client,
+                            const mb_client_txn_t *txn,
+                            mb_err_t status,
+                            const mb_adu_view_t *response,
+                            void *user_ctx)
+{
+    (void)client;
+    (void)txn;
+    auto *capture = static_cast<CallbackCapture *>(user_ctx);
+    capture->invoked = true;
+    capture->status = status;
+    if (response != nullptr) {
+        capture->response = *response;
     }
+}
 
-    void TearDown() override {
-        // Reset buffers after each test
+class MbClientTest : public ::testing::Test {
+protected:
+    void SetUp() override
+    {
+        modbus_transport_init_mock(&legacy_transport_);
+        iface_ = mock_transport_get_iface();
+        ASSERT_NE(nullptr, iface_);
+        ASSERT_EQ(MODBUS_ERROR_NONE,
+                  mb_client_init(&client_, iface_, txn_pool_.data(), txn_pool_.size()));
+        mb_client_set_watchdog(&client_, 200U);
         mock_clear_tx_buffer();
     }
 
-    // Poll the master and handle incoming data
-    void pollMaster(unsigned times=1) {
-        for (unsigned iteration = 0; iteration < times; ++iteration) {
-            mock_advance_time(50); // Simulate time passing
-
-            modbus_client_data_t *client = (modbus_client_data_t *)g_modbus_ctx.user_data;
-            uint8_t data[64];
-            // Simulate RX interrupt if waiting for a response
-            if(client->fsm.current_state->id == MODBUS_CLIENT_STATE_WAITING_RESPONSE) {
-                // Read data from mock transport's rx buffer
-                uint8_t size_read = client->ctx->transport.read(data, 64); // Adjust based on your mock_transport
-                if(size_read > 0) {
-                    for (uint8_t idx = 0; idx < size_read; ++idx) {
-                        modbus_client_receive_data_event(&client->fsm, data[idx]);
-                        mock_advance_time(5);
-                    }
-                }
-            }
-
-            modbus_client_poll(&g_modbus_ctx);
-        }
+    void TearDown() override
+    {
+        mock_clear_tx_buffer();
     }
 
-    // Helper function to simulate slave response based on master's request
-    void mock_slave_respond() {
-        // Read the transmitted data from the mock transport's tx buffer
-        uint8_t tx_buf[256];
-        uint16_t tx_len = mock_get_tx_data(tx_buf, sizeof(tx_buf));
-        if(tx_len == 0) return; // No data sent by master
+    static mb_client_request_t make_request(uint16_t start, uint16_t qty, CallbackCapture *cap)
+    {
+        current_payload_[0] = static_cast<mb_u8>(start >> 8);
+        current_payload_[1] = static_cast<mb_u8>(start & 0xFFU);
+        current_payload_[2] = static_cast<mb_u8>(qty >> 8);
+        current_payload_[3] = static_cast<mb_u8>(qty & 0xFFU);
 
-        // Simple parsing: assuming single request per test
-        if(tx_len < 8) {
-            // Not enough data for a Modbus RTU request
-            return;
-        }
-
-        uint8_t slave_address = tx_buf[0];
-        uint8_t function = tx_buf[1];
-
-        if(function == 0x03) { // Read Holding Registers
-            uint16_t start_addr = (tx_buf[2] << 8) | tx_buf[3];
-            uint16_t quantity = (tx_buf[4] << 8) | tx_buf[5];
-
-            // Generate response: byte_count + data + CRC
-            std::vector<uint8_t> resp_payload(1U + 2U * quantity);
-            resp_payload[0] = static_cast<uint8_t>(2U * quantity); // byte_count
-            for(uint16_t idx = 0; idx < quantity; ++idx) {
-                // For testing, set register value to (start_addr + i) * 0x100 + i
-                // e.g., start_addr=0x0000, i=0: 0x0000, i=1: 0x0101
-                uint16_t reg_val = (uint16_t)(((uint32_t)start_addr + idx) * 0x100U + idx);
-                resp_payload[1U + 2U * idx] = (uint8_t)((reg_val >> 8) & 0xFFU); // high byte
-                resp_payload[1U + 2U * idx + 1U] = (uint8_t)(reg_val & 0xFFU);    // low byte
-            }
-
-            uint8_t resp_frame[256];
-            uint16_t resp_len = modbus_build_rtu_frame(
-                slave_address,
-                function,
-                resp_payload.data(),
-                (uint16_t)resp_payload.size(),
-                resp_frame,
-                sizeof(resp_frame));
-            if(resp_len > 0) {
-                mock_inject_rx_data(resp_frame, resp_len);
-            }
-
-        } else if(function == 0x06) { // Write Single Register
-            // For simplicity, echo back the same frame as response
-            uint8_t resp_frame[256];
-            uint16_t resp_len = modbus_build_rtu_frame(slave_address, function, &tx_buf[2], 4, resp_frame, sizeof(resp_frame));
-            if(resp_len > 0) {
-                mock_inject_rx_data(resp_frame, resp_len);
-            }
-
-        }
-        // Handle other function codes as needed
+        mb_client_request_t req{};
+        req.request.unit_id = 0x11U;
+        req.request.function = MODBUS_FUNC_READ_HOLDING_REGISTERS;
+        req.flags = 0U;
+        req.request.payload = current_payload_;
+        req.request.payload_len = 4U;
+        req.timeout_ms = 50U;
+        req.retry_backoff_ms = 25U;
+        req.max_retries = 0U;
+        req.callback = client_callback;
+        req.user_ctx = cap;
+        return req;
     }
+
+    static void build_read_response(mb_adu_view_t &adu,
+                                    std::array<mb_u8, MB_RTU_BUFFER_SIZE> &frame,
+                                    mb_size_t &frame_len,
+                                    uint16_t quantity)
+    {
+        mb_u8 pdu[MB_PDU_MAX];
+        const mb_size_t payload_len = (mb_size_t)(quantity * 2U + 1U);
+        pdu[0] = static_cast<mb_u8>(quantity * 2U);
+        for (uint16_t i = 0; i < quantity; ++i) {
+            const uint16_t value = static_cast<uint16_t>(0x0102U + (i * 0x1111U));
+            pdu[1 + i * 2U] = static_cast<mb_u8>(value >> 8);
+            pdu[2 + i * 2U] = static_cast<mb_u8>(value & 0xFFU);
+        }
+
+        adu.unit_id = 0x11U;
+        adu.function = MODBUS_FUNC_READ_HOLDING_REGISTERS;
+        adu.payload = pdu;
+        adu.payload_len = payload_len;
+        ASSERT_EQ(MODBUS_ERROR_NONE, mb_frame_rtu_encode(&adu, frame.data(), frame.size(), &frame_len));
+    }
+
+    static mb_u8 current_payload_[4];
+
+    mb_client_t client_{};
+    std::array<mb_client_txn_t, 4> txn_pool_{};
+    modbus_transport_t legacy_transport_{};
+    const mb_transport_if_t *iface_ = nullptr;
 };
 
-TEST_F(ModbusMasterTest, SetTimeout) {
-    modbus_error_t err = modbus_client_set_timeout(&g_modbus_ctx, 2000);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
-    // Just trust that it's set internally, no direct getter here.
+mb_u8 MbClientTest::current_payload_[4] = {0};
+
+TEST_F(MbClientTest, CompletesSingleTransaction)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0002, &capture);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+    (void)mb_client_poll(&client_);
+    std::array<uint8_t, MB_RTU_BUFFER_SIZE> tx_frame{};
+    const auto tx_len = mock_get_tx_data(tx_frame.data(), tx_frame.size());
+    ASSERT_GT(tx_len, 0U);
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> response_frame{};
+    mb_size_t response_len = 0U;
+    build_read_response(response_adu, response_frame, response_len, 2U);
+
+    ASSERT_EQ(0, mock_inject_rx_data(response_frame.data(), (uint16_t)response_len));
+    for (int i = 0; i < 8 && !capture.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
+
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MB_OK, capture.status);
+    ASSERT_EQ(5U, capture.response.payload_len);
+    EXPECT_EQ(4U, capture.response.payload[0]);
 }
 
-TEST_F(ModbusMasterTest, NoResponseTimeout) {
-    // Send a read holding registers request
-    modbus_error_t err = modbus_client_read_holding_registers(&g_modbus_ctx, 0x01, 0x0000, 2);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
+TEST_F(MbClientTest, RetriesAndTimesOut)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    request.timeout_ms = 10U;
+    request.retry_backoff_ms = 20U;
+    request.max_retries = 1U;
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
 
-    // Poll to send the request
-    pollMaster(1);
+    (void)mb_client_poll(&client_);
+    std::array<uint8_t, MB_RTU_BUFFER_SIZE> frame{};
+    auto first = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(first, 0U);
+    mock_clear_tx_buffer();
 
-    // Check that something was sent
-    uint8_t tx_buf[256];
-    uint16_t tx_len = mock_get_tx_data(tx_buf, sizeof(tx_buf));
-    EXPECT_GT(tx_len, 0); // Master sent a request
+    mock_advance_time(11U);
+    (void)mb_client_poll(&client_);
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+    EXPECT_FALSE(capture.invoked);
 
-    // No response is injected, so advance time to trigger timeout
-    mock_advance_time(1500);
-    pollMaster(30); // multiple polls to process the timeout
+    mock_advance_time(21U);
+    (void)mb_client_poll(&client_);
+    auto second = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(second, 0U);
+    mock_clear_tx_buffer();
 
-    // Now, we would like to check if the master handled the timeout correctly.
-    // Since we don't have access to internal states, we may need to add hooks or callbacks.
-    // Alternatively, check that no data was read
-    int16_t read_data[10];
-    uint16_t count = modbus_client_get_read_data(&g_modbus_ctx, read_data, 10);
-    EXPECT_EQ(count, 0); // No data was read due to timeout
+    mock_advance_time(19U);
+    (void)mb_client_poll(&client_);
+    EXPECT_FALSE(capture.invoked);
+
+    mock_advance_time(2U);
+    (void)mb_client_poll(&client_);
+
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MODBUS_ERROR_TIMEOUT, capture.status);
 }
 
-TEST_F(ModbusMasterTest, ValidResponse) {
-    // Send a read holding registers request
-    modbus_error_t err = modbus_client_read_holding_registers(&g_modbus_ctx, 0x01, 0x0000, 2);
-    EXPECT_EQ(err, MODBUS_ERROR_NONE);
+TEST_F(MbClientTest, QueuesMultipleTransactions)
+{
+    CallbackCapture first{};
+    CallbackCapture second{};
+    mb_client_txn_t *first_txn = nullptr;
+    mb_client_txn_t *second_txn = nullptr;
 
-    // Poll to send the request
-    pollMaster(1);
+    auto req1 = make_request(0x0000, 0x0001, &first);
+    auto req2 = make_request(0x0004, 0x0001, &second);
 
-    // Check that something was sent
-    uint8_t tx_buf[256];
-    uint16_t tx_len = mock_get_tx_data(tx_buf, sizeof(tx_buf));
-    EXPECT_GT(tx_len, 0); // Master sent a request
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &req1, &first_txn));
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &req2, &second_txn));
 
-    // Simulate slave responding to the request
-    mock_slave_respond();
+    (void)mb_client_poll(&client_);
 
-    // Poll to process the response
-    pollMaster(10);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    auto len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(len, 0U);
 
-    // Retrieve data
-    int16_t read_data[10];
-    uint16_t count = modbus_client_get_read_data(&g_modbus_ctx, read_data, 10);
-    EXPECT_EQ(count, 2);
-    EXPECT_EQ(read_data[0], 0x0000); // (0x0000 + 0) * 0x100 + 0 = 0x0000
-    EXPECT_EQ(read_data[1], 0x0101); // (0x0000 + 1) * 0x100 + 1 = 0x0101
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_size_t resp_len = 0U;
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+    for (int i = 0; i < 8 && !first.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
+
+    EXPECT_TRUE(first.invoked);
+    EXPECT_EQ(MB_OK, first.status);
+    EXPECT_EQ(3U, first.response.payload_len);
+
+    len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(len, 0U);
+
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+    for (int i = 0; i < 8 && !second.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
+
+    EXPECT_TRUE(second.invoked);
+    EXPECT_EQ(MB_OK, second.status);
+    EXPECT_EQ(3U, second.response.payload_len);
 }
 
-// TEST_F(ModbusMasterTest, WriteSingleRegisterValid) {
-//     // Assume that writing register 0x0001 with value 0x1234
+TEST_F(MbClientTest, CancelTransaction)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
 
-//     // Send write single register request
-//     uint16_t reg_addr = 0x0001;
-//     uint16_t reg_val = 0x1234;
-//     modbus_error_t err = modbus_client_write_single_register(&g_modbus_ctx, 0x01, reg_addr, reg_val);
-//     EXPECT_EQ(err, MODBUS_ERROR_NONE);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_cancel(&client_, txn));
+    (void)mb_client_poll(&client_);
 
-//     // Poll to send the request
-//     pollMaster(1);
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MODBUS_ERROR_CANCELLED, capture.status);
+}
 
-//     // Check that something was sent
-//     uint8_t tx_buf[256];
-//     uint16_t tx_len = mock_get_tx_data(tx_buf, sizeof(tx_buf));
-//     EXPECT_GT(tx_len, 0); // Master sent a request
+TEST_F(MbClientTest, CancelQueuedTransaction)
+{
+    CallbackCapture first{};
+    CallbackCapture second{};
+    mb_client_txn_t *first_txn = nullptr;
+    mb_client_txn_t *second_txn = nullptr;
 
-//     // Simulate slave responding to the write request by echoing back the request
-//     mock_slave_respond();
+    auto req1 = make_request(0x0000, 0x0001, &first);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &req1, &first_txn));
+    (void)mb_client_poll(&client_);
 
-//     // Poll to process the response
-//     pollMaster(10);
+    auto req2 = make_request(0x0004, 0x0001, &second);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &req2, &second_txn));
+    ASSERT_NE(first_txn, second_txn);
 
-//     // Since it's a write, the master might not have data to read, but could have status
-//     // Depending on implementation, check for success or status
-//     // For simplicity, check that no data was read
-//     int16_t read_data[10];
-//     uint16_t count = modbus_master_get_read_data(&g_modbus_ctx, read_data, 10);
-//     EXPECT_EQ(count, 0); // No data read for write
-// }
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_cancel(&client_, second_txn));
+    EXPECT_TRUE(second.invoked);
+    EXPECT_EQ(MODBUS_ERROR_CANCELLED, second.status);
 
-// TEST_F(ModbusMasterTest, ExceptionResponse) {
-//     // Send a read holding registers request with invalid address to trigger exception
-//     modbus_error_t err = modbus_client_read_holding_registers(&g_modbus_ctx, 0x01, 0xFFFF, 1); // Invalid address
-//     EXPECT_EQ(err, MODBUS_ERROR_NONE);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    auto tx_len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(tx_len, 0U);
 
-//     // Poll to send the request
-//     pollMaster(1);
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_size_t resp_len = 0U;
+    build_read_response(response_adu, resp_frame, resp_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
 
-//     // Check that something was sent
-//     uint8_t tx_buf[256];
-//     uint16_t tx_len = mock_get_tx_data(tx_buf, sizeof(tx_buf));
-//     EXPECT_GT(tx_len, 0); // Master sent a request
+    for (int i = 0; i < 8 && !first.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
 
-//     // Simulate slave responding with exception
-//     // Build exception response: address, function + 0x80, exception code
-//     uint8_t exc_payload = 0x02; // Exception code: Illegal Data Address
-//     uint8_t exc_frame[256];
-//     uint16_t exc_len = modbus_build_rtu_frame(0x01, 0x83, &exc_payload, 1, exc_frame, sizeof(exc_frame)); // 0x03 + 0x80 = 0x83
-//     ASSERT_GT(exc_len, 0);
+    EXPECT_TRUE(first.invoked);
+    EXPECT_EQ(MB_OK, first.status);
+}
 
-//     mock_inject_rx_data(exc_frame, exc_len);
+TEST_F(MbClientTest, RetryBackoffDelaysResend)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
 
-//     // Poll to process the response
-//     pollMaster(10);
+    auto request = make_request(0x0000, 0x0001, &capture);
+    request.timeout_ms = 10U;
+    request.retry_backoff_ms = 40U;
+    request.max_retries = 1U;
 
-//     // Depending on implementation, the master might have a way to report errors
-//     // Since we don't have access to internal states, we could check that no data was read
-//     int16_t read_data[10];
-//     uint16_t count = modbus_master_get_read_data(&g_modbus_ctx, read_data, 10);
-//     EXPECT_EQ(count, 0); // No data read due to exception
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
 
-//     // Alternatively, if the master has error reporting mechanisms, check them
-// }
+    (void)mb_client_poll(&client_);
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    auto len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(len, 0U);
+    mock_clear_tx_buffer();
+
+    mock_advance_time(11U);
+    (void)mb_client_poll(&client_);
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+    EXPECT_FALSE(capture.invoked);
+
+    mock_advance_time(19U);
+    (void)mb_client_poll(&client_);
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+
+    mock_advance_time(25U);
+    (void)mb_client_poll(&client_);
+    EXPECT_GT(mock_get_tx_data(frame.data(), frame.size()), 0U);
+    mock_clear_tx_buffer();
+
+    mock_advance_time(21U);
+    (void)mb_client_poll(&client_);
+
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MODBUS_ERROR_TIMEOUT, capture.status);
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+}
+
+TEST_F(MbClientTest, StressSequentialTransactions)
+{
+    constexpr int kTotal = 1000;
+    std::vector<CallbackCapture> captures(kTotal);
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> tx_frame{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_adu_view_t response_adu{};
+
+    for (int i = 0; i < kTotal; ++i) {
+        mb_client_txn_t *txn = nullptr;
+        auto request = make_request(static_cast<uint16_t>(i & 0x00FF), 0x0001, &captures[i]);
+        request.timeout_ms = 20U;
+        request.max_retries = 0U;
+
+        ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+        (void)mb_client_poll(&client_);
+        auto len = mock_get_tx_data(tx_frame.data(), tx_frame.size());
+        ASSERT_GT(len, 0U);
+        mock_clear_tx_buffer();
+
+        mb_size_t resp_len = 0U;
+        build_read_response(response_adu, resp_frame, resp_len, 1U);
+        ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+
+        int guard = 0;
+        while (!captures[i].invoked && guard < 12) {
+            (void)mb_client_poll(&client_);
+            mock_advance_time(1U);
+            ++guard;
+        }
+
+        EXPECT_TRUE(captures[i].invoked);
+        EXPECT_EQ(MB_OK, captures[i].status);
+    }
+
+    EXPECT_TRUE(mb_client_is_idle(&client_));
+    EXPECT_EQ(0U, mb_client_pending(&client_));
+}
+
+    class MbClientTcpTest : public ::testing::Test {
+    protected:
+        void SetUp() override
+        {
+            modbus_transport_init_mock(&legacy_transport_);
+            iface_ = mock_transport_get_iface();
+            ASSERT_NE(nullptr, iface_);
+            ASSERT_EQ(MB_OK, mb_client_init_tcp(&client_, iface_, txn_pool_.data(), txn_pool_.size()));
+            mb_client_set_watchdog(&client_, 200U);
+            mock_clear_tx_buffer();
+        }
+
+        void TearDown() override
+        {
+            mock_clear_tx_buffer();
+        }
+
+        static mb_client_request_t make_request(uint16_t start, uint16_t qty, CallbackCapture *cap)
+        {
+            request_payload_[0] = static_cast<mb_u8>(start >> 8);
+            request_payload_[1] = static_cast<mb_u8>(start & 0xFFU);
+            request_payload_[2] = static_cast<mb_u8>(qty >> 8);
+            request_payload_[3] = static_cast<mb_u8>(qty & 0xFFU);
+
+            mb_client_request_t req{};
+            req.request.unit_id = 0x22U;
+            req.request.function = MODBUS_FUNC_READ_HOLDING_REGISTERS;
+            req.flags = 0U;
+            req.request.payload = request_payload_;
+            req.request.payload_len = 4U;
+            req.timeout_ms = 40U;
+            req.retry_backoff_ms = 10U;
+            req.max_retries = 1U;
+            req.callback = client_callback;
+            req.user_ctx = cap;
+            return req;
+        }
+
+        static mb_u8 request_payload_[4];
+
+        mb_client_t client_{};
+        std::array<mb_client_txn_t, 4> txn_pool_{};
+        modbus_transport_t legacy_transport_{};
+        const mb_transport_if_t *iface_{nullptr};
+    };
+
+    mb_u8 MbClientTcpTest::request_payload_[4] = {0};
+
+    TEST_F(MbClientTcpTest, SendsAndReceivesMbapFrame)
+    {
+        CallbackCapture capture{};
+        mb_client_txn_t *txn = nullptr;
+        auto request = make_request(0x0000, 0x0002, &capture);
+        ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, &txn));
+
+        (void)mb_client_poll(&client_);
+
+        std::array<mb_u8, MB_TCP_BUFFER_SIZE> tx_frame{};
+        const auto tx_len = mock_get_tx_data(tx_frame.data(), static_cast<uint16_t>(tx_frame.size()));
+        ASSERT_EQ(12U, tx_len);
+
+        const mb_u16 tid = static_cast<mb_u16>((tx_frame[0] << 8U) | tx_frame[1]);
+        EXPECT_NE(0U, tid);
+        EXPECT_EQ(0x00U, tx_frame[2]);
+        EXPECT_EQ(0x00U, tx_frame[3]);
+        EXPECT_EQ(0x00U, tx_frame[4]);
+        EXPECT_EQ(0x06U, tx_frame[5]);
+        EXPECT_EQ(request.request.unit_id, tx_frame[6]);
+        EXPECT_EQ(request.request.function, tx_frame[7]);
+        EXPECT_EQ(tid, txn->tid);
+
+        mock_clear_tx_buffer();
+
+        const mb_u8 response_payload[]{0x04U, 0x00U, 0x64U, 0x00U, 0x65U};
+        const mb_u16 length_field = static_cast<mb_u16>(1U + 1U + MB_COUNTOF(response_payload));
+        constexpr mb_size_t kResponseSize = 6U + 1U + 1U + MB_COUNTOF(response_payload);
+        std::array<mb_u8, kResponseSize> response_frame{};
+        response_frame[0] = static_cast<mb_u8>(tid >> 8U);
+        response_frame[1] = static_cast<mb_u8>(tid & 0xFFU);
+        response_frame[2] = 0x00U;
+        response_frame[3] = 0x00U;
+        response_frame[4] = static_cast<mb_u8>(length_field >> 8U);
+        response_frame[5] = static_cast<mb_u8>(length_field & 0xFFU);
+        response_frame[6] = request.request.unit_id;
+        response_frame[7] = request.request.function;
+        std::memcpy(&response_frame[8], response_payload, MB_COUNTOF(response_payload));
+
+        ASSERT_EQ(0, mock_inject_rx_data(response_frame.data(), static_cast<uint16_t>(response_frame.size())));
+
+        for (int i = 0; i < 10 && !capture.invoked; ++i) {
+            (void)mb_client_poll(&client_);
+            mock_advance_time(1U);
+        }
+
+        EXPECT_TRUE(capture.invoked);
+        EXPECT_EQ(MB_OK, capture.status);
+        EXPECT_EQ(request.request.unit_id, capture.response.unit_id);
+        EXPECT_EQ(request.request.function, capture.response.function);
+        ASSERT_EQ(static_cast<mb_size_t>(MB_COUNTOF(response_payload)), capture.response.payload_len);
+        for (size_t i = 0; i < MB_COUNTOF(response_payload); ++i) {
+            EXPECT_EQ(response_payload[i], capture.response.payload[i]);
+        }
+    }
+
+    TEST_F(MbClientTcpTest, RetriesPreserveTransactionId)
+    {
+        CallbackCapture capture{};
+        mb_client_txn_t *txn = nullptr;
+        auto request = make_request(0x0010, 0x0001, &capture);
+        request.timeout_ms = 5U;
+        request.retry_backoff_ms = 1U;
+        request.max_retries = 1U;
+
+        ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, &txn));
+
+        (void)mb_client_poll(&client_);
+        std::array<mb_u8, MB_TCP_BUFFER_SIZE> frame{};
+        auto len = mock_get_tx_data(frame.data(), static_cast<uint16_t>(frame.size()));
+        ASSERT_EQ(12U, len);
+        const mb_u16 tid = static_cast<mb_u16>((frame[0] << 8U) | frame[1]);
+        EXPECT_EQ(tid, txn->tid);
+        mock_clear_tx_buffer();
+
+        mock_advance_time(request.timeout_ms + 1U);
+        (void)mb_client_poll(&client_);
+        EXPECT_EQ(0U, mock_get_tx_data(frame.data(), static_cast<uint16_t>(frame.size())));
+
+        mock_advance_time(1U);
+        (void)mb_client_poll(&client_);
+        len = mock_get_tx_data(frame.data(), static_cast<uint16_t>(frame.size()));
+        ASSERT_EQ(12U, len);
+        const mb_u16 retry_tid = static_cast<mb_u16>((frame[0] << 8U) | frame[1]);
+        EXPECT_EQ(tid, retry_tid);
+        EXPECT_EQ(tid, txn->tid);
+
+        const mb_u8 response_payload[]{0x02U, 0x00U, 0xAAU};
+        const mb_u16 length_field = static_cast<mb_u16>(1U + 1U + MB_COUNTOF(response_payload));
+        const mb_size_t frame_size = static_cast<mb_size_t>(6U + length_field);
+        std::array<mb_u8, 16> response{};
+        response[0] = static_cast<mb_u8>(tid >> 8U);
+        response[1] = static_cast<mb_u8>(tid & 0xFFU);
+        response[2] = 0x00U;
+        response[3] = 0x00U;
+        response[4] = static_cast<mb_u8>(length_field >> 8U);
+        response[5] = static_cast<mb_u8>(length_field & 0xFFU);
+        response[6] = request.request.unit_id;
+        response[7] = request.request.function;
+        std::memcpy(&response[8], response_payload, MB_COUNTOF(response_payload));
+
+        mock_clear_tx_buffer();
+        ASSERT_EQ(0, mock_inject_rx_data(response.data(), static_cast<uint16_t>(frame_size)));
+
+        for (int i = 0; i < 10 && !capture.invoked; ++i) {
+            (void)mb_client_poll(&client_);
+            mock_advance_time(1U);
+        }
+
+        EXPECT_TRUE(capture.invoked);
+        EXPECT_EQ(MB_OK, capture.status);
+    }
+
+TEST_F(MbClientTest, RecoversFromSinglePacketLoss)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    request.timeout_ms = 15U;
+    request.retry_backoff_ms = 30U;
+    request.max_retries = 2U;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> resp_frame{};
+    mb_adu_view_t response_adu{};
+
+    (void)mb_client_poll(&client_);
+    auto first_len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(first_len, 0U);
+    mock_clear_tx_buffer();
+
+    mock_advance_time(16U);
+    (void)mb_client_poll(&client_);
+
+    bool resent = false;
+    for (int step = 0; step < 24 && !resent; ++step) {
+        mock_advance_time(5U);
+        (void)mb_client_poll(&client_);
+        auto resend_len = mock_get_tx_data(frame.data(), frame.size());
+        if (resend_len > 0U) {
+            resent = true;
+            mock_clear_tx_buffer();
+
+            mb_size_t resp_len = 0U;
+            build_read_response(response_adu, resp_frame, resp_len, 1U);
+            ASSERT_EQ(0, mock_inject_rx_data(resp_frame.data(), (uint16_t)resp_len));
+        }
+    }
+
+    ASSERT_TRUE(resent);
+
+    for (int i = 0; i < 16 && !capture.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(2U);
+    }
+
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MB_OK, capture.status);
+}
+
+} // namespace

@@ -31,6 +31,9 @@
 #include <modbus/base.h>
 #include <modbus/transport.h>
 #include <modbus/transport_if.h>
+#include <modbus/transport/rtu.h>
+#include <modbus/transport/tcp.h>
+#include <modbus/transport/tcp_multi.h>
 #include <modbus/frame.h>
 #include <modbus/utils.h>
 #include <modbus/fsm.h>

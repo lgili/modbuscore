@@ -338,7 +338,7 @@ mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_func
         return MODBUS_ERROR_INVALID_ARGUMENT;
     }
 
-    mb_u8 function = (mb_u8)(pdu[0] & (mb_u8)~MB_PDU_EXCEPTION_BIT);
+    mb_u8 function = (mb_u8)(pdu[0] & 0x7FU);
     mb_u8 code = pdu[1];
 
     if (code < MB_EX_ILLEGAL_FUNCTION || code > MB_EX_SERVER_DEVICE_FAILURE) {

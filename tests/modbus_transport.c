@@ -236,6 +236,10 @@ const mb_transport_if_t *mock_transport_get_iface(void);
  * @return int 0 on success, -1 if not enough space.
  */
 int mock_inject_rx_data(const uint8_t *data, uint16_t length) {
+    if (rx_mock_index == rx_mock_count) {
+        rx_mock_index = 0;
+        rx_mock_count = 0;
+    }
     if (length > (MOCK_BUFFER_SIZE - rx_mock_count)) {
         return -1; // No space
     }

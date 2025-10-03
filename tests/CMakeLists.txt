@@ -49,6 +49,11 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_pdu_codec.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_err.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_transport.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_transport.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_multi.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_throughput.cpp
 )
 
 if(MODBUS_ENABLE_INTEGRATION_TESTS)
@@ -56,6 +61,7 @@ if(MODBUS_ENABLE_INTEGRATION_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_client.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_server.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_client_server_integration.cpp
   )
 endif()
 

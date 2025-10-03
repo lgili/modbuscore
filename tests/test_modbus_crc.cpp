@@ -35,10 +35,9 @@ TEST(ModbusCrcTest, BasicCrcCheck) {
 
 // Teste com dados vazios
 TEST(ModbusCrcTest, EmptyData) {
-    uint8_t data[1]; // conteúdo irrelevante
-    // Se length=0, CRC deve iniciar em 0xFFFF e não alterar, então não há input.
-    uint16_t crc_bit_by_bit = modbus_calculate_crc(data, 0);
-    uint16_t crc_table = modbus_crc_with_table(data, 0);
+    static const uint8_t dummy[] = {0};
+    uint16_t crc_bit_by_bit = modbus_calculate_crc(dummy, 0);
+    uint16_t crc_table = modbus_crc_with_table(dummy, 0);
 
     // Com length=0, o CRC final não é definido especificamente, mas espera-se
     // que retorne o valor inicial 0xFFFF após processamento sem dados?

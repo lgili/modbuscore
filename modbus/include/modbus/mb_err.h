@@ -33,6 +33,8 @@ typedef enum modbus_error {
     MODBUS_ERROR_OTHER_REQUESTS = -6,     /**< Received other types of requests. */
     MODBUS_OTHERS_REQUESTS = -7,          /**< Placeholder for additional request types. */
     MODBUS_ERROR_OTHER = -8,              /**< Other unspecified error. */
+    MODBUS_ERROR_CANCELLED = -9,          /**< Operation was cancelled. */
+    MODBUS_ERROR_NO_RESOURCES = -10,      /**< Requested resource could not be reserved. */
 
     /* Modbus exceptions (positive values) */
     MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,      /**< Exception 1: Illegal function. */
@@ -54,6 +56,8 @@ typedef modbus_error_t mb_err_t;
 #define MB_ERR_INVALID_REQUEST      MODBUS_ERROR_INVALID_REQUEST
 #define MB_ERR_OTHER_REQUESTS       MODBUS_ERROR_OTHER_REQUESTS
 #define MB_ERR_OTHER                MODBUS_ERROR_OTHER
+#define MB_ERR_CANCELLED            MODBUS_ERROR_CANCELLED
+#define MB_ERR_NO_RESOURCES         MODBUS_ERROR_NO_RESOURCES
 
 #define MB_EX_ILLEGAL_FUNCTION      MODBUS_EXCEPTION_ILLEGAL_FUNCTION
 #define MB_EX_ILLEGAL_DATA_ADDRESS  MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS
