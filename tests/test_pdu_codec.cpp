@@ -9,6 +9,313 @@ extern "C" {
 
 namespace {
 
+TEST(PduFc01, BuildRequestEncodesFields)
+{
+    mb_u8 buffer[5]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_coils_request(buffer, sizeof buffer, 0x0013U, 10U));
+
+    const std::array<mb_u8, 5> expected{MB_PDU_FC_READ_COILS, 0x00U, 0x13U, 0x00U, 0x0AU};
+    EXPECT_TRUE(std::equal(expected.begin(), expected.end(), std::begin(buffer)));
+}
+
+TEST(PduFc01, BuildRequestRejectsInvalidQuantity)
+{
+    mb_u8 buffer[5]{};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_read_coils_request(buffer, sizeof buffer, 0x0000U, 0U));
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_build_read_coils_request(buffer, sizeof buffer, 0x0000U, MB_PDU_FC01_MAX_COILS + 1U));
+}
+
+TEST(PduFc01, ParseRequest)
+{
+    const std::array<mb_u8, 5> frame{MB_PDU_FC_READ_COILS, 0x00U, 0x20U, 0x00U, 0x10U};
+    mb_u16 address = 0U;
+    mb_u16 quantity = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_coils_request(frame.data(), frame.size(), &address, &quantity));
+
+    EXPECT_EQ(0x0020U, address);
+    EXPECT_EQ(0x0010U, quantity);
+}
+
+TEST(PduFc01, BuildResponsePacksBits)
+{
+    mb_u8 buffer[2 + 2]{};
+    const std::array<bool, 10> coils{true, false, true, true, false, false, false, true, true, false};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_coils_response(buffer, sizeof buffer, coils.data(), static_cast<mb_u16>(coils.size())));
+
+    EXPECT_EQ(MB_PDU_FC_READ_COILS, buffer[0]);
+    EXPECT_EQ(2U, buffer[1]);
+    EXPECT_EQ(0x8DU, buffer[2]);
+    EXPECT_EQ(0x01U, buffer[3]);
+}
+
+TEST(PduFc01, ParseResponse)
+{
+    const std::array<mb_u8, 4> frame{MB_PDU_FC_READ_COILS, 0x02U, 0xCDU, 0x01U};
+    const mb_u8 *payload = nullptr;
+    mb_u8 byte_count = 0U;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_coils_response(frame.data(), frame.size(), &payload, &byte_count));
+
+    ASSERT_NE(nullptr, payload);
+    EXPECT_EQ(2U, byte_count);
+    EXPECT_EQ(frame.data() + 2, payload);
+}
+
+TEST(PduFc02, BuildRequestEncodesFields)
+{
+    mb_u8 buffer[5]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_discrete_inputs_request(buffer, sizeof buffer, 0x0100U, 16U));
+
+    const std::array<mb_u8, 5> expected{MB_PDU_FC_READ_DISCRETE_INPUTS, 0x01U, 0x00U, 0x00U, 0x10U};
+    EXPECT_TRUE(std::equal(expected.begin(), expected.end(), std::begin(buffer)));
+}
+
+TEST(PduFc02, BuildResponsePacksBits)
+{
+    mb_u8 buffer[2 + 1]{};
+    const std::array<bool, 8> inputs{true, true, false, false, true, false, true, false};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_discrete_inputs_response(buffer, sizeof buffer, inputs.data(), static_cast<mb_u16>(inputs.size())));
+
+    EXPECT_EQ(MB_PDU_FC_READ_DISCRETE_INPUTS, buffer[0]);
+    EXPECT_EQ(1U, buffer[1]);
+    EXPECT_EQ(0x53U, buffer[2]);
+}
+
+TEST(PduFc02, ParseResponseRejectsLengthMismatch)
+{
+    const std::array<mb_u8, 3> frame{MB_PDU_FC_READ_DISCRETE_INPUTS, 0x02U, 0xAAU};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_read_discrete_inputs_response(frame.data(), frame.size(), nullptr, nullptr));
+}
+
+TEST(PduFc04, BuildRequestEncodesFields)
+{
+    mb_u8 buffer[5]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_input_request(buffer, sizeof buffer, 0x0001U, 4U));
+
+    const std::array<mb_u8, 5> expected{MB_PDU_FC_READ_INPUT_REGISTERS, 0x00U, 0x01U, 0x00U, 0x04U};
+    EXPECT_TRUE(std::equal(expected.begin(), expected.end(), std::begin(buffer)));
+}
+
+TEST(PduFc04, ParseRequest)
+{
+    const std::array<mb_u8, 5> frame{MB_PDU_FC_READ_INPUT_REGISTERS, 0x00U, 0x10U, 0x00U, 0x02U};
+    mb_u16 address = 0U;
+    mb_u16 quantity = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_input_request(frame.data(), frame.size(), &address, &quantity));
+
+    EXPECT_EQ(0x0010U, address);
+    EXPECT_EQ(0x0002U, quantity);
+}
+
+TEST(PduFc04, BuildResponse)
+{
+    mb_u8 buffer[2 + 4]{};
+    const std::array<mb_u16, 2> regs{0x1111U, 0x2222U};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_input_response(buffer, sizeof buffer, regs.data(), static_cast<mb_u16>(regs.size())));
+
+    EXPECT_EQ(MB_PDU_FC_READ_INPUT_REGISTERS, buffer[0]);
+    EXPECT_EQ(4U, buffer[1]);
+    EXPECT_EQ(0x11U, buffer[2]);
+    EXPECT_EQ(0x11U, buffer[3]);
+    EXPECT_EQ(0x22U, buffer[4]);
+    EXPECT_EQ(0x22U, buffer[5]);
+}
+
+TEST(PduFc04, ParseResponse)
+{
+    const std::array<mb_u8, 6> frame{MB_PDU_FC_READ_INPUT_REGISTERS, 0x04U, 0x12U, 0x34U, 0x56U, 0x78U};
+    const mb_u8 *payload = nullptr;
+    mb_u16 count = 0U;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_input_response(frame.data(), frame.size(), &payload, &count));
+
+    ASSERT_NE(nullptr, payload);
+    EXPECT_EQ(2U, count);
+    EXPECT_EQ(frame.data() + 2, payload);
+}
+
+TEST(PduFc05, BuildAndParse)
+{
+    mb_u8 buffer[5]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_write_single_coil_request(buffer, sizeof buffer, 0x0005U, true));
+
+    mb_u16 address = 0U;
+    bool state = false;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_write_single_coil_request(buffer, sizeof buffer, &address, &state));
+
+    EXPECT_EQ(0x0005U, address);
+    EXPECT_TRUE(state);
+
+    state = false;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_write_single_coil_response(buffer, sizeof buffer, &address, &state));
+    EXPECT_TRUE(state);
+}
+
+TEST(PduFc05, ParseRejectsInvalidValue)
+{
+    const std::array<mb_u8, 5> frame{MB_PDU_FC_WRITE_SINGLE_COIL, 0x00U, 0x01U, 0x12U, 0x34U};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_write_single_coil_request(frame.data(), frame.size(), nullptr, nullptr));
+}
+
+TEST(PduFc0F, BuildRequest)
+{
+    mb_u8 buffer[6 + 2]{};
+    const std::array<bool, 10> coils{true, false, true, false, true, false, false, true, true, false};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_write_multiple_coils_request(buffer, sizeof buffer, 0x0100U, coils.data(), static_cast<mb_u16>(coils.size())));
+
+    EXPECT_EQ(MB_PDU_FC_WRITE_MULTIPLE_COILS, buffer[0]);
+    EXPECT_EQ(0x01U, buffer[1]);
+    EXPECT_EQ(0x00U, buffer[2]);
+    EXPECT_EQ(0x00U, buffer[3]);
+    EXPECT_EQ(coils.size(), static_cast<size_t>(buffer[4]));
+    EXPECT_EQ(2U, buffer[5]);
+    EXPECT_EQ(0x95U, buffer[6]);
+    EXPECT_EQ(0x01U, buffer[7]);
+}
+
+TEST(PduFc0F, ParseRequest)
+{
+    const std::array<mb_u8, 7> frame{MB_PDU_FC_WRITE_MULTIPLE_COILS, 0x00U, 0x64U, 0x00U, 0x08U, 0x01U, 0xAAU};
+    mb_u16 addr = 0U;
+    mb_u16 count = 0U;
+    mb_u8 byte_count = 0U;
+    const mb_u8 *payload = nullptr;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_write_multiple_coils_request(frame.data(), frame.size(), &addr, &count, &byte_count, &payload));
+
+    EXPECT_EQ(0x0064U, addr);
+    EXPECT_EQ(8U, count);
+    EXPECT_EQ(1U, byte_count);
+    ASSERT_NE(nullptr, payload);
+    EXPECT_EQ(frame.data() + 6, payload);
+}
+
+TEST(PduFc0F, ParseRequestRejectsByteCountMismatch)
+{
+    const std::array<mb_u8, 7> frame{MB_PDU_FC_WRITE_MULTIPLE_COILS, 0x00U, 0x01U, 0x00U, 0x09U, 0x01U, 0xFFU};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_write_multiple_coils_request(frame.data(), frame.size(), nullptr, nullptr, nullptr, nullptr));
+}
+
+TEST(PduFc0F, BuildAndParseResponse)
+{
+    mb_u8 buffer[5]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_write_multiple_coils_response(buffer, sizeof buffer, 0x0002U, 8U));
+
+    mb_u16 addr = 0U;
+    mb_u16 count = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_write_multiple_coils_response(buffer, sizeof buffer, &addr, &count));
+
+    EXPECT_EQ(0x0002U, addr);
+    EXPECT_EQ(8U, count);
+}
+
+TEST(PduFc17, BuildRequest)
+{
+    mb_u8 buffer[10 + 4]{};
+    const std::array<mb_u16, 2> write_regs{0xAAAAU, 0x5555U};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_write_multiple_request(buffer, sizeof buffer,
+                                                        0x0010U, 2U,
+                                                        0x0020U, write_regs.data(), static_cast<mb_u16>(write_regs.size())));
+
+    EXPECT_EQ(MB_PDU_FC_READ_WRITE_MULTIPLE_REGISTERS, buffer[0]);
+    EXPECT_EQ(0x00U, buffer[1]);
+    EXPECT_EQ(0x10U, buffer[2]);
+    EXPECT_EQ(0x00U, buffer[3]);
+    EXPECT_EQ(0x02U, buffer[4]);
+    EXPECT_EQ(0x00U, buffer[5]);
+    EXPECT_EQ(0x20U, buffer[6]);
+    EXPECT_EQ(0x00U, buffer[7]);
+    EXPECT_EQ(write_regs.size(), static_cast<size_t>(buffer[8]));
+    EXPECT_EQ(4U, buffer[9]);
+}
+
+TEST(PduFc17, ParseRequest)
+{
+    const std::array<mb_u8, 14> frame{
+        MB_PDU_FC_READ_WRITE_MULTIPLE_REGISTERS,
+        0x00U, 0x08U,
+        0x00U, 0x02U,
+        0x00U, 0x20U,
+        0x00U, 0x02U,
+        0x04U,
+        0x12U, 0x34U,
+        0x56U, 0x78U};
+
+    mb_u16 read_addr = 0U;
+    mb_u16 read_qty = 0U;
+    mb_u16 write_addr = 0U;
+    mb_u16 write_qty = 0U;
+    const mb_u8 *payload = nullptr;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_write_multiple_request(frame.data(), frame.size(),
+                                                        &read_addr, &read_qty,
+                                                        &write_addr, &write_qty,
+                                                        &payload));
+
+    EXPECT_EQ(0x0008U, read_addr);
+    EXPECT_EQ(2U, read_qty);
+    EXPECT_EQ(0x0020U, write_addr);
+    EXPECT_EQ(2U, write_qty);
+    ASSERT_NE(nullptr, payload);
+    EXPECT_EQ(frame.data() + 10, payload);
+}
+
+TEST(PduFc17, BuildResponse)
+{
+    mb_u8 buffer[2 + 4]{};
+    const std::array<mb_u16, 2> read_regs{0x0F0FU, 0xF0F0U};
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_write_multiple_response(buffer, sizeof buffer, read_regs.data(), static_cast<mb_u16>(read_regs.size())));
+
+    EXPECT_EQ(MB_PDU_FC_READ_WRITE_MULTIPLE_REGISTERS, buffer[0]);
+    EXPECT_EQ(4U, buffer[1]);
+}
+
+TEST(PduFc17, ParseResponse)
+{
+    const std::array<mb_u8, 6> frame{MB_PDU_FC_READ_WRITE_MULTIPLE_REGISTERS, 0x04U, 0xAAU, 0xBBU, 0xCCU, 0xDDU};
+    const mb_u8 *payload = nullptr;
+    mb_u16 count = 0U;
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_write_multiple_response(frame.data(), frame.size(), &payload, &count));
+
+    ASSERT_NE(nullptr, payload);
+    EXPECT_EQ(2U, count);
+    EXPECT_EQ(frame.data() + 2, payload);
+}
+
+
 TEST(PduFc03, BuildRequestEncodesFields)
 {
     mb_u8 buffer[5]{};

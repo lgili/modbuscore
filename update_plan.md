@@ -104,6 +104,7 @@ Cada etapa tem Objetivo, Entregáveis e Gate (aceitação). Só segue se o gate 
 
 10) ASCII (opcional) + FCs extras
 	•	Entregáveis: ASCII framing; FC 01/02/04/05/0F/17 se necessário.
+	•	Status: 🔄 Helpers das FCs adicionados (req/resp validados); ASCII ainda pendente.
 	•	Gate: mesma bateria de testes do RTU/TCP.
 
 11) Observabilidade & Debug

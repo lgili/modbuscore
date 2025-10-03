@@ -17,6 +17,8 @@ HALs can evolve independently.
   user callbacks or static storage, with strict bounds checking (Gate 6).
 - **RTU and TCP transports** – shared MBAP encoder/decoder, optional
   multi-connection helper for Modbus TCP, and reusable RTU framing utilities.
+- **Extended PDU codec** – supports FC 01/02/03/04/05/06/0F/10/17 helpers with
+  strict validation, covering the extra function codes from Gate 10.
 - **Backpressure & observability** – configurable queue capacity, per-function
   timeouts, poison-pill flush and latency/response metrics for both client and
   server paths (Gate 8).
@@ -43,6 +45,7 @@ HALs can evolve independently.
 | 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
 | 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
 | 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
+| 10 | Extra FCs (01/02/04/05/0F/17) | ⏳ (ASCII framing próximo) |
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
 hardening.  See `update_plan.md` for the full roadmap.
