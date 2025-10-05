@@ -18,7 +18,6 @@ mb_diag_err_slot_t mb_diag_slot_from_error(mb_err_t err)
     case MB_ERR_INVALID_REQUEST:
         return MB_DIAG_ERR_SLOT_INVALID_REQUEST;
     case MB_ERR_OTHER_REQUESTS:
-        return MB_DIAG_ERR_SLOT_OTHER_REQUESTS;
     case MODBUS_OTHERS_REQUESTS:
         return MB_DIAG_ERR_SLOT_OTHER_REQUESTS;
     case MB_ERR_OTHER:

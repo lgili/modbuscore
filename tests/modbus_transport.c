@@ -198,12 +198,14 @@ static void mock_restart_uart(void) {
     tx_mock_count = 0;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static uint8_t mock_write_gpio(uint8_t gpio, uint8_t value) {
     (void)gpio;
     (void)value;
     // No-op. Return success.
     return 0;
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 static uint8_t mock_parse_bootloader_request(uint8_t *buffer, uint16_t *buffer_size) {
     (void)buffer;

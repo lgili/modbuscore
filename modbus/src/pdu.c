@@ -6,6 +6,8 @@
 
 #include <string.h>
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+
 static void mb_pdu_write_u16(mb_u8 *out, mb_u16 value)
 {
     out[0] = (mb_u8)((value >> 8) & 0xFFU);
@@ -980,7 +982,6 @@ mb_err_t mb_pdu_parse_read_write_multiple_response(const mb_u8 *pdu, mb_size_t l
 
     return MODBUS_ERROR_NONE;
 }
-
 mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code)
 {
     if (out == NULL) {
@@ -1031,3 +1032,5 @@ mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_func
 
     return MODBUS_ERROR_NONE;
 }
+
+// NOLINTEND(bugprone-easily-swappable-parameters)

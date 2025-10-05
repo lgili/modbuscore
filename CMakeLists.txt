@@ -32,6 +32,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+# Ensure POSIX feature-test macros expose required APIs on Unix-like toolchains.
+if(UNIX AND NOT APPLE)
+    add_compile_definitions(
+        _POSIX_C_SOURCE=200809L
+        _DEFAULT_SOURCE
+    )
+endif()
+
 # Propagate warning configuration
 if(MSVC)
     set(MODBUS_WARN_FLAGS /W4 /permissive-)
@@ -136,6 +144,10 @@ if(MODBUS_ENABLE_TESTS)
     add_subdirectory(tests)
 else()
     set(BUILD_TESTING OFF CACHE BOOL "Enable CTest targets" FORCE)
+endif()
+
+if(MODBUS_BUILD_FUZZERS AND NOT MODBUS_ENABLE_TESTS)
+    add_subdirectory(tests/fuzz)
 endif()
 
 # ---------------------------------------------------------------------------

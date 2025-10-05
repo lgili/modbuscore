@@ -49,7 +49,6 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_pdu_codec.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_log.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_err.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_port_posix.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_bare.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
@@ -58,6 +57,10 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_multi.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_throughput.cpp
 )
+
+if(NOT WIN32)
+  list(APPEND TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_port_posix.cpp)
+endif()
 
 if(MODBUS_ENABLE_INTEGRATION_TESTS)
   list(APPEND TEST_SOURCES

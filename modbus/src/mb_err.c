@@ -16,7 +16,6 @@ const char *mb_err_str(mb_err_t err)
     case MB_ERR_INVALID_REQUEST:
         return "Invalid request";
     case MB_ERR_OTHER_REQUESTS:
-        return "Other request";
     case MODBUS_OTHERS_REQUESTS:
         return "Other request";
     case MB_ERR_OTHER:

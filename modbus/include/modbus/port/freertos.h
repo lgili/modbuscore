@@ -75,6 +75,7 @@ typedef struct mb_port_freertos_transport {
  * @retval MB_OK                 Adapter initialised successfully.
  * @retval MB_ERR_INVALID_ARGUMENT Missing stream handles or callbacks.
  */
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
                                          void *tx_stream,
                                          void *rx_stream,
@@ -84,6 +85,7 @@ mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
                                          mb_port_freertos_yield_hook_fn yield_fn,
                                          uint32_t tick_rate_hz,
                                          uint32_t max_block_ticks);
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 /**
  * @brief Updates the maximum number of ticks each I/O call may block.

@@ -31,8 +31,8 @@ static mb_err_t posix_socket_make_nonblocking(int fd)
 
 static mb_time_ms_t posix_monotonic_ms(void)
 {
-    struct timespec ts;
 #if defined(CLOCK_MONOTONIC)
+    struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
         return (mb_time_ms_t)ts.tv_sec * 1000ULL + (mb_time_ms_t)(ts.tv_nsec / 1000000ULL);
     }
@@ -164,6 +164,7 @@ const mb_transport_if_t *mb_port_posix_socket_iface(mb_port_posix_socket_t *sock
     return &sock->iface;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_port_posix_tcp_client(mb_port_posix_socket_t *sock,
                                   const char *host,
                                   uint16_t port,
@@ -236,3 +237,4 @@ mb_err_t mb_port_posix_tcp_client(mb_port_posix_socket_t *sock,
     freeaddrinfo(res);
     return result;
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)

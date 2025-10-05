@@ -74,10 +74,12 @@ const mb_transport_if_t *mb_port_posix_socket_iface(mb_port_posix_socket_t *sock
  * @retval MB_ERR_INVALID_ARGUMENT Invalid parameter.
  * @retval MB_ERR_TRANSPORT       Connect failed or timed out.
  */
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_port_posix_tcp_client(mb_port_posix_socket_t *sock,
                                   const char *host,
                                   uint16_t port,
                                   mb_time_ms_t timeout_ms);
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 #ifdef __cplusplus
 }

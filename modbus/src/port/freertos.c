@@ -96,6 +96,7 @@ static void freertos_yield(void *ctx)
     }
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
                                          void *tx_stream,
                                          void *rx_stream,
@@ -134,6 +135,7 @@ mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
 
     return MB_OK;
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 void mb_port_freertos_transport_set_block_ticks(mb_port_freertos_transport_t *port, uint32_t ticks)
 {

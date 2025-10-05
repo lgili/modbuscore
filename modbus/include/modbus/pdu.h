@@ -53,6 +53,7 @@ extern "C" {
 #define MB_PDU_FC17_MIN_WRITE_REGISTERS  1U
 #define MB_PDU_FC17_MAX_WRITE_REGISTERS  121U
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_pdu_build_read_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
 mb_err_t mb_pdu_parse_read_coils_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_quantity);
 
@@ -106,6 +107,7 @@ mb_err_t mb_pdu_parse_read_write_multiple_request(const mb_u8 *pdu, mb_size_t le
 
 mb_err_t mb_pdu_build_read_write_multiple_response(mb_u8 *out, mb_size_t out_cap, const mb_u16 *read_registers, mb_u16 read_quantity);
 mb_err_t mb_pdu_parse_read_write_multiple_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u16 *out_register_count);
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 #ifdef __cplusplus
 }

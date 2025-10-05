@@ -1,4 +1,5 @@
 #include <array>
+#include <atomic>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -78,14 +79,21 @@ TEST(PosixPortTest, TcpClientConnects)
     ASSERT_EQ(0, getsockname(listen_fd, reinterpret_cast<sockaddr *>(&addr), &len)) << strerror(errno);
     const uint16_t port = ntohs(addr.sin_port);
 
-    int accepted_fd = -1;
+    constexpr std::array<char, 3> greeting{{0x01, 0x02, 0x03}};
+    std::atomic<int> accepted_fd{-1};
+    std::atomic<ssize_t> write_result{-1};
+    std::atomic<int> write_errno{0};
     std::thread server_thread([&]() {
         sockaddr_in peer{};
         socklen_t peer_len = sizeof(peer);
-        accepted_fd = accept(listen_fd, reinterpret_cast<sockaddr *>(&peer), &peer_len);
-        if (accepted_fd >= 0) {
-            const char greeting[] = {0x01, 0x02, 0x03};
-            (void)write(accepted_fd, greeting, sizeof(greeting));
+        int fd = accept(listen_fd, reinterpret_cast<sockaddr *>(&peer), &peer_len);
+        accepted_fd = fd;
+        if (fd >= 0) {
+            ssize_t rc = write(fd, greeting.data(), greeting.size());
+            if (rc < 0) {
+                write_errno = errno;
+            }
+            write_result = rc;
         }
     });
 
@@ -95,7 +103,12 @@ TEST(PosixPortTest, TcpClientConnects)
     server_thread.join();
     close(listen_fd);
 
-    ASSERT_GE(accepted_fd, 0);
+    const int accepted = accepted_fd.load();
+    ASSERT_GE(accepted, 0);
+
+    const ssize_t wrote = write_result.load();
+    ASSERT_GE(wrote, 0) << strerror(write_errno.load());
+    EXPECT_EQ(static_cast<ssize_t>(greeting.size()), wrote);
 
     const mb_transport_if_t *iface = mb_port_posix_socket_iface(&client_sock);
     ASSERT_NE(nullptr, iface);
@@ -109,7 +122,7 @@ TEST(PosixPortTest, TcpClientConnects)
     EXPECT_EQ(0x03U, buffer[2]);
 
     mb_port_posix_socket_close(&client_sock);
-    close(accepted_fd);
+    close(accepted);
 }
 
 } // namespace

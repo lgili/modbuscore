@@ -228,6 +228,7 @@ void modbus_selection_sort(variable_modbus_t modbus_variables[], int length)
  * // index = 1
  * ```
  */
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 int modbus_binary_search(variable_modbus_t modbus_variables[], uint16_t low, uint16_t high, uint16_t value)
 {
     if (!modbus_variables || low > high) {
@@ -252,6 +253,7 @@ int modbus_binary_search(variable_modbus_t modbus_variables[], uint16_t low, uin
     }
     return -1; // Not found
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 /**
  * @brief Calculates the Modbus CRC-16 using a bit-by-bit algorithm.

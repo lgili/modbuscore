@@ -241,6 +241,7 @@ static mb_time_ms_t client_retry_backoff_ms(const mb_client_txn_t *txn)
     return backoff;
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static mb_time_ms_t client_backoff_with_jitter(const mb_client_txn_t *txn,
                                                mb_time_ms_t base_backoff,
                                                mb_time_ms_t now)
@@ -266,6 +267,7 @@ static mb_time_ms_t client_backoff_with_jitter(const mb_client_txn_t *txn,
     }
     return delay;
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 static void client_start_next(mb_client_t *client);
 
@@ -507,6 +509,7 @@ static mb_err_t client_transport_poll(mb_client_t *client)
     }
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
                                    const mb_adu_view_t *adu,
                                    mb_u16 transaction_id,
@@ -555,6 +558,7 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
     client_transition_state(client, MB_CLIENT_STATE_IDLE);
     client_start_next(client);
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
 {

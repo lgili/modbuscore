@@ -47,6 +47,9 @@ typedef enum modbus_error {
  */
 typedef modbus_error_t mb_err_t;
 
+#ifdef MB_OK
+#undef MB_OK
+#endif
 #define MB_OK                       MODBUS_ERROR_NONE
 #define MB_ERR_INVALID_ARGUMENT     MODBUS_ERROR_INVALID_ARGUMENT
 #define MB_ERR_TIMEOUT              MODBUS_ERROR_TIMEOUT

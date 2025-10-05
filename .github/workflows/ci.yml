@@ -116,7 +116,22 @@ jobs:
       - name: Install fuzzing toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang
+          sudo apt-get install -y ninja-build clang llvm
+          CLANG_MAJ=$(clang -dumpversion | cut -d. -f1)
+          set +e
+          success_pkg=0
+          for ver in "$CLANG_MAJ" 19 18 17 16 15 14; do
+            if sudo apt-get install -y "libclang-rt-${ver}-dev"; then
+              echo "Installed libclang-rt-${ver}-dev"
+              success_pkg=1
+              break
+            fi
+          done
+          set -e
+          if [ "$success_pkg" -ne 1 ]; then
+            echo "::error::Failed to install a compatible libclang-rt runtime package" >&2
+            exit 1
+          fi
         shell: bash
       - name: Configure fuzz preset
         run: cmake --preset host-fuzz -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
@@ -168,7 +183,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build gcc g++ clang git cmake build-essential libmodbus-dev
           python3 -m pip install --upgrade pip
-          python3 -m pip install pymodbus==2.5.3
+          python3 -m pip install pymodbus==2.5.3 modpoll
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         shell: bash
       - name: Configure project (host-debug-examples)
         run: cmake --preset host-debug-examples
@@ -176,11 +192,8 @@ jobs:
       - name: Build TCP client CLI
         run: cmake --build --preset host-debug-examples --target modbus_tcp_client_cli
         shell: bash
-      - name: Build modpoll
-        run: |
-          git clone --depth 1 https://github.com/epsilonrt/modpoll.git third_party/modpoll
-          cmake -S third_party/modpoll -B third_party/modpoll/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build third_party/modpoll/build --parallel
+      - name: Verify modpoll installation
+        run: modpoll --version
         shell: bash
       - name: Start Modbus TCP server
         run: |
@@ -191,17 +204,29 @@ jobs:
       - name: Run library client against server
         run: build/host-debug-examples/examples/modbus_tcp_client_cli --host 127.0.0.1 --port 15020 --unit 1 --register 0 --count 2 --expect 100,200
         shell: bash
-      - name: Validate with mbtget
+      - name: Validate with pymodbus client
         run: |
-          mbtget -m tcp -a 1 -r 0 -n 2 127.0.0.1 -p 15020 | tee /tmp/mbtget.log
-          grep -q "100" /tmp/mbtget.log
-          grep -q "200" /tmp/mbtget.log
+          python3 - <<'PY'
+          from pymodbus.client.sync import ModbusTcpClient
+
+          client = ModbusTcpClient("127.0.0.1", port=15020)
+          if not client.connect():
+              raise SystemExit("Failed to connect to Modbus TCP server")
+
+          response = client.read_holding_registers(address=0, count=2, unit=1)
+          client.close()
+
+          if response.isError():
+              raise SystemExit(f"Modbus read failed: {response}")
+
+          expected = [100, 200]
+          if response.registers != expected:
+              raise SystemExit(f"Unexpected register values: {response.registers} != {expected}")
+          PY
         shell: bash
       - name: Validate with modpoll
         run: |
-          MODPOLL_BIN=$(find third_party/modpoll/build -type f -name modpoll -perm -111 | head -n 1)
-          chmod +x "$MODPOLL_BIN"
-          "$MODPOLL_BIN" -m tcp -a 1 -r 0 -c 2 127.0.0.1 -p 15020 | tee /tmp/modpoll.log
+          modpoll -m tcp -a 1 -r 0 -c 2 127.0.0.1 -p 15020 | tee /tmp/modpoll.log
           grep -q "100" /tmp/modpoll.log
           grep -q "200" /tmp/modpoll.log
         shell: bash

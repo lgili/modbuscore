@@ -229,6 +229,7 @@ static mb_err_t server_send_exception(mb_server_t *server,
     return mb_rtu_submit(&server->rtu, &response);
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static bool ranges_overlap(mb_u16 a_start, mb_u16 a_count, mb_u16 b_start, mb_u16 b_count)
 {
     const mb_u32 a_begin = a_start;
@@ -246,6 +247,7 @@ static bool region_contains(const mb_server_region_t *region, mb_u16 addr, mb_u1
     const mb_u32 req_end = req_begin + count;
     return (req_begin >= begin) && (req_end <= end);
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 static mb_err_t region_read(const mb_server_region_t *region,
                             mb_u16 addr,
@@ -365,7 +367,8 @@ static mb_err_t handle_fc16(mb_server_t *server,
 
     mb_u16 values[MB_PDU_FC16_MAX_REGISTERS];
     for (mb_u16 i = 0; i < quantity; ++i) {
-        values[i] = (mb_u16)((payload[i * 2U] << 8) | payload[i * 2U + 1U]);
+        const size_t idx = (size_t)i * 2U;
+        values[i] = (mb_u16)(((mb_u16)payload[idx] << 8) | payload[idx + 1U]);
     }
 
     mb_err_t err = region_write(region, start, values, quantity);

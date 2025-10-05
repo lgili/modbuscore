@@ -19,9 +19,12 @@ set(SOURCES
   src/client.c
   src/port/bare.c
   src/port/freertos.c
-  src/port/posix.c
   src/port/mutex.c
 )
+
+if(NOT WIN32)
+  list(APPEND SOURCES src/port/posix.c)
+endif()
 
 if(WIN32)
   list(APPEND SOURCES src/port/win.c)
