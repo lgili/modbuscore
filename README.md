@@ -121,20 +121,107 @@ to GitHub Pages (`gh-pages` branch) by the CI workflow.
 
 ## Examples
 
-Examples are disabled by default.  Enable them explicitly when configuring and
-build the desired target (a dedicated CMake preset is provided for convenience):
+Examples are disabled by default. Enable them explicitly when configuring and
+build the desired targets (a dedicated CMake preset is provided for convenience):
 
 ```bash
 cmake --preset host-debug-examples
-cmake --build --preset host-debug-examples --target modbus_tcp_client_cli
+cmake --build --preset host-debug-examples --target \
+  modbus_tcp_server_demo \
+  modbus_tcp_client_cli \
+  modbus_rtu_loop_demo \
+  modbus_rtu_serial_server \
+  modbus_rtu_serial_client
 ```
 
-Once configured, the following example binaries become available:
+### Running the TCP client/server demos
 
-- `modbus_tcp_client_cli` – CLI driver for Modbus TCP endpoints using the POSIX port.
-- `modbus_posix_sim` – socketpair demo wrapping a POSIX descriptor via `mb_port_posix_socket_init`.
+After the build completes the binaries live under
+`build/host-debug-examples/examples/`. Open two terminals:
+
+```bash
+# Terminal 1 – start the TCP server (press Ctrl+C to stop)
+./build/host-debug-examples/examples/modbus_tcp_server_demo \
+  --port 1502 \
+  --unit 17 \
+  --trace
+
+# Terminal 2 – run the TCP client against the server above
+./build/host-debug-examples/examples/modbus_tcp_client_cli \
+  --host 127.0.0.1 \
+  --port 1502 \
+  --unit 17 \
+  --register 0 \
+  --count 4
+```
+
+Adjust the host, port, unit id and register range to match your setup. Add
+`--expect v1,v2,...` to assert on returned holding registers.
+
+### Running the RTU loopback demo
+
+The RTU example spins an in-memory client/server pair and prints the observed
+transactions:
+
+```bash
+./build/host-debug-examples/examples/modbus_rtu_loop_demo
+```
+
+### Running the RTU serial demos
+
+The serial demos bind directly to a real COM/TTY device. You can point them to
+USB-to-RS485 adapters or virtual pairs for local testing.
+
+**Create a virtual serial port pair (optional)**
+
+- **Windows** – install [com0com](https://sourceforge.net/projects/com0com/) and
+  create a linked pair (for example `COM5` ↔ `COM6`). Disable strict baud checks
+  if your adapter needs custom rates.
+- **macOS/Linux** – use `socat` to spawn two linked pseudo-terminals:
+
+  ```bash
+  socat -d -d pty,raw,echo=0,link=./ttyV0 pty,raw,echo=0,link=./ttyV1
+  ```
+
+  Leave the command running so the devices remain available. The pair will show
+  up as `/dev/ttyV0` and `/dev/ttyV1`.
+
+**Start the RTU server**
+
+```bash
+./build/host-debug-examples/examples/modbus_rtu_serial_server \
+  --device /dev/ttyV0 \
+  --baud 115200 \
+  --unit 17 \
+  --trace
+```
+
+**Run the RTU client**
+
+```bash
+./build/host-debug-examples/examples/modbus_rtu_serial_client \
+  --device /dev/ttyV1 \
+  --baud 115200 \
+  --unit 17 \
+  --interval 1000 \
+  --trace
+```
+
+Swap `/dev/ttyV*` for the COM port of your USB-to-serial adapter when talking
+to real hardware. The server demo updates a small bank of holding registers in
+real time; the client polls them periodically and logs the values it receives.
+
+Once configured, the following additional example binaries become available:
+
+- `modbus_tcp_client_cli` – cross-platform CLI driver for Modbus TCP endpoints (POSIX sockets or Winsock via the shared helper).
+- `modbus_tcp_server_demo` – single-connection Modbus TCP server with live register updates and tracing hooks (macOS/Linux/Windows).
+- `modbus_tcp_multi_client_demo` – fan-out client that concurrently polls multiple Modbus TCP servers using the multi-transport helper.
+- `modbus_rtu_loop_demo` – self-contained RTU client/server loop using the in-memory transport shim for quick sanity checks.
+- `modbus_rtu_serial_server` – binds the RTU server FSM to a real serial port/USB adapter using the portable helper abstraction.
+- `modbus_rtu_serial_client` – polls holding registers from a serial Modbus slave (or the server demo) with optional trace output.
 - `modbus_freertos_sim` – FreeRTOS-style stream/queue simulation backed by `mb_port_freertos_transport_init`.
 - `modbus_bare_sim` – bare-metal loop example using `mb_port_bare_transport_init` with a synthetic tick source.
+- `modbus_posix_sim` – socketpair demo wrapping a POSIX descriptor via `mb_port_posix_socket_init` (available on non-Windows hosts).
 
 The CLI can be exercised against the CI Modbus TCP server or any compatible
 PLC/simulator, while the simulation binaries provide minimal host-side sanity

@@ -23,6 +23,10 @@ set(SOURCES
   src/port/mutex.c
 )
 
+if(WIN32)
+  list(APPEND SOURCES src/port/win.c)
+endif()
+
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
 set(HEADERS_PUBLIC  
   include/modbus/log.h
@@ -54,6 +58,10 @@ set(HEADERS_PUBLIC
   
 )
 
+if(WIN32)
+  list(APPEND HEADERS_PUBLIC include/modbus/port/win.h)
+endif()
+
 # Set HEADERS_PRIVATE variable (private headers won't be exposed)
 set(HEADERS_PRIVATE  
   
@@ -71,4 +79,8 @@ if(SEGGER_RTT_FOUND)
   message(STATUS "Enabling SEGGER RTT logging sink")
 else()
   message(STATUS "SEGGER RTT not found: MB_LOG_ENABLE_SEGGER_RTT defaults to 0")
+endif()
+
+if(WIN32)
+  target_link_libraries(${LIBRARY_NAME} PUBLIC ws2_32)
 endif()

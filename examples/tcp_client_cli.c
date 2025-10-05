@@ -3,12 +3,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <time.h>
 
 #include <modbus/client.h>
 #include <modbus/mb_err.h>
 #include <modbus/pdu.h>
-#include <modbus/port/posix.h>
+#include "common/demo_tcp_socket.h"
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
+static void sleep_ms(unsigned int milliseconds)
+{
+#if defined(_WIN32)
+    Sleep(milliseconds);
+#else
+    struct timespec ts;
+    ts.tv_sec = (time_t)(milliseconds / 1000U);
+    ts.tv_nsec = (long)((milliseconds % 1000U) * 1000000L);
+    nanosleep(&ts, NULL);
+#endif
+}
 
 #define CLI_DEFAULT_TIMEOUT_MS 1000U
 #define CLI_DEFAULT_RETRIES 1U
@@ -26,6 +42,46 @@ typedef struct {
     mb_u16 registers[MB_PDU_MAX / 2];
     mb_size_t count;
 } cli_result_t;
+
+static void client_event_sink(const mb_event_t *event, void *user)
+{
+    (void)user;
+    if (event == NULL) {
+        return;
+    }
+
+    switch (event->type) {
+    case MB_EVENT_CLIENT_STATE_ENTER:
+        if (event->source == MB_EVENT_SOURCE_CLIENT) {
+            printf("[client] state -> %u\n", (unsigned)event->data.client_state.state);
+        }
+        break;
+    case MB_EVENT_CLIENT_STATE_EXIT:
+        if (event->source == MB_EVENT_SOURCE_CLIENT) {
+            printf("[client] state <- %u\n", (unsigned)event->data.client_state.state);
+        }
+        break;
+    case MB_EVENT_CLIENT_TX_SUBMIT:
+        if (event->source == MB_EVENT_SOURCE_CLIENT) {
+            printf("[client] tx submit fc=%u expect_resp=%s\n",
+                   (unsigned)event->data.client_txn.function,
+                   event->data.client_txn.expect_response ? "yes" : "no");
+        }
+        break;
+    case MB_EVENT_CLIENT_TX_COMPLETE:
+        if (event->source == MB_EVENT_SOURCE_CLIENT) {
+            printf("[client] tx complete fc=%u status=%s\n",
+                   (unsigned)event->data.client_txn.function,
+                   mb_err_str(event->data.client_txn.status));
+        }
+        break;
+    case MB_EVENT_SERVER_STATE_ENTER:
+    case MB_EVENT_SERVER_STATE_EXIT:
+    case MB_EVENT_SERVER_REQUEST_ACCEPT:
+    case MB_EVENT_SERVER_REQUEST_COMPLETE:
+        break;
+    }
+}
 
 static void client_callback(mb_client_t *client,
                             const mb_client_txn_t *txn,
@@ -130,16 +186,17 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    mb_port_posix_socket_t tcp_sock;
-    if (mb_port_posix_tcp_client(&tcp_sock, host, (uint16_t)port, CLI_DEFAULT_TIMEOUT_MS) != MB_OK) {
-        fprintf(stderr, "Failed to connect to %s:%d\n", host, port);
+    demo_tcp_socket_t tcp_sock;
+    const mb_err_t connect_status = demo_tcp_socket_connect(&tcp_sock, host, (uint16_t)port, CLI_DEFAULT_TIMEOUT_MS);
+    if (!mb_err_is_ok(connect_status)) {
+        fprintf(stderr, "Failed to connect to %s:%d (%s)\n", host, port, mb_err_str(connect_status));
         return EXIT_FAILURE;
     }
 
-    const mb_transport_if_t *iface = mb_port_posix_socket_iface(&tcp_sock);
+    const mb_transport_if_t *iface = demo_tcp_socket_iface(&tcp_sock);
     if (!iface) {
-        fprintf(stderr, "Invalid POSIX transport\n");
-        mb_port_posix_socket_close(&tcp_sock);
+        fprintf(stderr, "Invalid transport wrapper\n");
+        demo_tcp_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
@@ -151,18 +208,21 @@ int main(int argc, char **argv)
     mb_err_t err = mb_client_init_tcp(&client, iface, tx_pool, MB_COUNTOF(tx_pool));
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to initialize client: %s\n", mb_err_str(err));
-        mb_port_posix_socket_close(&tcp_sock);
+        demo_tcp_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
+    mb_client_set_trace_hex(&client, true);
+
     mb_client_set_watchdog(&client, 5000U);
+    mb_client_set_event_callback(&client, client_event_sink, NULL);
 
     mb_u8 pdu[5];
     mb_size_t pdu_len = sizeof(pdu);
     err = mb_pdu_build_read_holding_request(pdu, pdu_len, (mb_u16)reg_addr, (mb_u16)reg_count);
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to build request: %s\n", mb_err_str(err));
-        mb_port_posix_socket_close(&tcp_sock);
+        demo_tcp_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
@@ -192,25 +252,25 @@ int main(int argc, char **argv)
     err = mb_client_submit(&client, &request, &txn);
     if (!mb_err_is_ok(err)) {
         fprintf(stderr, "Failed to submit transaction: %s\n", mb_err_str(err));
-        mb_port_posix_socket_close(&tcp_sock);
+        demo_tcp_socket_close(&tcp_sock);
         return EXIT_FAILURE;
     }
 
     while (!result.completed) {
         err = mb_client_poll(&client);
         if (err == MB_ERR_TIMEOUT) {
-            usleep(1000);
+            sleep_ms(1U);
             continue;
         }
         if (!mb_err_is_ok(err)) {
             fprintf(stderr, "Polling error: %s\n", mb_err_str(err));
-            mb_port_posix_socket_close(&tcp_sock);
+            demo_tcp_socket_close(&tcp_sock);
             return EXIT_FAILURE;
         }
-        usleep(1000);
+        sleep_ms(1U);
     }
 
-    mb_port_posix_socket_close(&tcp_sock);
+    demo_tcp_socket_close(&tcp_sock);
 
     if (!mb_err_is_ok(result.status)) {
         fprintf(stderr, "Transaction failed: %s\n", mb_err_str(result.status));

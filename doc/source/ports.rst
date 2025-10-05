@@ -25,6 +25,25 @@ non-blocking behaviour. Typical flow:
 The adapter internally maps POSIX error codes to ``mb_err_t`` so Modbus state
 machines can react deterministically.
 
+Windows socket adapter
+----------------------
+
+``mb_port_win_socket_*`` mirrors the POSIX helper while targeting Winsock 2. It
+bootstraps the underlying subsystem (via
+:func:`mb_port_win_socket_global_init`), installs non-blocking mode through
+``ioctlsocket`` and surfaces :ref:`mb_transport_if_t` compatible callbacks. The
+workflow is identical to the POSIX variant:
+
+#. Call :func:`mb_port_win_tcp_client` (or wrap an accepted socket with
+   :func:`mb_port_win_socket_init`).
+#. Retrieve the transport using :func:`mb_port_win_socket_iface` and feed it to
+   :func:`mb_client_init` / :func:`mb_server_init`.
+#. Tear down with :func:`mb_port_win_socket_close` and release the reference to
+   Winsock via :func:`mb_port_win_socket_global_cleanup` when you are done.
+
+The helper adopts the same ``mb_err_t`` mappings, so your Modbus FSM reacts the
+same way on macOS/Linux and Windows.
+
 FreeRTOS transport adapter
 --------------------------
 

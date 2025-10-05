@@ -42,5 +42,9 @@
 #include <modbus/server.h>
 #include <modbus/client.h>
 
+#if defined(_WIN32)
+#include <modbus/port/win.h>
+#endif
+
 
 #endif /* MODBUS_H */

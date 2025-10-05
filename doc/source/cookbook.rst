@@ -8,6 +8,106 @@ in Gates 5–11.
 .. contents:: Recipes
    :local:
 
+Running the bundled demos
+-------------------------
+
+Build the examples preset once to compile all helper binaries:
+
+.. code-block:: bash
+
+    cmake --preset host-debug-examples
+    cmake --build --preset host-debug-examples --target \
+      modbus_tcp_server_demo \
+      modbus_tcp_client_cli \
+            modbus_rtu_loop_demo \
+            modbus_rtu_serial_server \
+            modbus_rtu_serial_client
+
+The executables are emitted under ``build/host-debug-examples/examples``.
+
+Modbus TCP client/server pair
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Launch the server in one terminal (add ``--trace`` for verbose framing logs):
+
+.. code-block:: bash
+
+    ./build/host-debug-examples/examples/modbus_tcp_server_demo \
+      --port 1502 \
+      --unit 17 \
+      --trace
+
+Drive it with the CLI from another terminal, adjusting host/unit/registers to
+match your target device:
+
+.. code-block:: bash
+
+    ./build/host-debug-examples/examples/modbus_tcp_client_cli \
+      --host 127.0.0.1 \
+      --port 1502 \
+      --unit 17 \
+      --register 0 \
+      --count 4
+
+Includes an optional ``--expect v1,v2,...`` flag to assert the returned holding
+register values.
+
+RTU in-memory loopback
+~~~~~~~~~~~~~~~~~~~~~~
+
+Exercise the RTU client/server FSMs without any external hardware:
+
+.. code-block:: bash
+
+    ./build/host-debug-examples/examples/modbus_rtu_loop_demo
+
+The demo prints both client and server state transitions and dumps the register
+values pulled through the loopback transport.
+
+RTU serial client/server pair
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use the portable serial helper to talk to real COM/TTY devices (USB adapters or
+virtual pairs).
+
+**1. Optional – create a virtual serial link**
+
+- *Windows*: install `com0com <https://sourceforge.net/projects/com0com/>`_ and
+    create a linked pair such as ``COM5`` ↔ ``COM6``.
+- *macOS/Linux*: spawn two pseudo-terminals via ``socat`` and keep the process
+    running:
+
+    .. code-block:: bash
+
+         socat -d -d pty,raw,echo=0,link=./ttyV0 pty,raw,echo=0,link=./ttyV1
+
+    The devices become available as ``/dev/ttyV0`` and ``/dev/ttyV1``.
+
+**2. Start the RTU server**
+
+.. code-block:: bash
+
+     ./build/host-debug-examples/examples/modbus_rtu_serial_server \
+         --device /dev/ttyV0 \
+         --baud 115200 \
+         --unit 17 \
+         --trace
+
+**3. Poll registers with the RTU client**
+
+.. code-block:: bash
+
+     ./build/host-debug-examples/examples/modbus_rtu_serial_client \
+         --device /dev/ttyV1 \
+         --baud 115200 \
+         --unit 17 \
+         --interval 1000 \
+         --trace
+
+Swap the device paths for your actual USB-to-RS485 adapter when targeting real
+hardware. The server keeps a small region of holding registers updated, while
+the client prints the values returned by each poll.
+
 Minimal RTU client loop
 -----------------------
 
