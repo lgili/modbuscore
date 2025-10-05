@@ -93,6 +93,20 @@ if(MODBUS_ENABLE_COVERAGE)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# Hardening flags
+# ---------------------------------------------------------------------------
+if(NOT MSVC AND (CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "AppleClang"))
+    add_compile_options(-fno-common -fstack-protector-strong)
+    add_link_options(-fstack-protector-strong)
+
+    if(UNIX AND NOT APPLE)
+        add_link_options($<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:-Wl,-z,relro,-z,now>)
+    endif()
+
+    add_compile_definitions($<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>>:_FORTIFY_SOURCE=2>)
+endif()
+
 # Make warnings available to subdirectories
 set(MODBUS_WARN_FLAGS ${MODBUS_WARN_FLAGS} CACHE INTERNAL "Compiler warnings for Modbus targets")
 

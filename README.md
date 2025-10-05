@@ -156,12 +156,25 @@ into:
 
 - **Formatting** – `.clang-format` holds the project style; run `clang-format -i`
   on modified files.
-- **Static analysis** – enable `.clang-tidy` with `run-clang-tidy -p build/host-debug`.
+- **Static analysis** – `.clang-tidy` ships with the security and CERT bundles;
+  run it locally via `cmake --preset host-debug -DCMAKE_C_CLANG_TIDY=clang-tidy`.
 - **Fuzzing** – build the fuzz harness with `-DMODBUS_BUILD_FUZZERS=ON` (requires
   Clang/libFuzzer).
 - **Coverage** – `-DMODBUS_ENABLE_COVERAGE=ON` plus the `coverage` target
   produces LCOV/HTML reports.
 - **System GTest** – optional via `-DMODBUS_USE_SYSTEM_GTEST=ON`.
+
+## Security & Hardening
+
+- **Compiler flags** – non-MSVC builds now opt into `-fno-common` and
+  `-fstack-protector-strong`; Release/RelWithDebInfo also add `_FORTIFY_SOURCE=2`
+  and RELRO/Now on ELF platforms.
+- **CI pipeline** – dedicated `lint`, `coverage` and `fuzz` jobs keep the
+  security profile, instrumentation, and libFuzzer harnesses green alongside
+  the existing multi-platform builds.
+- **MISRA checklist** – the documentation set includes
+  [a living MISRA-C compliance checklist](doc/build/html/misra.html) that tracks
+  enforcement hooks and justified deviations.
 
 ## Contributing
 

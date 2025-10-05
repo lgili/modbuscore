@@ -55,6 +55,25 @@
             }
         },
         {
+            "name": "host-coverage",
+            "displayName": "Host Coverage",
+            "description": "Debug build with gcov/lcov instrumentation",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_COVERAGE": "ON"
+            }
+        },
+        {
+            "name": "host-fuzz",
+            "displayName": "Host Fuzzers",
+            "description": "Build libFuzzer harnesses",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_BUILD_FUZZERS": "ON",
+                "MODBUS_ENABLE_TESTS": "OFF"
+            }
+        },
+        {
             "name": "host-docs",
             "displayName": "Host Documentation",
             "description": "Debug build with documentation enabled",
@@ -114,6 +133,16 @@
             "name": "host-asan",
             "displayName": "Build Host Sanitizers",
             "configurePreset": "host-asan"
+        },
+        {
+            "name": "host-coverage",
+            "displayName": "Build Host Coverage",
+            "configurePreset": "host-coverage"
+        },
+        {
+            "name": "host-fuzz",
+            "displayName": "Build Host Fuzzers",
+            "configurePreset": "host-fuzz"
         },
         {
             "name": "mingw-debug",

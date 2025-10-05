@@ -3,7 +3,10 @@ Checks: >
   clang-analyzer-*,
   performance-*,
   readability-implicit-bool-conversion,
-  readability-misleading-indentation
-WarningsAsErrors: ''
+  readability-misleading-indentation,
+  security-*,
+  cert-*,
+  modernize-use-nullptr
+WarningsAsErrors: 'bugprone-*,clang-analyzer-*,security-*'
 HeaderFilterRegex: '^(modbus|tests)/'
 FormatStyle: file

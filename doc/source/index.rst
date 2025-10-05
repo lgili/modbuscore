@@ -13,6 +13,7 @@ Modbus C Library
    migration
    api
    roadmapping
+   misra
    contributing
    license
 

@@ -1,7 +1,7 @@
-Roadmap & Gates (0–12)
+Roadmap & Gates (0–13)
 ======================
 
-This section summarises the completed gates up to **Gate 12**. Each gate lists
+This section summarises the completed gates up to **Gate 13**. Each gate lists
 the objectives, key deliverables and the acceptance checks that were wired into
 the test suite or CI.
 
@@ -119,3 +119,12 @@ Gate 12 – Documentation & API Stability
   ``<modbus/modbus.h>``).
 * **Gate:** Documentation builds without warnings, examples compile, and the
   API surface is frozen under SemVer guarantees.
+
+Gate 13 – Hardening & Release
+-----------------------------
+
+* **Deliverables:** clang-tidy security profile, MISRA-C checklist, compiler
+  hardening flags (``-fno-common``, ``-fstack-protector-strong``,
+  ``_FORTIFY_SOURCE=2``) and ELF RELRO/Now when available.
+* **Gate:** CI runs sanitizers, fuzzers, coverage and linting; release tags are
+  cut from green pipelines.

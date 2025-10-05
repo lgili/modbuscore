@@ -118,6 +118,7 @@ Cada etapa tem Objetivo, Entregáveis e Gate (aceitação). Só segue se o gate 
 13) Hardening & Release
 	•	Entregáveis: clang-tidy perfil segurança, MISRA-C checklist (não estrito), -fno-common -fstack-protector, FORTIFY_SOURCE quando disponível.
 	•	Gate: CI full (sanitizers + fuzz + cobertura + linters) verde; tag v1.0.0.
+	•	Status: ✅ clang-tidy endurecido, hardening flags e jobs de cobertura/fuzz/lint na CI.
 
 ⸻
 

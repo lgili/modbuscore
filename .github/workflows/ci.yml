@@ -7,6 +7,27 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang clang-tidy
+        shell: bash
+      - name: Configure (clang-tidy)
+        run: cmake -S . -B build/clang-tidy -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DMODBUS_ENABLE_TESTS=ON \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_CLANG_TIDY=clang-tidy
+        shell: bash
+      - name: Run clang-tidy build
+        run: cmake --build build/clang-tidy --parallel
+        shell: bash
+
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -64,6 +85,49 @@ jobs:
         run: ctest --output-on-failure --test-dir build/${{ matrix.preset }}
         shell: pwsh
 
+  coverage:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install coverage toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc g++ lcov
+        shell: bash
+      - name: Configure coverage preset
+        run: cmake --preset host-coverage -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+        shell: bash
+      - name: Generate coverage report
+        run: cmake --build --preset host-coverage --target coverage
+        shell: bash
+      - name: Upload coverage HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: build/host-coverage/coverage_html
+        if: success()
+
+  fuzz:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install fuzzing toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang
+        shell: bash
+      - name: Configure fuzz preset
+        run: cmake --preset host-fuzz -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+        shell: bash
+      - name: Build fuzzers
+        run: cmake --build --preset host-fuzz --target modbus_pdu_fuzz
+        shell: bash
+      - name: Smoke test fuzz target
+        run: build/host-fuzz/fuzz/modbus_pdu_fuzz -runs=1000 -seed=1337
+        shell: bash
+
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -106,11 +170,11 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install pymodbus==2.5.3
         shell: bash
-      - name: Configure project (host-debug)
-        run: cmake --preset host-debug
+      - name: Configure project (host-debug-examples)
+        run: cmake --preset host-debug-examples
         shell: bash
       - name: Build TCP client CLI
-        run: cmake --build --preset host-debug --target modbus_tcp_client_cli
+        run: cmake --build --preset host-debug-examples --target modbus_tcp_client_cli
         shell: bash
       - name: Build modpoll
         run: |
@@ -125,7 +189,7 @@ jobs:
           sleep 3
         shell: bash
       - name: Run library client against server
-        run: build/host-debug/examples/modbus_tcp_client_cli --host 127.0.0.1 --port 15020 --unit 1 --register 0 --count 2 --expect 100,200
+        run: build/host-debug-examples/examples/modbus_tcp_client_cli --host 127.0.0.1 --port 15020 --unit 1 --register 0 --count 2 --expect 100,200
         shell: bash
       - name: Validate with mbtget
         run: |
