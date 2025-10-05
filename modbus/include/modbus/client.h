@@ -12,6 +12,7 @@
 #include <modbus/frame.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
+#include <modbus/observe.h>
 #include <modbus/transport/rtu.h>
 #include <modbus/transport/tcp.h>
 
@@ -117,6 +118,10 @@ typedef struct mb_client {
     mb_size_t pending_count;
     mb_time_ms_t fc_timeouts[256];
     mb_client_metrics_t metrics;
+    mb_diag_counters_t diag;
+    mb_event_callback_t observer_cb;
+    void *observer_user;
+    bool trace_hex;
 } mb_client_t;
 
 mb_err_t mb_client_init(mb_client_t *client,
@@ -154,6 +159,14 @@ void mb_client_set_fc_timeout(mb_client_t *client, mb_u8 function, mb_time_ms_t 
 void mb_client_get_metrics(const mb_client_t *client, mb_client_metrics_t *out_metrics);
 
 void mb_client_reset_metrics(mb_client_t *client);
+
+void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag);
+
+void mb_client_reset_diag(mb_client_t *client);
+
+void mb_client_set_event_callback(mb_client_t *client, mb_event_callback_t callback, void *user_ctx);
+
+void mb_client_set_trace_hex(mb_client_t *client, bool enable);
 
 #ifdef __cplusplus
 }

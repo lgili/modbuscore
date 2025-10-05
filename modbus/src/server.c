@@ -1,11 +1,49 @@
 #include <modbus/server.h>
 
+#include <stdio.h>
 #include <string.h>
+
+#include <modbus/mb_log.h>
 
 static const mb_u16 kExceptionIllegalFunction = MB_EX_ILLEGAL_FUNCTION;
 static const mb_u16 kExceptionIllegalDataAddress = MB_EX_ILLEGAL_DATA_ADDRESS;
 static const mb_u16 kExceptionIllegalDataValue = MB_EX_ILLEGAL_DATA_VALUE;
 static const mb_u16 kExceptionServerDeviceFailure = MB_EX_SERVER_DEVICE_FAILURE;
+
+static void server_trace_hex_buffer(const mb_server_t *server,
+                                    const char *label,
+                                    const mb_u8 *buffer,
+                                    mb_size_t length)
+{
+#if MB_LOG_ENABLED
+    if (server == NULL || !server->trace_hex || buffer == NULL || length == 0U) {
+        return;
+    }
+
+    char line[16U + (MB_PDU_MAX * 3U)];
+    int written = snprintf(line, sizeof(line), "%s:", (label != NULL) ? label : "server");
+    if (written < 0) {
+        return;
+    }
+
+    size_t pos = (size_t)written;
+    for (mb_size_t i = 0U; i < length && pos + 4U < sizeof(line); ++i) {
+        int rv = snprintf(&line[pos], sizeof(line) - pos, " %02X", buffer[i]);
+        if (rv < 0) {
+            break;
+        }
+        pos += (size_t)rv;
+    }
+
+    line[sizeof(line) - 1U] = '\0';
+    MB_LOG_DEBUG("%s", line);
+#else
+    (void)server;
+    (void)label;
+    (void)buffer;
+    (void)length;
+#endif
+}
 
 static void server_reset_request(mb_server_request_t *req)
 {
@@ -18,6 +56,55 @@ static void server_reset_request(mb_server_request_t *req)
 static mb_time_ms_t server_now(const mb_server_t *server)
 {
     return mb_transport_now(server->iface);
+}
+
+static void server_emit_state_event(mb_server_t *server,
+                                    mb_event_type_t type,
+                                    mb_server_state_t state)
+{
+    if (server == NULL || server->observer_cb == NULL) {
+        return;
+    }
+
+    mb_event_t event = {
+        .source = MB_EVENT_SOURCE_SERVER,
+        .type = type,
+        .timestamp = server_now(server),
+    };
+    event.data.server_state.state = (mb_u8)state;
+    server->observer_cb(&event, server->observer_user);
+}
+
+static void server_emit_request_event(mb_server_t *server,
+                                      mb_event_type_t type,
+                                      const mb_server_request_t *req,
+                                      mb_err_t status)
+{
+    if (server == NULL || server->observer_cb == NULL || req == NULL) {
+        return;
+    }
+
+    mb_event_t event = {
+        .source = MB_EVENT_SOURCE_SERVER,
+        .type = type,
+        .timestamp = server_now(server),
+    };
+    event.data.server_req.function = req->function;
+    event.data.server_req.broadcast = req->broadcast;
+    event.data.server_req.status = status;
+    server->observer_cb(&event, server->observer_user);
+}
+
+static void server_transition_state(mb_server_t *server, mb_server_state_t next)
+{
+    if (server == NULL || server->state == next) {
+        return;
+    }
+
+    const mb_server_state_t previous = server->state;
+    server_emit_state_event(server, MB_EVENT_SERVER_STATE_EXIT, previous);
+    server->state = next;
+    server_emit_state_event(server, MB_EVENT_SERVER_STATE_ENTER, next);
 }
 
 static mb_time_ms_t server_fc_timeout(const mb_server_t *server, mb_u8 function)
@@ -129,6 +216,8 @@ static mb_err_t server_send_exception(mb_server_t *server,
     if (!mb_err_is_ok(status)) {
         return status;
     }
+
+    server_trace_hex_buffer(server, "server.tx", server->tx_buffer, 2U);
 
     mb_adu_view_t response = {
         .unit_id = server->unit_id,
@@ -336,14 +425,19 @@ static void server_handle_poison(mb_server_t *server)
         }
 
         if (!pending->broadcast) {
-            if (mb_err_is_ok(server_send_exception(server, &pending->request_view, (mb_u8)kExceptionServerDeviceFailure))) {
+            mb_err_t send_status = server_send_exception(server, &pending->request_view,
+                                                         (mb_u8)kExceptionServerDeviceFailure);
+            if (mb_err_is_ok(send_status)) {
                 server->metrics.exceptions += 1U;
             } else {
                 server->metrics.errors += 1U;
+                mb_diag_record_error(&server->diag, send_status);
             }
         }
 
         server->metrics.dropped += 1U;
+        mb_diag_record_error(&server->diag, MB_ERR_CANCELLED);
+        server_emit_request_event(server, MB_EVENT_SERVER_REQUEST_COMPLETE, pending, MB_ERR_CANCELLED);
         server_release_request(pending);
     }
 }
@@ -423,12 +517,15 @@ static void server_execute_request(mb_server_t *server, mb_server_request_t *req
     }
 
     err = map_error_to_exception(err);
+    mb_err_t completion = err;
 
     if (req->broadcast) {
         if (!mb_err_is_ok(err)) {
             server->metrics.errors += 1U;
         }
         server_update_latency(server, req);
+        mb_diag_record_error(&server->diag, completion);
+        server_emit_request_event(server, MB_EVENT_SERVER_REQUEST_COMPLETE, req, completion);
         return;
     }
 
@@ -440,21 +537,27 @@ static void server_execute_request(mb_server_t *server, mb_server_request_t *req
             .payload_len = (response_pdu_len > 0U) ? (response_pdu_len - 1U) : 0U,
         };
 
+        server_trace_hex_buffer(server, "server.tx", server->tx_buffer, response_pdu_len);
+
         mb_err_t tx = mb_rtu_submit(&server->rtu, &response);
         if (mb_err_is_ok(tx)) {
             server->metrics.responded += 1U;
         } else {
             server->metrics.errors += 1U;
+            completion = tx;
         }
     } else {
         if (mb_err_is_ok(server_send_exception(server, &req->request_view, (mb_u8)err))) {
             server->metrics.exceptions += 1U;
         } else {
             server->metrics.errors += 1U;
+            completion = MB_ERR_TRANSPORT;
         }
     }
 
     server_update_latency(server, req);
+    mb_diag_record_error(&server->diag, completion);
+    server_emit_request_event(server, MB_EVENT_SERVER_REQUEST_COMPLETE, req, completion);
 }
 
 static void server_process_queue(mb_server_t *server)
@@ -478,19 +581,24 @@ static void server_process_queue(mb_server_t *server)
 
         server->metrics.timeouts += 1U;
         server->metrics.dropped += 1U;
+        mb_diag_record_error(&server->diag, MB_ERR_TIMEOUT);
         if (!candidate->broadcast) {
-            if (mb_err_is_ok(server_send_exception(server, &candidate->request_view,
-                                                   (mb_u8)kExceptionServerDeviceFailure))) {
+            mb_err_t send_status = server_send_exception(server, &candidate->request_view,
+                                                         (mb_u8)kExceptionServerDeviceFailure);
+            if (mb_err_is_ok(send_status)) {
                 server->metrics.exceptions += 1U;
             } else {
                 server->metrics.errors += 1U;
+                mb_diag_record_error(&server->diag, send_status);
             }
         }
+        server_emit_request_event(server, MB_EVENT_SERVER_REQUEST_COMPLETE, candidate, MB_ERR_TIMEOUT);
         server_release_request(candidate);
     }
 
     mb_server_request_t *req = server_dequeue(server);
     if (req == NULL) {
+        server_transition_state(server, MB_SERVER_STATE_IDLE);
         return;
     }
 
@@ -498,15 +606,19 @@ static void server_process_queue(mb_server_t *server)
     req->start_time = server_now(server);
 
     if (req->poison) {
+        server_transition_state(server, MB_SERVER_STATE_DRAINING);
         server_handle_poison(server);
         server_release_request(req);
         server->current = NULL;
+        server_transition_state(server, MB_SERVER_STATE_IDLE);
         return;
     }
 
+    server_transition_state(server, MB_SERVER_STATE_PROCESSING);
     server_execute_request(server, req);
     server_release_request(req);
     server->current = NULL;
+    server_transition_state(server, MB_SERVER_STATE_IDLE);
 }
 
 static void server_record_drop(mb_server_t *server,
@@ -538,6 +650,8 @@ static mb_err_t server_accept_adu(mb_server_t *server,
 
     if (!mb_err_is_ok(status) || adu == NULL) {
         server->metrics.errors += 1U;
+        const mb_err_t diag_status = (!mb_err_is_ok(status)) ? status : MB_ERR_INVALID_ARGUMENT;
+        mb_diag_record_error(&server->diag, diag_status);
         return status;
     }
 
@@ -548,6 +662,7 @@ static mb_err_t server_accept_adu(mb_server_t *server,
 
     const mb_size_t pdu_len = adu->payload_len + 1U;
     if (pdu_len > MB_PDU_MAX) {
+        mb_diag_record_error(&server->diag, MB_ERR_INVALID_ARGUMENT);
         server_record_drop(server, adu, broadcast, kExceptionIllegalDataValue);
         return MB_ERR_INVALID_ARGUMENT;
     }
@@ -555,12 +670,14 @@ static mb_err_t server_accept_adu(mb_server_t *server,
     const bool high_priority = server_is_high_priority_fc(adu->function);
     if (!high_priority && !broadcast && server->queue_capacity > 0U &&
         server_total_inflight(server) >= server->queue_capacity) {
+        mb_diag_record_error(&server->diag, MB_ERR_NO_RESOURCES);
         server_record_drop(server, adu, broadcast, kExceptionServerDeviceFailure);
         return MB_ERR_NO_RESOURCES;
     }
 
     mb_server_request_t *req = server_alloc_request(server);
     if (req == NULL) {
+        mb_diag_record_error(&server->diag, MB_ERR_NO_RESOURCES);
         server_record_drop(server, adu, broadcast, kExceptionServerDeviceFailure);
         return MB_ERR_NO_RESOURCES;
     }
@@ -588,11 +705,16 @@ static mb_err_t server_accept_adu(mb_server_t *server,
     req->enqueue_time = now;
     req->deadline = now + server_fc_timeout(server, adu->function);
 
+    server_trace_hex_buffer(server, "server.rx", req->storage, req->pdu_len);
+
     server_enqueue(server, req);
     server->metrics.received += 1U;
     if (broadcast) {
         server->metrics.broadcasts += 1U;
     }
+
+    mb_diag_record_fc(&server->diag, req->function);
+    server_emit_request_event(server, MB_EVENT_SERVER_REQUEST_ACCEPT, req, MB_OK);
 
     return MB_OK;
 }
@@ -628,12 +750,14 @@ mb_err_t mb_server_init(mb_server_t *server,
     server->pool = request_pool;
     server->pool_size = request_pool_len;
     server->queue_capacity = request_pool_len;
+    server->state = MB_SERVER_STATE_IDLE;
 
     for (mb_size_t i = 0U; i < request_pool_len; ++i) {
         server_reset_request(&request_pool[i]);
     }
     memset(server->fc_timeouts, 0, sizeof(server->fc_timeouts));
     memset(&server->metrics, 0, sizeof(server->metrics));
+    mb_diag_reset(&server->diag);
 
     mb_err_t err = mb_rtu_init(&server->rtu, iface, mb_server_rtu_callback, server);
     if (!mb_err_is_ok(err)) {
@@ -660,6 +784,8 @@ void mb_server_reset(mb_server_t *server)
     }
 
     mb_rtu_reset(&server->rtu);
+    mb_diag_reset(&server->diag);
+    server_transition_state(server, MB_SERVER_STATE_IDLE);
 }
 
 static mb_err_t insert_region(mb_server_t *server, const mb_server_region_t *cfg)
@@ -754,6 +880,47 @@ mb_err_t mb_server_inject_adu(mb_server_t *server, const mb_adu_view_t *adu)
         return MB_ERR_INVALID_ARGUMENT;
     }
     return server_accept_adu(server, adu, MB_OK);
+}
+
+void mb_server_get_diag(const mb_server_t *server, mb_diag_counters_t *out_diag)
+{
+    if (server == NULL || out_diag == NULL) {
+        return;
+    }
+
+    *out_diag = server->diag;
+}
+
+void mb_server_reset_diag(mb_server_t *server)
+{
+    if (server == NULL) {
+        return;
+    }
+
+    mb_diag_reset(&server->diag);
+}
+
+void mb_server_set_event_callback(mb_server_t *server, mb_event_callback_t callback, void *user_ctx)
+{
+    if (server == NULL) {
+        return;
+    }
+
+    server->observer_cb = callback;
+    server->observer_user = (callback != NULL) ? user_ctx : NULL;
+
+    if (callback != NULL) {
+        server_emit_state_event(server, MB_EVENT_SERVER_STATE_ENTER, server->state);
+    }
+}
+
+void mb_server_set_trace_hex(mb_server_t *server, bool enable)
+{
+    if (server == NULL) {
+        return;
+    }
+
+    server->trace_hex = enable;
 }
 
 mb_size_t mb_server_pending(const mb_server_t *server)

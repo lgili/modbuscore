@@ -9,6 +9,7 @@ set(SOURCES
   src/transport/tcp/tcp_multi.c
   src/mb_log.c
   src/mb_err.c
+  src/observe.c
   src/transport/rtu/rtu.c
   src/log.c
   src/utils.c
@@ -32,6 +33,7 @@ set(HEADERS_PUBLIC
   include/modbus/ringbuf.h
   include/modbus/mb_err.h
   include/modbus/mb_log.h
+  include/modbus/observe.h
   include/modbus/modbus.h
   include/modbus/conf.h
   include/modbus/transport.h

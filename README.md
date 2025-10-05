@@ -25,6 +25,9 @@ HALs can evolve independently.
 - **Portable HAL** – POSIX sockets, bare-metal tick adapters and FreeRTOS
   stream/queue bridges expose ready-made transports with optional mutex
   helpers (Gate 9).
+- **Tracing & diagnostics** – opt-in hex dumps, structured event callbacks and
+  per-function diagnostics counters surfaced through `modbus/observe.h`
+  (Gate 11).
 - **Heap-free utilities** – ring buffers, memory pool, CRC helpers and logging
   façade ready for embedded targets.
 - **Comprehensive tests** – unit, integration, fuzzing harnesses and CI jobs
@@ -45,6 +48,7 @@ HALs can evolve independently.
 | 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
 | 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
 | 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
+| 11 | Observability & debug (events, tracing, diagnostics) | ✅ |
 | 10 | Extra FCs (01/02/04/05/0F/17) | ⏳ (ASCII framing próximo) |
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
@@ -64,8 +68,31 @@ hardening.  See `update_plan.md` for the full roadmap.
 ```bash
 cmake --preset host-debug
 cmake --build --preset host-debug
+```
+
+### Run All Tests
+
+Unit tests are enabled by default in the `host-*` presets.  After configuring
+with `host-debug`, the command below exercises the full suite:
+
+```bash
 ctest --output-on-failure --test-dir build/host-debug
 ```
+
+Integration tests (client/server transport + observability flows) are guarded
+behind `MODBUS_ENABLE_INTEGRATION_TESTS`.  Configure a dedicated build tree and
+invoke ctest from there:
+
+```bash
+cmake -S . -B build/host-debug-integ -G Ninja \
+  -DMODBUS_ENABLE_TESTS=ON \
+  -DMODBUS_ENABLE_INTEGRATION_TESTS=ON
+cmake --build build/host-debug-integ
+ctest --output-on-failure --test-dir build/host-debug-integ
+```
+
+Both commands honour `CTEST_PARALLEL_LEVEL` if you want to run tests in
+parallel.
 
 Release build:
 

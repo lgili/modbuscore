@@ -11,6 +11,7 @@
 
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
+#include <modbus/observe.h>
 #include <modbus/pdu.h>
 #include <modbus/transport_if.h>
 #include <modbus/transport/rtu.h>
@@ -79,6 +80,12 @@ typedef struct {
     mb_u64 latency_total_ms;
 } mb_server_metrics_t;
 
+typedef enum {
+    MB_SERVER_STATE_IDLE = 0,
+    MB_SERVER_STATE_PROCESSING,
+    MB_SERVER_STATE_DRAINING
+} mb_server_state_t;
+
 /**
  * @brief Register mapping entry.
  *
@@ -117,6 +124,11 @@ typedef struct {
     mb_size_t pending_count;
     mb_time_ms_t fc_timeouts[256];
     mb_server_metrics_t metrics;
+    mb_diag_counters_t diag;
+    mb_event_callback_t observer_cb;
+    void *observer_user;
+    bool trace_hex;
+    mb_server_state_t state;
 
     mb_u8 rx_buffer[MB_PDU_MAX];
     mb_u8 tx_buffer[MB_PDU_MAX];
@@ -180,6 +192,14 @@ void mb_server_get_metrics(const mb_server_t *server, mb_server_metrics_t *out_m
 void mb_server_reset_metrics(mb_server_t *server);
 
 mb_err_t mb_server_inject_adu(mb_server_t *server, const mb_adu_view_t *adu);
+
+void mb_server_get_diag(const mb_server_t *server, mb_diag_counters_t *out_diag);
+
+void mb_server_reset_diag(mb_server_t *server);
+
+void mb_server_set_event_callback(mb_server_t *server, mb_event_callback_t callback, void *user_ctx);
+
+void mb_server_set_trace_hex(mb_server_t *server, bool enable);
 
 #ifdef __cplusplus
 }

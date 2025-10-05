@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <vector>
 
@@ -6,6 +7,7 @@
 extern "C" {
 #include <modbus/client.h>
 #include <modbus/core.h>
+#include <modbus/observe.h>
 #include <modbus/pdu.h>
 #include <modbus/transport.h>
 #include <modbus/transport/tcp.h>
@@ -21,6 +23,19 @@ const mb_transport_if_t *mock_transport_get_iface(void);
 }
 
 namespace {
+
+struct ClientEventRecorder {
+    std::vector<mb_event_t> events;
+
+    static void Callback(const mb_event_t *event, void *user_ctx)
+    {
+        if (event == nullptr || user_ctx == nullptr) {
+            return;
+        }
+        auto *self = static_cast<ClientEventRecorder *>(user_ctx);
+        self->events.push_back(*event);
+    }
+};
 
 struct CallbackCapture {
     bool invoked = false;
@@ -773,6 +788,125 @@ TEST_F(MbClientTest, MetricsResetClearsCounters)
     EXPECT_EQ(0U, metrics.submitted);
     EXPECT_EQ(0U, metrics.completed);
     EXPECT_EQ(0U, metrics.response_count);
+}
+
+TEST_F(MbClientTest, DiagnosticsReflectCompletionStatuses)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+    (void)mb_client_poll(&client_);
+    std::array<uint8_t, MB_RTU_BUFFER_SIZE> tx_frame{};
+    auto tx_len = mock_get_tx_data(tx_frame.data(), tx_frame.size());
+    ASSERT_GT(tx_len, 0U);
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> response_frame{};
+    mb_size_t response_len = 0U;
+    build_read_response(response_adu, response_frame, response_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(response_frame.data(), static_cast<uint16_t>(response_len)));
+
+    for (int i = 0; i < 8 && !capture.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
+    ASSERT_TRUE(capture.invoked);
+    mock_clear_tx_buffer();
+
+    mb_diag_counters_t diag{};
+    mb_client_get_diag(&client_, &diag);
+    EXPECT_EQ(1U, diag.function[MODBUS_FUNC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(1U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+
+    mb_client_reset_diag(&client_);
+    mb_client_get_diag(&client_, &diag);
+    EXPECT_EQ(0U, diag.function[MODBUS_FUNC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(0U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+
+    CallbackCapture timeout_capture{};
+    txn = nullptr;
+    auto timeout_request = make_request(0x0004, 0x0001, &timeout_capture);
+    timeout_request.timeout_ms = 5U;
+    timeout_request.retry_backoff_ms = 5U;
+    timeout_request.max_retries = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &timeout_request, &txn));
+
+    for (int step = 0; step < 16 && !timeout_capture.invoked; ++step) {
+        mock_advance_time(6U);
+        (void)mb_client_poll(&client_);
+    }
+    ASSERT_TRUE(timeout_capture.invoked);
+    EXPECT_EQ(MB_ERR_TIMEOUT, timeout_capture.status);
+
+    mb_client_get_diag(&client_, &diag);
+    EXPECT_EQ(1U, diag.function[MODBUS_FUNC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(1U, diag.error[MB_DIAG_ERR_SLOT_TIMEOUT]);
+}
+
+TEST_F(MbClientTest, EmitsObservabilityEvents)
+{
+    ClientEventRecorder recorder;
+    mb_client_set_event_callback(&client_, ClientEventRecorder::Callback, &recorder);
+
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+    (void)mb_client_poll(&client_);
+    std::array<uint8_t, MB_RTU_BUFFER_SIZE> tx_frame{};
+    auto tx_len = mock_get_tx_data(tx_frame.data(), tx_frame.size());
+    ASSERT_GT(tx_len, 0U);
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> response_frame{};
+    mb_size_t response_len = 0U;
+    build_read_response(response_adu, response_frame, response_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(response_frame.data(), static_cast<uint16_t>(response_len)));
+
+    for (int i = 0; i < 8 && !capture.invoked; ++i) {
+        (void)mb_client_poll(&client_);
+        mock_advance_time(5U);
+    }
+    ASSERT_TRUE(capture.invoked);
+
+    ASSERT_GE(recorder.events.size(), static_cast<size_t>(6));
+    EXPECT_EQ(MB_EVENT_SOURCE_CLIENT, recorder.events.front().source);
+    EXPECT_EQ(MB_EVENT_CLIENT_STATE_ENTER, recorder.events.front().type);
+    EXPECT_EQ(MB_CLIENT_STATE_IDLE, recorder.events.front().data.client_state.state);
+
+    const auto submit_it = std::find_if(recorder.events.begin(), recorder.events.end(), [](const mb_event_t &evt) {
+        return evt.type == MB_EVENT_CLIENT_TX_SUBMIT;
+    });
+    ASSERT_NE(recorder.events.end(), submit_it);
+    EXPECT_EQ(MODBUS_FUNC_READ_HOLDING_REGISTERS, submit_it->data.client_txn.function);
+    EXPECT_TRUE(submit_it->data.client_txn.expect_response);
+
+    const auto complete_it = std::find_if(recorder.events.begin(), recorder.events.end(), [](const mb_event_t &evt) {
+        return evt.type == MB_EVENT_CLIENT_TX_COMPLETE;
+    });
+    ASSERT_NE(recorder.events.end(), complete_it);
+    EXPECT_EQ(MB_OK, complete_it->data.client_txn.status);
+
+    bool saw_waiting_enter = false;
+    bool saw_waiting_exit = false;
+    bool saw_idle_after = false;
+    for (size_t i = 0; i < recorder.events.size(); ++i) {
+        const mb_event_t &evt = recorder.events[i];
+        if (evt.type == MB_EVENT_CLIENT_STATE_ENTER && evt.data.client_state.state == MB_CLIENT_STATE_WAITING) {
+            saw_waiting_enter = true;
+        } else if (evt.type == MB_EVENT_CLIENT_STATE_EXIT && evt.data.client_state.state == MB_CLIENT_STATE_WAITING) {
+            saw_waiting_exit = true;
+        } else if (evt.type == MB_EVENT_CLIENT_STATE_ENTER && evt.data.client_state.state == MB_CLIENT_STATE_IDLE && i != 0U) {
+            saw_idle_after = true;
+        }
+    }
+
+    EXPECT_TRUE(saw_waiting_enter);
+    EXPECT_TRUE(saw_waiting_exit);
+    EXPECT_TRUE(saw_idle_after);
 }
 
 } // namespace

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <vector>
@@ -6,6 +7,7 @@
 
 extern "C" {
 #include <modbus/frame.h>
+#include <modbus/observe.h>
 #include <modbus/pdu.h>
 #include <modbus/server.h>
 #include <modbus/transport.h>
@@ -23,6 +25,19 @@ const mb_transport_if_t *mock_transport_get_iface(void);
 namespace {
 
 constexpr mb_u8 kUnitId = 0x11U;
+
+struct ServerEventRecorder {
+    std::vector<mb_event_t> events;
+
+    static void Callback(const mb_event_t *event, void *user_ctx)
+    {
+        if (event == nullptr || user_ctx == nullptr) {
+            return;
+        }
+        auto *self = static_cast<ServerEventRecorder *>(user_ctx);
+        self->events.push_back(*event);
+    }
+};
 
 class MbServerTest : public ::testing::Test {
 protected:
@@ -373,6 +388,86 @@ TEST_F(MbServerTest, MetricsResetClearsCounters)
     EXPECT_EQ(0U, metrics.received);
     EXPECT_EQ(0U, metrics.responded);
     EXPECT_EQ(0U, metrics.exceptions);
+}
+
+TEST_F(MbServerTest, DiagnosticsAccumulateCounts)
+{
+    mb_diag_counters_t diag{};
+    mb_server_get_diag(&server_, &diag);
+    EXPECT_EQ(0U, diag.function[MB_PDU_FC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(0U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump(8);
+
+    mb_server_get_diag(&server_, &diag);
+    EXPECT_EQ(1U, diag.function[MB_PDU_FC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(1U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x00F0U, 0x0001U));
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump(8);
+
+    mb_server_get_diag(&server_, &diag);
+    EXPECT_EQ(2U, diag.function[MB_PDU_FC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(1U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+    EXPECT_EQ(1U, diag.error[MB_DIAG_ERR_SLOT_EXCEPTION_ILLEGAL_DATA_ADDRESS]);
+
+    mb_server_reset_diag(&server_);
+    mb_server_get_diag(&server_, &diag);
+    EXPECT_EQ(0U, diag.function[MB_PDU_FC_READ_HOLDING_REGISTERS]);
+    EXPECT_EQ(0U, diag.error[MB_DIAG_ERR_SLOT_OK]);
+    EXPECT_EQ(0U, diag.error[MB_DIAG_ERR_SLOT_EXCEPTION_ILLEGAL_DATA_ADDRESS]);
+}
+
+TEST_F(MbServerTest, EmitsObservabilityEvents)
+{
+    ServerEventRecorder recorder;
+    mb_server_set_event_callback(&server_, ServerEventRecorder::Callback, &recorder);
+
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+    sendPdu(req_pdu, 5U, kUnitId);
+    pump(8);
+
+    ASSERT_GE(recorder.events.size(), static_cast<size_t>(6));
+    EXPECT_EQ(MB_EVENT_SOURCE_SERVER, recorder.events.front().source);
+    EXPECT_EQ(MB_EVENT_SERVER_STATE_ENTER, recorder.events.front().type);
+    EXPECT_EQ(MB_SERVER_STATE_IDLE, recorder.events.front().data.server_state.state);
+
+    const auto accept_it = std::find_if(recorder.events.begin(), recorder.events.end(), [](const mb_event_t &evt) {
+        return evt.type == MB_EVENT_SERVER_REQUEST_ACCEPT;
+    });
+    ASSERT_NE(recorder.events.end(), accept_it);
+    EXPECT_EQ(MB_PDU_FC_READ_HOLDING_REGISTERS, accept_it->data.server_req.function);
+    EXPECT_FALSE(accept_it->data.server_req.broadcast);
+    EXPECT_EQ(MB_OK, accept_it->data.server_req.status);
+
+    const auto complete_it = std::find_if(recorder.events.begin(), recorder.events.end(), [](const mb_event_t &evt) {
+        return evt.type == MB_EVENT_SERVER_REQUEST_COMPLETE;
+    });
+    ASSERT_NE(recorder.events.end(), complete_it);
+    EXPECT_EQ(MB_OK, complete_it->data.server_req.status);
+
+    bool saw_processing_enter = false;
+    bool saw_processing_exit = false;
+    bool saw_idle_enter_after = false;
+    for (size_t i = 0; i < recorder.events.size(); ++i) {
+        const mb_event_t &evt = recorder.events[i];
+        if (evt.type == MB_EVENT_SERVER_STATE_ENTER && evt.data.server_state.state == MB_SERVER_STATE_PROCESSING) {
+            saw_processing_enter = true;
+        } else if (evt.type == MB_EVENT_SERVER_STATE_EXIT && evt.data.server_state.state == MB_SERVER_STATE_PROCESSING) {
+            saw_processing_exit = true;
+        } else if (evt.type == MB_EVENT_SERVER_STATE_ENTER && evt.data.server_state.state == MB_SERVER_STATE_IDLE && i != 0U) {
+            saw_idle_enter_after = true;
+        }
+    }
+
+    EXPECT_TRUE(saw_processing_enter);
+    EXPECT_TRUE(saw_processing_exit);
+    EXPECT_TRUE(saw_idle_enter_after);
 }
 
 } // namespace

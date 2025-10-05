@@ -97,9 +97,9 @@ where the transport path is bypassed.
 POSIX transport helper
 ----------------------
 
-Gate 9 completes the first pass of the HAL layer with adapters for POSIX,
-bare-metal loops and FreeRTOS environments.  On POSIX platforms a thin wrapper
-exposes a ready-to-use :c:type:`mb_transport_if_t` from a socket descriptor:
+Gate 9 introduces the first transport/HAL helper. On POSIX platforms a thin
+wrapper exposes a ready-to-use :c:type:`mb_transport_if_t` from a socket
+descriptor:
 
 .. code-block:: c
 
@@ -115,16 +115,60 @@ exposes a ready-to-use :c:type:`mb_transport_if_t` from a socket descriptor:
 
    /* ... issue requests ... */
 
-    mb_port_posix_socket_close(&tcp);
+   mb_port_posix_socket_close(&tcp);
 
-Bare-metal targets can bind their UART/RTU primitives with
-:c:func:`mb_port_bare_transport_init`, which turns a tick-based time source and
-callbacks into a Modbus transport without pulling in an RTOS.  For FreeRTOS
-systems, :c:func:`mb_port_freertos_transport_init` wraps stream buffers or
-queues (``xStreamBufferSend`` / ``xStreamBufferReceive``) using the scheduler's
-tick rate, providing the same non-blocking contract expected by the client and
-server FSMs.  Optional helpers for cooperative yield and mutexes round off the
-portability layer.
+FreeRTOS and bare-metal helpers are stubbed for now (they return
+``MB_ERR_OTHER``), serving as placeholders for upcoming implementations while
+keeping the public API stable.
+
+Observability hooks
+-------------------
+
+Gate 11 wires structured observability into both the client and the server. The
+new ``modbus/observe.h`` header exposes three pillars:
+
+``mb_diag_*`` counters
+    Per-function and per-error histograms that can be sampled/reset at runtime.
+    Useful for feeding watchdog dashboards.
+
+Event callbacks
+    ``mb_client_set_event_callback`` / ``mb_server_set_event_callback`` surface
+    state transitions (enter/exit) and transaction lifecycle events. The payload
+    carries function code, status and timestamps so you can pipe them to tracing
+    backends.
+
+Hex tracing
+    ``mb_client_set_trace_hex`` / ``mb_server_set_trace_hex`` dump RTU/TCP PDUs
+    through :c:macro:`MB_LOG_DEBUG` when logging is enabled – handy during
+    bring-up and while diagnosing protocol mismatches.
+
+Typical usage:
+
+.. code-block:: c
+
+   static void my_event_sink(const mb_event_t *evt, void *user)
+   {
+       (void)user;
+       if (evt->source == MB_EVENT_SOURCE_CLIENT &&
+           evt->type == MB_EVENT_CLIENT_TX_COMPLETE) {
+           printf("tx done fc=%u status=%d\n",
+                  evt->data.client_txn.function,
+                  evt->data.client_txn.status);
+       }
+   }
+
+   mb_diag_counters_t diag;
+   mb_client_get_diag(client, &diag);
+   printf("fc03=%llu timeouts=%llu\n",
+          (unsigned long long)diag.function[MB_PDU_FC_READ_HOLDING_REGISTERS],
+          (unsigned long long)diag.error[MB_DIAG_ERR_SLOT_TIMEOUT]);
+   mb_client_reset_diag(client);
+
+   mb_client_set_event_callback(client, my_event_sink, NULL);
+   mb_client_set_trace_hex(client, true);
+
+The same APIs exist for :c:type:`mb_server_t`. All hooks are optional and can be
+compiled out simply by not enabling logging or not installing callbacks.
 
 Advanced Features
 -----------------

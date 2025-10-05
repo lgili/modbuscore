@@ -1,7 +1,10 @@
 #include <modbus/client.h>
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+
+#include <modbus/mb_log.h>
 
 #define MB_CLIENT_TIMEOUT_DEFAULT MB_CLIENT_DEFAULT_TIMEOUT_MS
 #define MB_CLIENT_BACKOFF_DEFAULT MB_CLIENT_DEFAULT_RETRY_BACKOFF_MS
@@ -40,6 +43,144 @@ static mb_size_t client_total_inflight(const mb_client_t *client)
     }
 
     return count;
+}
+
+static void client_trace_hex_buffer(const mb_client_t *client,
+                                    const char *label,
+                                    const mb_u8 *buffer,
+                                    mb_size_t length)
+{
+#if MB_LOG_ENABLED
+    if (client == NULL || !client->trace_hex || buffer == NULL || length == 0U) {
+        return;
+    }
+
+    char line[16U + (MB_PDU_MAX * 3U)];
+    int written = snprintf(line, sizeof(line), "%s:", (label != NULL) ? label : "client");
+    if (written < 0) {
+        return;
+    }
+
+    size_t pos = (size_t)written;
+    for (mb_size_t i = 0U; i < length && pos + 4U < sizeof(line); ++i) {
+        int rv = snprintf(&line[pos], sizeof(line) - pos, " %02X", buffer[i]);
+        if (rv < 0) {
+            break;
+        }
+        pos += (size_t)rv;
+    }
+
+    line[sizeof(line) - 1U] = '\0';
+    MB_LOG_DEBUG("%s", line);
+#else
+    (void)client;
+    (void)label;
+    (void)buffer;
+    (void)length;
+#endif
+}
+
+static void client_trace_request(const mb_client_t *client, const mb_client_txn_t *txn, const char *label)
+{
+#if MB_LOG_ENABLED
+    if (client == NULL || txn == NULL || !client->trace_hex) {
+        return;
+    }
+
+    mb_u8 scratch[MB_PDU_MAX + 1U];
+    scratch[0] = txn->request_view.function;
+    mb_size_t len = 1U;
+    if (txn->request_view.payload_len > 0U && txn->request_view.payload != NULL) {
+        mb_size_t copy_len = txn->request_view.payload_len;
+        if (copy_len > MB_PDU_MAX) {
+            copy_len = MB_PDU_MAX;
+        }
+        memcpy(&scratch[1], txn->request_view.payload, copy_len);
+        len += copy_len;
+    }
+
+    client_trace_hex_buffer(client, (label != NULL) ? label : "client.tx", scratch, len);
+#else
+    (void)client;
+    (void)txn;
+    (void)label;
+#endif
+}
+
+static void client_trace_response(const mb_client_t *client, const mb_adu_view_t *adu, const char *label)
+{
+#if MB_LOG_ENABLED
+    if (client == NULL || adu == NULL || !client->trace_hex) {
+        return;
+    }
+
+    mb_u8 scratch[MB_PDU_MAX + 1U];
+    scratch[0] = adu->function;
+    mb_size_t len = 1U;
+    if (adu->payload_len > 0U && adu->payload != NULL) {
+        mb_size_t copy_len = adu->payload_len;
+        if (copy_len > MB_PDU_MAX) {
+            copy_len = MB_PDU_MAX;
+        }
+        memcpy(&scratch[1], adu->payload, copy_len);
+        len += copy_len;
+    }
+
+    client_trace_hex_buffer(client, (label != NULL) ? label : "client.rx", scratch, len);
+#else
+    (void)client;
+    (void)adu;
+    (void)label;
+#endif
+}
+
+static void client_emit_state_event(mb_client_t *client,
+                                    mb_event_type_t type,
+                                    mb_client_state_t state)
+{
+    if (client == NULL || client->observer_cb == NULL) {
+        return;
+    }
+
+    mb_event_t event = {
+        .source = MB_EVENT_SOURCE_CLIENT,
+        .type = type,
+        .timestamp = client_now(client),
+    };
+    event.data.client_state.state = (mb_u8)state;
+    client->observer_cb(&event, client->observer_user);
+}
+
+static void client_emit_tx_event(mb_client_t *client,
+                                 mb_event_type_t type,
+                                 const mb_client_txn_t *txn,
+                                 mb_err_t status)
+{
+    if (client == NULL || client->observer_cb == NULL || txn == NULL) {
+        return;
+    }
+
+    mb_event_t event = {
+        .source = MB_EVENT_SOURCE_CLIENT,
+        .type = type,
+        .timestamp = client_now(client),
+    };
+    event.data.client_txn.function = txn->request_view.function;
+    event.data.client_txn.status = status;
+    event.data.client_txn.expect_response = txn->expect_response;
+    client->observer_cb(&event, client->observer_user);
+}
+
+static void client_transition_state(mb_client_t *client, mb_client_state_t next)
+{
+    if (client == NULL || client->state == next) {
+        return;
+    }
+
+    const mb_client_state_t previous = client->state;
+    client_emit_state_event(client, MB_EVENT_CLIENT_STATE_EXIT, previous);
+    client->state = next;
+    client_emit_state_event(client, MB_EVENT_CLIENT_STATE_ENTER, next);
 }
 
 static mb_time_ms_t client_base_timeout_ms(const mb_client_txn_t *txn)
@@ -267,6 +408,9 @@ static void client_finalize(mb_client_t *client,
     txn->completed = true;
     txn->callback_pending = true;
 
+    mb_diag_record_error(&client->diag, status);
+    client_emit_tx_event(client, MB_EVENT_CLIENT_TX_COMPLETE, txn, status);
+
     if (txn->cfg.callback) {
         txn->cfg.callback(client, txn, status, response, txn->cfg.user_ctx);
     }
@@ -316,6 +460,8 @@ static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *tx
 
     mb_err_t status = MB_ERR_INVALID_ARGUMENT;
     mb_size_t frame_len = 0U;
+
+    client_trace_request(client, txn, "client.tx");
 
     switch (client->transport) {
     case MB_CLIENT_TRANSPORT_RTU:
@@ -392,6 +538,7 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
     if (status == MB_OK && adu != NULL) {
         const mb_size_t adu_len = MB_TCP_HEADER_SIZE + 1U + adu->payload_len;
         client->metrics.bytes_rx += adu_len;
+        client_trace_response(client, adu, "client.rx");
     }
 
     if (status == MB_OK) {
@@ -405,7 +552,7 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
         client->current = NULL;
     }
 
-    client->state = MB_CLIENT_STATE_IDLE;
+    client_transition_state(client, MB_CLIENT_STATE_IDLE);
     client_start_next(client);
 }
 
@@ -425,7 +572,7 @@ static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
     if (txn->poison) {
         client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
         client->current = NULL;
-        client->state = MB_CLIENT_STATE_IDLE;
+        client_transition_state(client, MB_CLIENT_STATE_IDLE);
         client_start_next(client);
         return;
     }
@@ -434,18 +581,18 @@ static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
     if (status != MB_OK) {
         client_finalize(client, txn, status, NULL);
         client->current = NULL;
-        client->state = MB_CLIENT_STATE_IDLE;
+        client_transition_state(client, MB_CLIENT_STATE_IDLE);
         return;
     }
 
     if (!txn->expect_response) {
         client_finalize(client, txn, MB_OK, NULL);
         client->current = NULL;
-        client->state = MB_CLIENT_STATE_IDLE;
+        client_transition_state(client, MB_CLIENT_STATE_IDLE);
         return;
     }
 
-    client->state = MB_CLIENT_STATE_WAITING;
+    client_transition_state(client, MB_CLIENT_STATE_WAITING);
 }
 
 static void client_start_next(mb_client_t *client)
@@ -453,7 +600,7 @@ static void client_start_next(mb_client_t *client)
     while (true) {
         client->current = client_dequeue(client);
         if (client->current == NULL) {
-            client->state = MB_CLIENT_STATE_IDLE;
+            client_transition_state(client, MB_CLIENT_STATE_IDLE);
             return;
         }
 
@@ -488,7 +635,7 @@ static void client_retry(mb_client_t *client)
     txn->deadline = 0U;
     txn->watchdog_deadline = 0U;
 
-    client->state = MB_CLIENT_STATE_BACKOFF;
+    client_transition_state(client, MB_CLIENT_STATE_BACKOFF);
 }
 
 static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
@@ -506,6 +653,7 @@ static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
     if (status == MB_OK && adu != NULL) {
         const mb_size_t adu_len = 1U + adu->payload_len + 2U;
         client->metrics.bytes_rx += adu_len;
+        client_trace_response(client, adu, "client.rx");
     }
 
     if (status == MB_OK) {
@@ -516,7 +664,7 @@ static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
     }
 
     client->current = NULL;
-    client->state = MB_CLIENT_STATE_IDLE;
+    client_transition_state(client, MB_CLIENT_STATE_IDLE);
     client_start_next(client);
 }
 
@@ -544,6 +692,7 @@ static mb_err_t mb_client_init_common(mb_client_t *client,
     client->pending_count = 0U;
     memset(client->fc_timeouts, 0, sizeof(client->fc_timeouts));
     memset(&client->metrics, 0, sizeof(client->metrics));
+    mb_diag_reset(&client->diag);
 
     for (mb_size_t i = 0U; i < txn_pool_len; ++i) {
         memset(&txn_pool[i], 0, sizeof(mb_client_txn_t));
@@ -589,6 +738,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (request->request.payload_len > MB_PDU_MAX) {
+        mb_diag_record_error(&client->diag, MB_ERR_INVALID_ARGUMENT);
         return MB_ERR_INVALID_ARGUMENT;
     }
 
@@ -596,6 +746,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     if (!is_poison && client->queue_capacity > 0U) {
         const mb_size_t inflight = client_total_inflight(client);
         if (inflight >= client->queue_capacity) {
+            mb_diag_record_error(&client->diag, MB_ERR_NO_RESOURCES);
             return MB_ERR_NO_RESOURCES;
         }
     }
@@ -609,6 +760,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (txn == NULL) {
+        mb_diag_record_error(&client->diag, MB_ERR_NO_RESOURCES);
         return MB_ERR_NO_RESOURCES;
     }
 
@@ -643,6 +795,11 @@ mb_err_t mb_client_submit(mb_client_t *client,
     } else {
         txn->request_view.payload = NULL;
     }
+
+    if (!txn->poison) {
+        mb_diag_record_fc(&client->diag, txn->request_view.function);
+    }
+    client_emit_tx_event(client, MB_EVENT_CLIENT_TX_SUBMIT, txn, MB_OK);
 
     client_enqueue(client, txn);
     client->metrics.submitted += 1U;
@@ -806,4 +963,45 @@ void mb_client_reset_metrics(mb_client_t *client)
     }
 
     memset(&client->metrics, 0, sizeof(client->metrics));
+}
+
+void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag)
+{
+    if (client == NULL || out_diag == NULL) {
+        return;
+    }
+
+    *out_diag = client->diag;
+}
+
+void mb_client_reset_diag(mb_client_t *client)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    mb_diag_reset(&client->diag);
+}
+
+void mb_client_set_event_callback(mb_client_t *client, mb_event_callback_t callback, void *user_ctx)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    client->observer_cb = callback;
+    client->observer_user = (callback != NULL) ? user_ctx : NULL;
+
+    if (callback != NULL) {
+        client_emit_state_event(client, MB_EVENT_CLIENT_STATE_ENTER, client->state);
+    }
+}
+
+void mb_client_set_trace_hex(mb_client_t *client, bool enable)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    client->trace_hex = enable;
 }

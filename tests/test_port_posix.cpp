@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include <errno.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -60,11 +61,21 @@ TEST(PosixPortTest, TcpClientConnects)
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0;
-    ASSERT_EQ(0, bind(listen_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)));
+#if defined(__APPLE__)
+    addr.sin_len = sizeof(addr);
+#endif
+    if (bind(listen_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0) {
+        const int bind_errno = errno;
+        if (bind_errno == EPERM || bind_errno == EACCES) {
+            GTEST_SKIP() << "Socket bind not permitted in sandbox: " << strerror(bind_errno);
+            return;
+        }
+        FAIL() << strerror(bind_errno);
+    }
     ASSERT_EQ(0, listen(listen_fd, 1));
 
     socklen_t len = sizeof(addr);
-    ASSERT_EQ(0, getsockname(listen_fd, reinterpret_cast<sockaddr *>(&addr), &len));
+    ASSERT_EQ(0, getsockname(listen_fd, reinterpret_cast<sockaddr *>(&addr), &len)) << strerror(errno);
     const uint16_t port = ntohs(addr.sin_port);
 
     int accepted_fd = -1;
