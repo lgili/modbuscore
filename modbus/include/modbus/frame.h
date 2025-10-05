@@ -1,6 +1,6 @@
 /**
  * @file frame.h
- * @brief Helpers to assemble and dissect Modbus ADUs (Gate 3).
+ * @brief Helpers to assemble and dissect Modbus Application Data Units.
  */
 
 #ifndef MODBUS_FRAME_H

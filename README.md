@@ -144,7 +144,13 @@ checks for each HAL adapter.
 
 The full API reference (generated via Doxygen + Sphinx + Breathe) lives at
 <https://lgili.github.io/modbus/>.  It covers the current surface of the library
-only; legacy APIs have been removed.
+only; legacy APIs have been removed.  Once the docs preset is built you can dive
+into:
+
+- [Cookbook](doc/build/html/cookbook.html) – ready-made client/server recipes,
+  observability hooks and testing patterns.
+- [Migration guide](doc/build/html/migration.html) – breaking changes and
+  adoption checklist for 1.x upgrades.
 
 ## Developer Notes
 

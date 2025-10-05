@@ -1,11 +1,10 @@
 /**
  * @file mb_err.h
- * @brief Centralized error codes and helpers for the Modbus library.
+ * @brief Central repository for Modbus error codes and helpers.
  *
- * This header consolidates the error enumeration and related utilities that were
- * previously scattered across legacy headers.  It provides a single place for
- * the common status codes used by both client and server components, laying the
- * groundwork for Gate 1 cleanups.
+ * This header consolidates the error enumeration and related utilities that
+ * were previously scattered across legacy headers, providing a single source of
+ * truth for status codes shared by the client, server and transport layers.
  */
 
 #ifndef MODBUS_MB_ERR_H
@@ -44,7 +43,7 @@ typedef enum modbus_error {
 } modbus_error_t;
 
 /**
- * @brief Convenience alias aligned with the Gate 1 naming scheme.
+ * @brief Convenience alias mirroring the historical ``modbus_error_t`` name.
  */
 typedef modbus_error_t mb_err_t;
 

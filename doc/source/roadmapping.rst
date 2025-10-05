@@ -1,7 +1,7 @@
-Roadmap & Gates (0–7)
-=====================
+Roadmap & Gates (0–12)
+======================
 
-This section summarises the completed gates up to **Gate 7**. Each gate lists
+This section summarises the completed gates up to **Gate 12**. Each gate lists
 the objectives, key deliverables and the acceptance checks that were wired into
 the test suite or CI.
 
@@ -72,6 +72,50 @@ Gate 7 – TCP / MBAP
   using the library CLI plus ``mbtget``/``modpoll``; throughput mock processes
   ≥ 1 000 responses (`test_tcp_throughput`).
 
-Future gates (8+) will address advanced robustness, HAL ports, additional
-function codes, observability and release hardening. Refer to ``update_plan.md``
-for the full roadmap.
+Future gates (13+) will focus on release hardening (sanitizers, MISRA profiles),
+security posture and long-term maintenance. Refer to ``update_plan.md`` for the
+full roadmap.
+
+Gate 8 – Robustness & Backpressure
+----------------------------------
+
+* **Deliverables:** Queue backpressure (configurable capacity), poison-pill
+  drains, per-function timeout overrides, latency/response metrics for both
+  client and server.
+* **Gate:** Chaos tests introduce bursty traffic, latency and packet loss;
+  the metrics counters capture drops/timeouts and no starvation occurs.
+
+Gate 9 – Port/HAL Adapters
+--------------------------
+
+* **Deliverables:** POSIX socket wrapper, FreeRTOS stream/queue adapter and
+  bare-metal transport helper (non-blocking UART/SPI integrations), plus a
+  portable mutex shim.
+* **Gate:** POSIX and FreeRTOS examples compile/run, bare-metal adapter passes
+  hardware-in-the-loop smoke tests.
+
+Gate 10 – Extended Function Codes
+---------------------------------
+
+* **Deliverables:** Helpers for FC 01/02/04/05/0F/17 alongside validation and
+  regression tests; ASCII framing deferred to a future iteration.
+* **Gate:** Unit/integration tests cover the additional PDU helpers, ensuring
+  malformed requests raise the correct exceptions.
+
+Gate 11 – Observability & Debug
+-------------------------------
+
+* **Deliverables:** Structured events (state enter/leave, transaction lifecycle),
+  opt-in hex tracing, diagnostics counters grouped by function code and error
+  bucket (``mb_diag_*`` API).
+* **Gate:** Integration tests capture events while inducing failures, and diag
+  counters reflect errors/timeouts accurately.
+
+Gate 12 – Documentation & API Stability
+---------------------------------------
+
+* **Deliverables:** Ports guide, migration notes, client/server cookbook,
+  Sphinx/Doxygen refresh and SemVer 1.0.0 declaration (stable umbrella header
+  ``<modbus/modbus.h>``).
+* **Gate:** Documentation builds without warnings, examples compile, and the
+  API surface is frozen under SemVer guarantees.

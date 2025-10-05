@@ -1,6 +1,10 @@
 /**
  * @file server.h
- * @brief Non-blocking Modbus server handling for holding registers (Gate 8).
+ * @brief Public API for the cooperative Modbus server runtime.
+ *
+ * The server exposes helpers to register register regions, manage
+ * prioritised request queues, and feed Modbus RTU transports while delivering
+ * diagnostics and observability hooks to the application layer.
  */
 
 #ifndef MODBUS_SERVER_H
@@ -135,7 +139,21 @@ typedef struct {
 } mb_server_t;
 
 /**
- * @brief Initialises a server object bound to a transport.
+ * @brief Initialises a server object bound to a transport interface.
+ *
+ * All memory backing regions and request slots is supplied by the caller so the
+ * server can operate without dynamic allocations.
+ *
+ * @param server           Server instance to initialise.
+ * @param iface            Transport implementing ::mb_transport_if_t.
+ * @param unit_id          Modbus unit identifier served by this instance.
+ * @param regions          Array used to store region descriptors.
+ * @param region_capacity  Number of entries available in @p regions.
+ * @param request_pool     Array of request descriptors used as queue storage.
+ * @param request_pool_len Number of entries in @p request_pool.
+ *
+ * @retval MB_OK                 Initialisation succeeded.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid argument or missing storage.
  */
 mb_err_t mb_server_init(mb_server_t *server,
                         const mb_transport_if_t *iface,
@@ -146,12 +164,30 @@ mb_err_t mb_server_init(mb_server_t *server,
                         mb_size_t request_pool_len);
 
 /**
- * @brief Clears all registered regions.
+ * @brief Clears all registered register regions and pending requests.
+ *
+ * Pending requests are not cancelled; call @ref mb_server_submit_poison first
+ * if a graceful drain is required.
  */
 void mb_server_reset(mb_server_t *server);
 
 /**
  * @brief Registers a region served exclusively through callbacks.
+ *
+ * Use this overload when registers are virtual or when backing storage lives
+ * outside the server instance.
+ *
+ * @param server    Server instance.
+ * @param start     First register address handled by the region.
+ * @param count     Number of registers exposed by the region.
+ * @param read_only Reject write requests when true.
+ * @param read_cb   Callback invoked for read operations.
+ * @param write_cb  Callback invoked for write operations (ignored when @p read_only is true).
+ * @param user_ctx  Pointer forwarded to callbacks.
+ *
+ * @retval MB_OK                 Region added successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid range or overlaps existing regions.
+ * @retval MB_ERR_OTHER          Region capacity exhausted.
  */
 mb_err_t mb_server_add_region(mb_server_t *server,
                               mb_u16 start,
@@ -163,6 +199,18 @@ mb_err_t mb_server_add_region(mb_server_t *server,
 
 /**
  * @brief Registers a region backed by caller-provided storage.
+ *
+ * The buffer provided in @p storage must contain at least @p count elements.
+ *
+ * @param server   Server instance.
+ * @param start    First register address handled by the region.
+ * @param count    Number of registers backed by @p storage.
+ * @param read_only Reject write requests when true.
+ * @param storage  Caller-owned register array.
+ *
+ * @retval MB_OK                 Region added successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid storage pointer or range.
+ * @retval MB_ERR_OTHER          Region capacity exhausted.
  */
 mb_err_t mb_server_add_storage(mb_server_t *server,
                                mb_u16 start,
@@ -171,34 +219,134 @@ mb_err_t mb_server_add_storage(mb_server_t *server,
                                mb_u16 *storage);
 
 /**
- * @brief Advances the server FSM.
+ * @brief Advances the server finite-state machine.
+ *
+ * Poll this function frequently to accept new Modbus requests and service the
+ * queue.
+ *
+ * @param server Server instance.
+ *
+ * @retval MB_OK                 Operation succeeded or no work was pending.
+ * @retval MB_ERR_INVALID_ARGUMENT @p server was NULL.
+ * @retval other                 Error codes bubbled up from the active transport.
  */
 mb_err_t mb_server_poll(mb_server_t *server);
 
+/**
+ * @brief Returns the number of requests currently pending in the queue.
+ *
+ * @param server Server instance.
+ * @return Number of pending requests (0 when @p server is NULL).
+ */
 mb_size_t mb_server_pending(const mb_server_t *server);
 
+/**
+ * @brief Reports whether the server has no active or queued requests.
+ *
+ * @param server Server instance.
+ *
+ * @retval true  No requests are in-flight or queued.
+ * @retval false There is active or pending work.
+ */
 bool mb_server_is_idle(const mb_server_t *server);
 
+/**
+ * @brief Limits how many requests can be staged at once.
+ *
+ * Setting @p capacity to zero enables an unbounded queue capped only by the
+ * size of the request pool.
+ *
+ * @param server   Server instance.
+ * @param capacity Maximum number of queued requests.
+ */
 void mb_server_set_queue_capacity(mb_server_t *server, mb_size_t capacity);
 
+/**
+ * @brief Retrieves the current queue capacity limit.
+ *
+ * @param server Server instance.
+ * @return Queue capacity (0 when @p server is NULL).
+ */
 mb_size_t mb_server_queue_capacity(const mb_server_t *server);
 
+/**
+ * @brief Overrides the timeout used for a specific function code.
+ *
+ * @param server   Server instance.
+ * @param function Function code whose timeout should be updated.
+ * @param timeout_ms Timeout in milliseconds (0 reverts to default).
+ */
 void mb_server_set_fc_timeout(mb_server_t *server, mb_u8 function, mb_time_ms_t timeout_ms);
 
+/**
+ * @brief Enqueues a poison pill that flushes outstanding requests.
+ *
+ * @param server Server instance.
+ *
+ * @retval MB_OK                 Poison request queued successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT @p server was NULL.
+ * @retval MB_ERR_NO_RESOURCES   No spare request slot was available.
+ */
 mb_err_t mb_server_submit_poison(mb_server_t *server);
 
+/**
+ * @brief Copies accumulated metrics into @p out_metrics.
+ *
+ * @param server       Server instance.
+ * @param out_metrics  Destination structure; left untouched when NULL.
+ */
 void mb_server_get_metrics(const mb_server_t *server, mb_server_metrics_t *out_metrics);
 
+/**
+ * @brief Resets the server metrics to zero.
+ *
+ * @param server Server instance.
+ */
 void mb_server_reset_metrics(mb_server_t *server);
 
+/**
+ * @brief Injects a raw ADU into the server for testing purposes.
+ *
+ * Intended for simulations where the transport path is bypassed.
+ *
+ * @param server Server instance.
+ * @param adu    ADU to inject.
+ *
+ * @retval MB_OK                 ADU was accepted for processing.
+ * @retval MB_ERR_INVALID_ARGUMENT @p server or @p adu was NULL.
+ */
 mb_err_t mb_server_inject_adu(mb_server_t *server, const mb_adu_view_t *adu);
 
+/**
+ * @brief Copies diagnostic counters into @p out_diag.
+ *
+ * @param server   Server instance.
+ * @param out_diag Destination structure; left untouched when NULL.
+ */
 void mb_server_get_diag(const mb_server_t *server, mb_diag_counters_t *out_diag);
 
+/**
+ * @brief Clears the diagnostic counters maintained by the server.
+ *
+ * @param server Server instance.
+ */
 void mb_server_reset_diag(mb_server_t *server);
 
+/**
+ * @brief Registers an event callback invoked on state transitions and requests.
+ *
+ * @param server   Server instance.
+ * @param callback Event sink; pass NULL to disable notifications.
+ * @param user_ctx Opaque pointer forwarded to @p callback.
+ */
 void mb_server_set_event_callback(mb_server_t *server, mb_event_callback_t callback, void *user_ctx);
 
+/**
+ * @brief Enables or disables hexadecimal tracing of requests and responses.
+ *
+ * @param server Server instance.
+ * @param enable ``true`` to enable tracing, ``false`` otherwise.
+ */
 void mb_server_set_trace_hex(mb_server_t *server, bool enable);
 
 #ifdef __cplusplus

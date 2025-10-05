@@ -1,6 +1,6 @@
 /**
  * @file pdu.h
- * @brief Helpers to encode and decode Modbus PDUs (Gate 2).
+ * @brief Helpers to encode and decode Modbus Protocol Data Units.
  */
 
 #ifndef MODBUS_PDU_H

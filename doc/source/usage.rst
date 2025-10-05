@@ -4,10 +4,11 @@ Usage Guide
 Initialisation
 --------------
 
-1. Set up a transport interface (RTU or TCP) implementing :ref:`mb_transport_if_t`.
-2. Initialise client or server with the respective init call.
-3. Register register regions (server) or prepare transaction pool (client).
-4. Poll the state machine regularly (``mb_client_poll`` / ``mb_server_poll``).
+1. Include the umbrella header ``<modbus/modbus.h>`` (or the specific headers you need).
+2. Set up a transport interface (RTU or TCP) implementing :ref:`mb_transport_if_t`.
+3. Initialise client or server with the respective init call.
+4. Register register regions (server) or prepare transaction pool (client).
+5. Poll the state machine regularly (``mb_client_poll`` / ``mb_server_poll``).
 
 Client Example (RTU)
 --------------------
@@ -117,9 +118,77 @@ descriptor:
 
    mb_port_posix_socket_close(&tcp);
 
-FreeRTOS and bare-metal helpers are stubbed for now (they return
-``MB_ERR_OTHER``), serving as placeholders for upcoming implementations while
-keeping the public API stable.
+FreeRTOS transport helper
+-------------------------
+
+Gate 9 also ships a FreeRTOS adapter that bridges stream buffers or queues to
+an :c:type:`mb_transport_if_t`.  Wire the low-level primitives and the Modbus
+client/server gains a non-blocking interface that cooperates with the scheduler:
+
+.. code-block:: c
+
+   mb_port_freertos_transport_t port;
+   mb_port_freertos_transport_init(&port,
+                                   tx_stream,
+                                   rx_stream,
+                                   xStreamBufferSend,
+                                   xStreamBufferReceive,
+                                   xTaskGetTickCount,
+                                   taskYIELD,
+                                   configTICK_RATE_HZ,
+                                   pdMS_TO_TICKS(10));
+
+   const mb_transport_if_t *iface = mb_port_freertos_transport_iface(&port);
+   mb_client_init(&client, iface, tx_pool, MB_COUNTOF(tx_pool));
+
+Bare-metal helper
+-----------------
+
+For MCUs without an RTOS use :c:type:`mb_port_bare_transport_t` to adapt your
+HAL callbacks.  Provide non-blocking send/receive hooks plus a monotonic tick
+source and the library handles the rest:
+
+.. code-block:: c
+
+   static mb_err_t uart_send(void *ctx,
+                             const mb_u8 *buf,
+                             mb_size_t len,
+                             mb_transport_io_result_t *out)
+   {
+       /* drive DMA/interrupt UART; populate out->bytes */
+   }
+
+   static mb_err_t uart_recv(void *ctx,
+                             mb_u8 *buf,
+                             mb_size_t cap,
+                             mb_transport_io_result_t *out)
+   {
+       /* peek RX FIFO; set out->status to MB_TRANSPORT_IO_AGAIN when empty */
+   }
+
+   static uint32_t ticks_now(void *ctx)
+   {
+       return timer_ticks();
+   }
+
+   mb_port_bare_transport_t port;
+   mb_port_bare_transport_init(&port,
+                               &uart_handle,
+                               uart_send,
+                               uart_recv,
+                               ticks_now,
+                               1000U, /* 1 kHz tick */
+                               cpu_yield,
+                               NULL);
+
+   const mb_transport_if_t *iface = mb_port_bare_transport_iface(&port);
+   mb_server_init(&server,
+                  iface,
+                  0x11U,
+                  regions,
+                  MB_COUNTOF(regions),
+                  requests,
+                  MB_COUNTOF(requests));
 
 Observability hooks
 -------------------
@@ -179,3 +248,6 @@ Advanced Features
 * Watchdog: ``mb_client_set_watchdog``.
 
 Refer to :doc:`api` for exhaustive definitions.
+
+For more complete end-to-end walkthroughs visit the :doc:`cookbook`, and when
+upgrading existing deployments consult the :doc:`migration` guide.

@@ -1,6 +1,6 @@
 /**
  * @file bare.h
- * @brief Bare-metal friendly transport helpers (Gate 9 deliverable).
+ * @brief Bare-metal friendly transport helpers for Modbus integrations.
  */
 
 #ifndef MODBUS_PORT_BARE_H
@@ -65,6 +65,9 @@ typedef struct mb_port_bare_transport {
  * @param tick_rate_hz  Tick frequency used to derive milliseconds.
  * @param yield_fn      Optional CPU-yield hook (may be ``NULL``).
  * @param clock_ctx     Optional clock handle (defaults to ``user_ctx`` when ``NULL``).
+ *
+ * @retval MB_OK                 Adapter initialised successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Missing callbacks or invalid tick parameters.
  */
 mb_err_t mb_port_bare_transport_init(mb_port_bare_transport_t *port,
                                      void *user_ctx,
@@ -77,16 +80,24 @@ mb_err_t mb_port_bare_transport_init(mb_port_bare_transport_t *port,
 
 /**
  * @brief Updates the tick rate used for millisecond conversion.
+ *
+ * @param port          Adapter instance.
+ * @param tick_rate_hz  New tick rate (Hz); ignored when zero.
  */
 void mb_port_bare_transport_update_tick_rate(mb_port_bare_transport_t *port, uint32_t tick_rate_hz);
 
 /**
  * @brief Allows using a dedicated clock context separate from ``user_ctx``.
+ *
+ * @param port       Adapter instance.
+ * @param clock_ctx  Context forwarded to the tick callback.
  */
 void mb_port_bare_transport_set_clock_ctx(mb_port_bare_transport_t *port, void *clock_ctx);
 
 /**
  * @brief Returns the configured transport interface.
+ *
+ * The pointer remains valid for as long as @p port is alive.
  */
 const mb_transport_if_t *mb_port_bare_transport_iface(mb_port_bare_transport_t *port);
 

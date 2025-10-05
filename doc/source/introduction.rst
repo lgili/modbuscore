@@ -1,10 +1,12 @@
 Introduction
 ============
 
-This documentation describes the current generation of the Modbus C library.
-The focus is on an embedded-friendly, non-blocking implementation targeting
-Modbus RTU and Modbus TCP transports with a clean separation between the PDU
-codec, transport interfaces, and the client/server state machines.
+This documentation describes the **Modbus C library 1.0.0**. The focus is on
+an embedded-friendly, non-blocking implementation targeting Modbus RTU and
+Modbus TCP transports with a clean separation between the PDU codec, transport
+interfaces, and the client/server state machines. Gate 12 ratifies the public
+API surface for long-term support: applications that include ``<modbus/modbus.h>``
+can rely on SemVer guarantees going forward.
 
 **Key design goals**
 

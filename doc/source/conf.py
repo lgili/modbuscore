@@ -5,7 +5,7 @@ from datetime import datetime
 project = "Modbus C Library"
 author = "Luiz Carlos Gili"
 copyright = f"{datetime.now():%Y}, {author}"
-release = os.environ.get("MODBUS_DOC_VERSION", "0.7.0")
+release = os.environ.get("MODBUS_DOC_VERSION", "1.0.0")
 
 extensions = [
     "breathe",

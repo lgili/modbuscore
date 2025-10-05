@@ -8,6 +8,9 @@ Modbus C Library
    introduction
    installation
    usage
+   ports
+   cookbook
+   migration
    api
    roadmapping
    contributing

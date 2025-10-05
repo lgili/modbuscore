@@ -1,11 +1,10 @@
 /**
  * @file mb_log.h
- * @brief Thin logging façade used during Gate 1 refactoring.
+ * @brief Lightweight logging façade shared across the Modbus library.
  *
- * The current implementation re-exports the existing uLog-based infrastructure
- * via Modbus-specific names.  Future gates can evolve this layer without
- * touching callers—code should include this header instead of the legacy
- * `log.h` directly.
+ * The module re-exports the underlying logging implementation through
+ * Modbus-specific names so applications can configure sinks and thresholds
+ * without depending on the internal headers.
  */
 
 #ifndef MODBUS_MB_LOG_H

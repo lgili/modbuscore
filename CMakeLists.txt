@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(Modbus VERSION 1.2.3 LANGUAGES C CXX)
+project(Modbus VERSION 1.0.0 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Build configuration knobs (Gate 0 deliverables)

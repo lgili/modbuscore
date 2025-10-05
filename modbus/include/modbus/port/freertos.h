@@ -1,6 +1,6 @@
 /**
  * @file freertos.h
- * @brief FreeRTOS-friendly transport adapters (Gate 9 deliverable).
+ * @brief FreeRTOS-friendly transport adapters for Modbus targets.
  */
 
 #ifndef MODBUS_PORT_FREERTOS_H
@@ -58,6 +58,22 @@ typedef struct mb_port_freertos_transport {
 
 /**
  * @brief Initialises a FreeRTOS-backed transport adapter.
+ *
+ * All parameters mirror the FreeRTOS stream/queue APIs, allowing the adapter
+ * to forward I/O to stream buffers, queues, or custom shims.
+ *
+ * @param port            Adapter storage to initialise.
+ * @param tx_stream       Stream/queue used to transmit bytes.
+ * @param rx_stream       Stream/queue used to receive bytes.
+ * @param send_fn         Function that pushes bytes into @p tx_stream.
+ * @param recv_fn         Function that pulls bytes from @p rx_stream.
+ * @param tick_fn         Hook returning the current scheduler tick count.
+ * @param yield_fn        Optional cooperative-yield hook (``taskYIELD``).
+ * @param tick_rate_hz    Scheduler tick rate expressed in hertz.
+ * @param max_block_ticks Maximum number of ticks each I/O call may block.
+ *
+ * @retval MB_OK                 Adapter initialised successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Missing stream handles or callbacks.
  */
 mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
                                          void *tx_stream,
@@ -71,16 +87,24 @@ mb_err_t mb_port_freertos_transport_init(mb_port_freertos_transport_t *port,
 
 /**
  * @brief Updates the maximum number of ticks each I/O call may block.
+ *
+ * @param port   Adapter instance.
+ * @param ticks  Maximum block duration expressed in scheduler ticks.
  */
 void mb_port_freertos_transport_set_block_ticks(mb_port_freertos_transport_t *port, uint32_t ticks);
 
 /**
  * @brief Updates the tick frequency (Hz) used for ms conversion.
+ *
+ * @param port         Adapter instance.
+ * @param tick_rate_hz New tick rate; ignored when zero.
  */
 void mb_port_freertos_transport_set_tick_rate(mb_port_freertos_transport_t *port, uint32_t tick_rate_hz);
 
 /**
  * @brief Returns the transport interface managed by the adapter.
+ *
+ * The pointer remains valid while the adapter structure stays in scope.
  */
 const mb_transport_if_t *mb_port_freertos_transport_iface(mb_port_freertos_transport_t *port);
 

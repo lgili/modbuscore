@@ -1,6 +1,10 @@
 /**
  * @file client.h
- * @brief Non-blocking Modbus client transaction manager (Gate 5).
+ * @brief Public API for the asynchronous Modbus client state machine.
+ *
+ * The client manages a queue of protocol transactions, applies retry and
+ * watchdog policies, and bridges the higher layers to RTU or TCP transports
+ * without blocking the caller.
  */
 
 #ifndef MODBUS_CLIENT_H
@@ -124,48 +128,210 @@ typedef struct mb_client {
     bool trace_hex;
 } mb_client_t;
 
+/**
+ * @brief Initialises a Modbus client instance bound to a transport.
+ *
+ * The client adopts @p iface as its non-blocking transport, clears the
+ * transaction pool and applies default timeout/backoff configuration. Callers
+ * must provide storage for the transaction descriptors in @p txn_pool.
+ *
+ * @param client        Client object to initialise.
+ * @param iface         Transport interface implementing @ref mb_transport_if_t.
+ * @param txn_pool      Array of transaction slots managed by the client.
+ * @param txn_pool_len  Number of elements in @p txn_pool.
+ *
+ * @retval MB_OK                 Initialisation succeeded.
+ * @retval MB_ERR_INVALID_ARGUMENT  One of the arguments was NULL or invalid.
+ */
 mb_err_t mb_client_init(mb_client_t *client,
                         const mb_transport_if_t *iface,
                         mb_client_txn_t *txn_pool,
                         mb_size_t txn_pool_len);
 
+/**
+ * @brief Initialises a client instance targeting Modbus TCP transports.
+ *
+ * This variant wires the TCP transport helper, enabling transaction ID routing
+ * and multi-socket aware callbacks. Parameters mirror @ref mb_client_init.
+ *
+ * @see mb_client_init
+ *
+ * @retval MB_OK                 Initialisation succeeded.
+ * @retval MB_ERR_INVALID_ARGUMENT  One of the arguments was NULL or invalid.
+ */
 mb_err_t mb_client_init_tcp(mb_client_t *client,
                             const mb_transport_if_t *iface,
                             mb_client_txn_t *txn_pool,
                             mb_size_t txn_pool_len);
 
+/**
+ * @brief Queues a Modbus request for transmission.
+ *
+ * The request is copied into an available transaction slot. When @p out_txn is
+ * not NULL it receives the descriptor so callers can later inspect state or
+ * cancel the operation. Requests flagged with
+ * ::MB_CLIENT_REQUEST_HIGH_PRIORITY bypass the FIFO order while
+ * ::MB_CLIENT_REQUEST_POISON flushes the queue.
+ *
+ * @param client   Client instance obtained from @ref mb_client_init.
+ * @param request  Immutable request description; payload is copied internally.
+ * @param out_txn  Optional pointer that receives the allocated transaction.
+ *
+ * @retval MB_OK              The request was queued successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT  Arguments were NULL or payload exceeded ::MB_PDU_MAX.
+ * @retval MB_ERR_NO_RESOURCES No transaction slots or queue capacity available.
+ */
 mb_err_t mb_client_submit(mb_client_t *client,
                           const mb_client_request_t *request,
                           mb_client_txn_t **out_txn);
 
+/**
+ * @brief Injects a high-priority poison pill that drains the queue.
+ *
+ * The client stops after current work completes, leaving the FSM idle. Useful
+ * when shutting down or when transports need to be reconfigured.
+ *
+ * @param client Client instance.
+ *
+ * @retval MB_OK                 Poison request queued successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT @p client was NULL.
+ * @retval MB_ERR_NO_RESOURCES   No transaction slot available for the poison pill.
+ */
 mb_err_t mb_client_submit_poison(mb_client_t *client);
 
+/**
+ * @brief Cancels a previously submitted transaction.
+ *
+ * If the transaction is in-flight it is finalised with ::MB_ERR_CANCELLED. If
+ * it was queued, it is removed from the pending list.
+ *
+ * @param client Client instance.
+ * @param txn    Transaction descriptor obtained from @ref mb_client_submit.
+ *
+ * @retval MB_OK                  The transaction was cancelled successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT The transaction pointer was NULL or not in use.
+ */
 mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn);
 
+/**
+ * @brief Advances the client finite-state machine.
+ *
+ * Poll this function from your event loop to progress retries, timeouts and
+ * transport I/O.
+ *
+ * @param client Client instance.
+ * @retval MB_OK             Operation succeeded or no work was required.
+ * @retval MB_ERR_INVALID_ARGUMENT  @p client was NULL.
+ * @retval other             Error codes bubbled up from the active transport.
+ */
 mb_err_t mb_client_poll(mb_client_t *client);
 
+/**
+ * @brief Configures the watchdog window for in-flight transactions.
+ *
+ * When non-zero, transactions exceeding @p watchdog_ms without progress are
+ * aborted with ::MB_ERR_TRANSPORT.
+ *
+ * @param client      Client instance.
+ * @param watchdog_ms Maximum inactivity window in milliseconds (0 disables).
+ */
 void mb_client_set_watchdog(mb_client_t *client, mb_time_ms_t watchdog_ms);
 
+/**
+ * @brief Reports whether the client has no active or queued transactions.
+ *
+ * @param client Client instance.
+ *
+ * @retval true  No transactions active or queued.
+ * @retval false At least one transaction is pending.
+ */
 bool mb_client_is_idle(const mb_client_t *client);
 
+/**
+ * @brief Returns the number of transactions currently active or queued.
+ *
+ * @param client Client instance.
+ * @return Number of transactions in-flight or awaiting dispatch.
+ */
 mb_size_t mb_client_pending(const mb_client_t *client);
 
+/**
+ * @brief Limits the amount of concurrent work accepted by the client.
+ *
+ * Set @p capacity to zero to fall back to the pool size (default behaviour).
+ *
+ * @param client   Client instance.
+ * @param capacity Maximum number of transactions allowed simultaneously.
+ */
 void mb_client_set_queue_capacity(mb_client_t *client, mb_size_t capacity);
 
+/**
+ * @brief Retrieves the current queue capacity limit.
+ *
+ * @param client Client instance.
+ * @return Configured queue capacity (0 when @p client is NULL).
+ */
 mb_size_t mb_client_queue_capacity(const mb_client_t *client);
 
+/**
+ * @brief Overrides the timeout for a specific function code.
+ *
+ * Passing a zero timeout clears the override and reverts to the default
+ * exponential strategy.
+ *
+ * @param client   Client instance.
+ * @param function Function code to override.
+ * @param timeout_ms New timeout in milliseconds (0 clears override).
+ */
 void mb_client_set_fc_timeout(mb_client_t *client, mb_u8 function, mb_time_ms_t timeout_ms);
 
+/**
+ * @brief Copies the current client metrics into @p out_metrics.
+ *
+ * @param client      Client instance.
+ * @param out_metrics Destination structure; left untouched when NULL.
+ */
 void mb_client_get_metrics(const mb_client_t *client, mb_client_metrics_t *out_metrics);
 
+/**
+ * @brief Resets all accumulated client metrics back to zero.
+ *
+ * @param client Client instance.
+ */
 void mb_client_reset_metrics(mb_client_t *client);
 
+/**
+ * @brief Copies diagnostic counters into @p out_diag.
+ *
+ * @param client   Client instance.
+ * @param out_diag Destination structure; left untouched when NULL.
+ */
 void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag);
 
+/**
+ * @brief Clears the diagnostic counters collected for this client.
+ *
+ * @param client Client instance.
+ */
 void mb_client_reset_diag(mb_client_t *client);
 
+/**
+ * @brief Registers an event callback to observe client activity.
+ *
+ * When @p callback is non-NULL the current state is emitted immediately.
+ *
+ * @param client    Client instance.
+ * @param callback  Event sink invoked on state and transaction updates.
+ * @param user_ctx  Opaque pointer forwarded to @p callback.
+ */
 void mb_client_set_event_callback(mb_client_t *client, mb_event_callback_t callback, void *user_ctx);
 
+/**
+ * @brief Toggles hexadecimal tracing of TX/RX PDUs to the logging sink.
+ *
+ * @param client Client instance.
+ * @param enable ``true`` to enable tracing, ``false`` to disable.
+ */
 void mb_client_set_trace_hex(mb_client_t *client, bool enable);
 
 #ifdef __cplusplus

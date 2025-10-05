@@ -100,6 +100,11 @@ static inline void mb_transport_yield(const mb_transport_if_t *iface)
     }
 }
 
+/**
+ * @brief Computes the elapsed time in milliseconds since @p since.
+ *
+ * Returns zero when @p iface is NULL or the clock rolled backwards.
+ */
 static inline mb_time_ms_t mb_transport_elapsed_since(const mb_transport_if_t *iface,
                                                       mb_time_ms_t since)
 {

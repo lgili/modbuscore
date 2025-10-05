@@ -1,6 +1,6 @@
 /**
  * @file mutex.h
- * @brief Optional synchronisation primitives for Modbus ports (Gate 9).
+ * @brief Optional synchronisation primitives for Modbus ports.
  */
 
 #ifndef MODBUS_PORT_MUTEX_H
@@ -43,9 +43,34 @@ typedef struct mb_port_mutex {
 #endif
 } mb_port_mutex_t;
 
+/**
+ * @brief Initialises a mutex object.
+ *
+ * @retval MB_OK                 Mutex initialised successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT @p mutex was NULL.
+ * @retval MB_ERR_OTHER          Underlying platform call failed.
+ */
 mb_err_t mb_port_mutex_init(mb_port_mutex_t *mutex);
+
+/**
+ * @brief Releases resources held by the mutex.
+ *
+ * No-op when the mutex has not been initialised.
+ */
 void mb_port_mutex_deinit(mb_port_mutex_t *mutex);
+
+/**
+ * @brief Attempts to acquire the mutex, blocking/spinning until success.
+ *
+ * @retval MB_OK                 Mutex acquired successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT @p mutex was NULL.
+ * @retval MB_ERR_OTHER          Mutex not initialised or platform error.
+ */
 mb_err_t mb_port_mutex_lock(mb_port_mutex_t *mutex);
+
+/**
+ * @brief Releases the mutex.
+ */
 void mb_port_mutex_unlock(mb_port_mutex_t *mutex);
 
 #ifdef __cplusplus
