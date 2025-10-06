@@ -90,8 +90,9 @@ extern "C"{
  * Currently supports RTU and TCP. Additional transport types can be added in the future.
  */
 typedef enum {
-    MODBUS_TRANSPORT_RTU = 1, /**< RTU transport type */
-    MODBUS_TRANSPORT_TCP = 2  /**< TCP transport type */
+    MODBUS_TRANSPORT_RTU = 1,    /**< RTU transport type */
+    MODBUS_TRANSPORT_TCP = 2,    /**< TCP transport type */
+    MODBUS_TRANSPORT_ASCII = 3   /**< ASCII transport type */
 } modbus_transport_type_t;
 
 /**

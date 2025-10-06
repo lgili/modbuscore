@@ -76,6 +76,7 @@ set(GENERATED_DIR       "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(VERSION_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
 set(PROJECT_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}Config.cmake")
 set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
+set(PKG_CONFIG_FILE "${GENERATED_DIR}/${LIBRARY_NAME}.pc")
 
 # Include module with functions:
 #   - write_basic_package_version_file(...)
@@ -99,6 +100,12 @@ configure_package_config_file(
     "${PROJECT_SOURCE_DIR}/cmake/Config.cmake.in"
     "${PROJECT_CONFIG_FILE}"
       INSTALL_DESTINATION "${CONFIG_INSTALL_DIR}"
+)
+
+configure_file(
+  "${PROJECT_SOURCE_DIR}/cmake/modbus.pc.in"
+  "${PKG_CONFIG_FILE}"
+  @ONLY
 )
 
 # Uninstall targets

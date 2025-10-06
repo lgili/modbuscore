@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+
+Name: @PROJECT_NAME@
+Description: Embedded-friendly Modbus RTU/TCP library
+Version: @Modbus_VERSION@
+Libs: -L${libdir} -l@LIBRARY_NAME@
+Cflags: -I${includedir}/@LIBRARY_FOLDER@

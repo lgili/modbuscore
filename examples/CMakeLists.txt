@@ -22,6 +22,10 @@ add_executable(modbus_rtu_loop_demo rtu_loop_demo.c)
 target_link_libraries(modbus_rtu_loop_demo PRIVATE Modbus::modbus)
 target_compile_options(modbus_rtu_loop_demo PRIVATE ${MODBUS_WARN_FLAGS})
 
+add_executable(modbus_unit_test_loop_demo unit_test_loop_demo.c)
+target_link_libraries(modbus_unit_test_loop_demo PRIVATE Modbus::modbus)
+target_compile_options(modbus_unit_test_loop_demo PRIVATE ${MODBUS_WARN_FLAGS})
+
 add_executable(modbus_rtu_serial_server rtu_serial_server.c)
 target_link_libraries(modbus_rtu_serial_server PRIVATE modbus_examples_common)
 target_compile_options(modbus_rtu_serial_server PRIVATE ${MODBUS_WARN_FLAGS})
@@ -51,6 +55,7 @@ set(INSTALLABLE_TARGETS
   modbus_rtu_loop_demo
   modbus_rtu_serial_server
   modbus_rtu_serial_client
+  modbus_unit_test_loop_demo
   modbus_freertos_sim
   modbus_bare_sim
 )

@@ -33,6 +33,7 @@
 #include <modbus/transport.h>
 #include <modbus/transport_if.h>
 #include <modbus/transport/rtu.h>
+#include <modbus/transport/ascii.h>
 #include <modbus/transport/tcp.h>
 #include <modbus/transport/tcp_multi.h>
 #include <modbus/frame.h>
@@ -41,6 +42,7 @@
 #include <modbus/core.h>
 #if MB_CONF_BUILD_SERVER
 #include <modbus/server.h>
+#include <modbus/mapping.h>
 #endif
 
 #if MB_CONF_BUILD_CLIENT

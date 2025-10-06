@@ -75,6 +75,11 @@ install(
     DESTINATION "${CONFIG_INSTALL_DIR}"
 )
 
+install(
+  FILES "${PKG_CONFIG_FILE}"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+)
+
 # Config
 #   - <prefix>/lib/cmake/Foo/FooTargets.cmake
 install(

@@ -65,6 +65,19 @@ Build-system updates
   include directories and compile definitions flow correctly.
 * CMake requires 3.20 now. Regenerate your build directories when bumping.
 
+Compatibility helpers (Gate 15)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Replace `modbus_mapping_new_start_address` usage with
+  :c:func:`mb_server_mapping_init` or :c:func:`mb_server_mapping_apply`. The new
+  helpers accept user-provided storage (heap-free by default) and wire regions
+  into the cooperative server in one call.
+* Installation exports now include both ``ModbusConfig.cmake`` (for
+  ``find_package``) and ``modbus.pc`` (for ``pkg-config``). Update build scripts
+  to prefer the upstream packages over hand-rolled include/lib hints.
+* The `modbus_unit_test_loop_demo` example mirrors libmodbus' unit-test client
+  and server flows, easing parity testing when porting applications.
+
 Adoption checklist
 ^^^^^^^^^^^^^^^^^^
 

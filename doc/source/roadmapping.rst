@@ -94,13 +94,13 @@ Gate 9 – Port/HAL Adapters
 * **Gate:** POSIX and FreeRTOS examples compile/run, bare-metal adapter passes
   hardware-in-the-loop smoke tests.
 
-Gate 10 – Extended Function Codes
----------------------------------
+Gate 10 – Extended Function Codes + ASCII
+-----------------------------------------
 
 * **Deliverables:** Helpers for FC 01/02/04/05/0F/17 alongside validation and
-  regression tests; ASCII framing deferred to a future iteration.
-* **Gate:** Unit/integration tests cover the additional PDU helpers, ensuring
-  malformed requests raise the correct exceptions.
+  regression tests, plus Modbus ASCII framing with LRC validation.
+* **Gate:** Unit/integration tests cover the additional PDU helpers and ASCII
+  transport, ensuring malformed requests raise the correct exceptions.
 
 Gate 11 – Observability & Debug
 -------------------------------

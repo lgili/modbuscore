@@ -10,6 +10,7 @@ extern "C" {
 #include <modbus/observe.h>
 #include <modbus/pdu.h>
 #include <modbus/server.h>
+#include <modbus/mapping.h>
 #include <modbus/transport.h>
 }
 
@@ -23,6 +24,21 @@ const mb_transport_if_t *mock_transport_get_iface(void);
 }
 
 namespace {
+
+TEST(ServerMapping, NullArguments)
+{
+    mb_server_mapping_bank_t bank = {
+        .start = 0U,
+        .count = 1U,
+        .storage = nullptr,
+        .read_only = false,
+    };
+
+    EXPECT_EQ(MB_ERR_INVALID_ARGUMENT, mb_server_mapping_apply(nullptr, &bank, 1U));
+
+    mb_server_t server{};
+    EXPECT_EQ(MB_ERR_INVALID_ARGUMENT, mb_server_mapping_init(&server, nullptr));
+}
 
 constexpr mb_u8 kUnitId = 0x11U;
 
@@ -47,23 +63,37 @@ protected:
         iface_ = mock_transport_get_iface();
         ASSERT_NE(nullptr, iface_);
 
-        mb_err_t err = mb_server_init(&server_,
-                                      iface_,
-                                      kUnitId,
-                                      regions_.data(),
-                                      regions_.size(),
-                                      request_pool_.data(),
-                                      request_pool_.size());
-        ASSERT_EQ(MB_OK, err);
-
         // Map holding registers 0x0010..0x0014 (5 registers) as read/write storage.
         storage_rw_ = {0x1111, 0x2222, 0x3333, 0x4444, 0x5555};
-        err = mb_server_add_storage(&server_, 0x0010U, static_cast<mb_u16>(storage_rw_.size()), false, storage_rw_.data());
-        ASSERT_EQ(MB_OK, err);
 
         // Map read-only block 0x0020..0x0021 (2 registers).
         storage_ro_ = {0xAAAA, 0xBBBB};
-        err = mb_server_add_storage(&server_, 0x0020U, static_cast<mb_u16>(storage_ro_.size()), true, storage_ro_.data());
+
+        const std::array<mb_server_mapping_bank_t, 2> banks = {{{
+                                                                    .start = 0x0010U,
+                                                                    .count = static_cast<mb_u16>(storage_rw_.size()),
+                                                                    .storage = storage_rw_.data(),
+                                                                    .read_only = false,
+                                                                },
+                                                                {
+                                                                    .start = 0x0020U,
+                                                                    .count = static_cast<mb_u16>(storage_ro_.size()),
+                                                                    .storage = storage_ro_.data(),
+                                                                    .read_only = true,
+                                                                }}};
+
+        const mb_server_mapping_config_t cfg = {
+            .iface = iface_,
+            .unit_id = kUnitId,
+            .regions = regions_.data(),
+            .region_capacity = regions_.size(),
+            .request_pool = request_pool_.data(),
+            .request_capacity = request_pool_.size(),
+            .banks = banks.data(),
+            .bank_count = banks.size(),
+        };
+
+        const mb_err_t err = mb_server_mapping_init(&server_, &cfg);
         ASSERT_EQ(MB_OK, err);
 
         mock_clear_tx_buffer();

@@ -3,8 +3,10 @@ set(SOURCES
   src/ringbuf.c
   src/mempool.c
   src/pdu.c
+  src/mapping.c
   src/frame.c
   src/transport.c
+  src/transport/ascii/ascii.c
   src/transport/tcp/tcp.c
   src/transport/tcp/tcp_multi.c
   src/mb_log.c
@@ -49,7 +51,9 @@ set(HEADERS_PUBLIC
   include/modbus/observe.h
   include/modbus/modbus.h
   include/modbus/conf.h
+  include/modbus/mapping.h
   include/modbus/transport.h
+  include/modbus/transport/ascii.h
   include/modbus/transport/rtu.h
   include/modbus/transport/tcp.h
   include/modbus/transport/tcp_multi.h

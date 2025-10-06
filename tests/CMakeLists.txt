@@ -52,6 +52,7 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_bare.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_ascii_transport.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_transport.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_transport.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_multi.cpp

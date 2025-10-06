@@ -19,6 +19,8 @@ HALs can evolve independently.
   multi-connection helper for Modbus TCP, and reusable RTU framing utilities.
 - **Extended PDU codec** – supports FC 01/02/03/04/05/06/07/0F/10/11/16/17 helpers with
   strict validation, covering the extra function codes from Gate 10.
+- **Drop-in mapping helper** – Gate 15 bundles libmodbus-style mapping via
+  `mb_server_mapping_init`, speeding up register binding with zero boilerplate.
 - **Backpressure & observability** – configurable queue capacity, per-function
   timeouts, poison-pill flush and latency/response metrics for both client and
   server paths (Gate 8).
@@ -48,8 +50,9 @@ HALs can evolve independently.
 | 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
 | 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
 | 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
+| 10 | Extra FCs (01/02/04/05/0F/17) + ASCII transport | ✅ |
 | 11 | Observability & debug (events, tracing, diagnostics) | ✅ |
-| 10 | Extra FCs (01/02/04/05/0F/17) | ⏳ (ASCII framing coming next) |
+| 15 | Compatibility & port conveniences | ✅ |
 | 14 | Protocol parity & data helpers | ✅ |
 
 ## Function code coverage
@@ -69,7 +72,8 @@ HALs can evolve independently.
 |0x16 | Mask Write Register       | Client/Server       | ✅ |
 |0x17 | Read/Write Multiple Regs  | Client/Server       | ✅ |
 
-ASCII framing remains scheduled for Gate 10.
+ASCII transport now complements the RTU and TCP implementations with
+colon-framed LRC-validated links.
 
 ## libmodbus parity helpers
 
@@ -78,6 +82,15 @@ compatible with `libmodbus` (`modbus_get_uint32_*`, `modbus_get_float_*` and
 the matching setters). Each variant honours the byte-order conventions
 ABCD/DCBA/BADC/CDAB, making migrations painless without manual buffer shuffles.
 Refer to `modbus/utils.h` for the full getter/setter roster.
+
+Gate 15 extends the compatibility story with:
+
+- `mb_server_mapping_init`/`mb_server_mapping_apply` to replicate
+  `modbus_mapping_new_start_address` without dynamic allocation.
+- Installation artifacts for both `find_package(Modbus CONFIG)` and
+  `pkg-config --cflags --libs modbus`.
+- A self-contained `modbus_unit_test_loop_demo` example that mirrors the
+  libmodbus unit-test client/server flow on top of the cooperative FSMs.
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
 hardening.  See `update_plan.md` for the full roadmap.
@@ -164,6 +177,26 @@ cmake --build --preset docs
 HTML output is produced under `build/docs/html` and is automatically published
 to GitHub Pages (`gh-pages` branch) by the CI workflow.
 
+### Consume with CMake
+
+```cmake
+find_package(Modbus CONFIG REQUIRED)
+add_executable(my_app main.c)
+target_link_libraries(my_app PRIVATE Modbus::modbus)
+```
+
+Installation exports live under `${prefix}/lib/cmake/Modbus`. Any extra
+components (examples, docs) follow the same namespace.
+
+### Consume with pkg-config
+
+```bash
+pkg-config --cflags --libs modbus
+```
+
+The generated `modbus.pc` honours the install prefix and exposes both static
+and shared builds.
+
 ## Examples
 
 Examples are disabled by default. Enable them explicitly when configuring and
@@ -174,6 +207,7 @@ cmake --preset host-debug-examples
 cmake --build --preset host-debug-examples --target \
   modbus_tcp_server_demo \
   modbus_tcp_client_cli \
+  modbus_unit_test_loop_demo \
   modbus_rtu_loop_demo \
   modbus_rtu_serial_server \
   modbus_rtu_serial_client
@@ -262,6 +296,8 @@ Once configured, the following additional example binaries become available:
 - `modbus_tcp_server_demo` – single-connection Modbus TCP server with live register updates and tracing hooks (macOS/Linux/Windows).
 - `modbus_tcp_multi_client_demo` – fan-out client that concurrently polls multiple Modbus TCP servers using the multi-transport helper.
 - `modbus_rtu_loop_demo` – self-contained RTU client/server loop using the in-memory transport shim for quick sanity checks.
+- `modbus_unit_test_loop_demo` – Gate 15 showcase that replicates the libmodbus
+  unit-test client/server exchange with the new mapping helpers.
 - `modbus_rtu_serial_server` – binds the RTU server FSM to a real serial port/USB adapter using the portable helper abstraction.
 - `modbus_rtu_serial_client` – polls holding registers from a serial Modbus slave (or the server demo) with optional trace output.
 - `modbus_freertos_sim` – FreeRTOS-style stream/queue simulation backed by `mb_port_freertos_transport_init`.

@@ -19,6 +19,7 @@ Build the examples preset once to compile all helper binaries:
     cmake --build --preset host-debug-examples --target \
       modbus_tcp_server_demo \
       modbus_tcp_client_cli \
+            modbus_unit_test_loop_demo \
             modbus_rtu_loop_demo \
             modbus_rtu_serial_server \
             modbus_rtu_serial_client
@@ -63,6 +64,21 @@ Exercise the RTU client/server FSMs without any external hardware:
 
 The demo prints both client and server state transitions and dumps the register
 values pulled through the loopback transport.
+
+Unit-test style loopback (Gate 15)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Replicate the classic libmodbus unit-test flow—read, write single, write many
+and exception probes—using the new mapping helpers:
+
+.. code-block:: bash
+
+    ./build/host-debug-examples/examples/modbus_unit_test_loop_demo
+
+The program wires storage via :c:func:`mb_server_mapping_init`, runs the client
+and server FSMs in lock-step over an in-memory transport, and prints each step
+alongside the updated register banks. Ideal for validating ported
+applications before integrating real transports.
 
 RTU serial client/server pair
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

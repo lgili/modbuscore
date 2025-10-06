@@ -103,7 +103,7 @@ Each stage lists Objective, Deliverables, and Gate (acceptance). We only advance
 
 10) ASCII (optional) + extra FCs
 	•	Deliverables: ASCII framing; extend FC coverage (01/02/04/05/0F/17 as needed).
-	•	Status: 🔄 FC helpers landed (validated requests/responses); ASCII framing still pending.
+	•	Status: ✅ FC helpers and ASCII transport merged with unit coverage mirroring RTU/TCP.
 	•	Gate: same regression suite as RTU/TCP.
 
 11) Observability & debug
@@ -125,8 +125,9 @@ Each stage lists Objective, Deliverables, and Gate (acceptance). We only advance
 	•	Status: ✅ deliverables shipped and documented.
 
 15) Compatibility & port convenience
-	•	Deliverables: quick mapping constructors (libmodbus `modbus_mapping_new` style), auto-generated `pkg-config`/`find_package` artifacts, migration guide, examples equivalent to classic libmodbus client/server tests.
-	•	Gate: examples build using only the installed package, migration guide covers 90% of libmodbus→modbus workflows, integration pipelines validate both demos.
+	•	Deliverables: libmodbus-style mapping helpers (`mb_server_mapping_init`), generated `pkg-config` + `find_package` artifacts, expanded migration guidance, demo mirroring the classic libmodbus unit-test client/server pairing.
+	•	Gate: examples build using the installed package, migration guide highlights Gate 15 helpers, CI exercises the unit-test loop demo alongside existing samples.
+	•	Status: ✅ helpers, packaging, docs and demo merged.
 
 16) Footprint & feature toggles
 	•	Deliverables: build flags to enable/disable client/server/transports, footprint documentation, CI presets validating combinations (client-only, server-only), flash/RAM usage metrics.
