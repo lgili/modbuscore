@@ -32,6 +32,18 @@ const char *mb_err_str(mb_err_t err)
         return "Illegal data value";
     case MB_EX_SERVER_DEVICE_FAILURE:
         return "Server device failure";
+    case MB_EX_ACKNOWLEDGE:
+        return "Acknowledge";
+    case MB_EX_SERVER_DEVICE_BUSY:
+        return "Server device busy";
+    case MB_EX_NEGATIVE_ACKNOWLEDGE:
+        return "Negative acknowledge";
+    case MB_EX_MEMORY_PARITY_ERROR:
+        return "Memory parity error";
+    case MB_EX_GATEWAY_PATH_UNAVAILABLE:
+        return "Gateway path unavailable";
+    case MB_EX_GATEWAY_TARGET_FAILED:
+        return "Gateway target device failed";
     default:
         return "Unknown error";
     }

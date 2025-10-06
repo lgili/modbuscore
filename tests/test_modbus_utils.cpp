@@ -129,3 +129,63 @@ TEST(ModbusUtilsTest, CrcValidateRejectsShortFrame) {
     EXPECT_FALSE(modbus_crc_validate(frame, sizeof(frame)));
 }
 
+TEST(ModbusUtilsConversionTest, Uint32Accessors)
+{
+    const uint16_t regs[2] = {0x1234U, 0x5678U};
+
+    EXPECT_EQ(0x12345678U, modbus_get_uint32_abcd(regs));
+    EXPECT_EQ(0x78563412U, modbus_get_uint32_dcba(regs));
+    EXPECT_EQ(0x34127856U, modbus_get_uint32_badc(regs));
+    EXPECT_EQ(0x56781234U, modbus_get_uint32_cdab(regs));
+
+    uint16_t out_abcd[2]{};
+    modbus_set_uint32_abcd(0x89ABCDEFU, out_abcd);
+    EXPECT_EQ(0x89ABU, out_abcd[0]);
+    EXPECT_EQ(0xCDEFU, out_abcd[1]);
+
+    uint16_t out_dcba[2]{};
+    modbus_set_uint32_dcba(0x89ABCDEFU, out_dcba);
+    EXPECT_EQ(0xEFCDU, out_dcba[0]);
+    EXPECT_EQ(0xAB89U, out_dcba[1]);
+
+    uint16_t out_badc[2]{};
+    modbus_set_uint32_badc(0x01234567U, out_badc);
+    EXPECT_EQ(0x2301U, out_badc[0]);
+    EXPECT_EQ(0x6745U, out_badc[1]);
+
+    uint16_t out_cdab[2]{};
+    modbus_set_uint32_cdab(0x89ABCDEFU, out_cdab);
+    EXPECT_EQ(0xCDEFU, out_cdab[0]);
+    EXPECT_EQ(0x89ABU, out_cdab[1]);
+}
+
+TEST(ModbusUtilsConversionTest, Int32Accessors)
+{
+    const uint16_t regs[2] = {0xFFFEU, 0xDCBAU};
+    EXPECT_EQ(static_cast<int32_t>(0xFFFEDCBAU), modbus_get_int32_abcd(regs));
+    EXPECT_EQ(static_cast<int32_t>(0xBADCFEFFU), modbus_get_int32_dcba(regs));
+
+    uint16_t out_regs[2]{};
+    const int32_t negative_value = -67890;
+    modbus_set_int32_cdab(negative_value, out_regs);
+    EXPECT_EQ(negative_value, modbus_get_int32_cdab(out_regs));
+}
+
+TEST(ModbusUtilsConversionTest, FloatRoundTrip)
+{
+    constexpr float value = -123.5F;
+    uint16_t regs[2]{};
+
+    modbus_set_float_abcd(value, regs);
+    EXPECT_FLOAT_EQ(value, modbus_get_float_abcd(regs));
+
+    modbus_set_float_badc(value, regs);
+    EXPECT_FLOAT_EQ(value, modbus_get_float_badc(regs));
+
+    modbus_set_float_dcba(value, regs);
+    EXPECT_FLOAT_EQ(value, modbus_get_float_dcba(regs));
+
+    modbus_set_float_cdab(value, regs);
+    EXPECT_FLOAT_EQ(value, modbus_get_float_cdab(regs));
+}
+

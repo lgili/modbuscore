@@ -1,153 +1,163 @@
-bora arquitetar essa lib de Modbus em C como se fosse produto de mercado: modular, portátil, sem travar, com testes e docs. segue um plano incremental com “gates” objetivos pra só avançar quando estiver sólido.
+Let's architect this C Modbus library as a production-grade product: modular, portable, deadlock-free, fully tested, and well documented. Below is an incremental plan split into objective gates—move forward only when the gate is green.
 
-Visão e princípios
-	•	Portável: C11 “puro” (fallbacks para C99), sem malloc por padrão (pool opcional), zero dependências duras.
-	•	Modular: separa PDU (codec), Transporte (RTU/TCP/ASCII), Core FSM (cliente/servidor), HAL/Port (UART/TCP, timers), Buffers/Queue e Log.
-	•	À prova de travas: tudo não-bloqueante, com timeouts por estado, watchdog interno, fila de transações com retries e cancelamento.
-	•	Segura: validação estrita de tamanhos e códigos, limites de PDU (≤ 253 bytes), CRC/MBAP, checagem de over/underflow, UB-safe.
-	•	Observável: métricas, eventos, níveis de log, hooks de tracing.
-	•	Testável: TDD, fuzzer nos decoders, sanitizers, cobertura e CI.
+Vision & principles
+	•	Portable: “pure” C11 (C99 fallback), no malloc by default (optional pool), zero hard dependencies.
+	•	Modular: clearly split PDU codec, Transport (RTU/TCP/ASCII), Core FSM (client/server), HAL/Port (UART/TCP, timers), Buffers/Queues, and Logging.
+	•	Deadlock-proof: fully non-blocking, per-state timeouts, internal watchdog, transaction queue with retries and cancellation.
+	•	Safe: strict bounds and opcode validation, PDU size limits (≤ 253 bytes), CRC/MBAP guards, overflow/underflow checks, UB-safe code paths.
+	•	Observable: metrics, structured events, log levels, tracing hooks.
+	•	Testable: TDD, fuzzers on decoders, sanitizers, coverage, and CI coverage.
 
 ⸻
 
-Arquitetura (camadas)
+Layered architecture
 
-app (exemplos) ─────────────────────────────────────────────────────┐
+app (examples) ─────────────────────────────────────────────────────┐
                                                                     │
              ┌───────────── Core FSM ───────────────┐               │
-             │  Cliente (master)  |  Servidor (slave)               │
-             │  Transações, timeouts, retries, watchdog             │
+             │  Client (master)  |  Server (slave)                 │
+             │  Transactions, timeouts, retries, watchdog          │
              └──────────────────────────────────────┘               │
              ┌────────────  PDU Codec  ────────────┐                │
-             │  encode/decode FCs, exceções, limites               │
+             │  encode/decode FCs, exceptions, limits               │
              └──────────────────────────────────────┘               │
-             ┌──────────  Abstração Transporte  ─────┐              │
-             │  RTU | ASCII | TCP  (plug-ins)        │              │
-             └───────────────────────────────────────┘              │
-             ┌───────────  Port/HAL  ────────────────┐              │
-             │  UART/TCP, timers, timestamp, mutex opcional         │
-             └───────────────────────────────────────┘              │
-             ┌────────── Util: Buffers/Queue/CRC/Log ─┐             │
-             └─────────────────────────────────────────┘             │
+             ┌──────────  Transport abstraction ───┐                │
+             │  RTU | ASCII | TCP (plug-ins)        │               │
+             └──────────────────────────────────────┘               │
+             ┌───────────  Port/HAL  ───────────────┐               │
+             │  UART/TCP, timers, monotonic clock, optional mutex   │
+             └──────────────────────────────────────┘               │
+             ┌────────── Utilities: Buffers/Queue/CRC/Log ─┐        │
+             └─────────────────────────────────────────────┘        │
 
-	•	Core FSM: máquina de estados finita (poll-based) para Rx/Tx, per-transação; estados com deadline.
-	•	PDU Codec: builders/parsers (FC03/04/06/16/…); exceções; tabelas de limites.
-	•	Transporte: RTU (CRC/tempo de silêncio), TCP (MBAP/TID), ASCII (opcional).
-	•	Port/HAL: ponteiros de função para read, write, now_ms, sleep(0), yield(), “ticks” e locks opcionais.
-	•	Utilitários: ring buffer lock-free (SPSC), pool fixo, CRC16, MBAP helpers, logger.
+	•	Core FSM: poll-based finite state machine for Rx/Tx, per-transaction deadlines.
+	•	PDU Codec: builders/parsers (FC03/04/06/16/…), exception helpers, limit tables.
+	•	Transport: RTU (CRC/silence timing), TCP (MBAP/TID), ASCII (optional).
+	•	Port/HAL: function pointers for read, write, now_ms, sleep(0), yield(), tick source, optional locks.
+	•	Utilities: lock-free SPSC ring buffer, fixed pool, CRC16, MBAP helpers, logger façade.
 
 ⸻
 
-Estrutura de repositório
+Repository layout
 
-/include/modbus/          # headers públicos
-/src/core/                # fsm, transaction mgr
+/include/modbus/          # public headers
+/src/core/                # FSM, transaction manager
 /src/pdu/                 # encoders/decoders
-/src/transport/rtu/       # rtu
-/src/transport/tcp/       # tcp
-/src/port/                # port de referência (posix, freertos, bare)
-/src/util/                # crc, ringbuf, pool, log
-/examples/                # cliente/servidor
-/tests/unit/              # ceedling ou cmocka
-/tests/fuzz/              # libFuzzer/AFL (decoders)
+/src/transport/rtu/       # RTU transport
+/src/transport/tcp/       # TCP transport
+/src/port/                # reference ports (posix, freertos, bare)
+/src/util/                # crc, ring buffer, pool, log
+/examples/                # client/server demos
+/tests/unit/              # unit tests
+/tests/fuzz/              # libFuzzer/AFL harnesses
 /docs/                    # doxygen + sphinx (breathe)
 /cmake/                   # toolchains, options
 
-
 ⸻
 
-Roadmap incremental com Gates
+Incremental roadmap with gates
 
-Cada etapa tem Objetivo, Entregáveis e Gate (aceitação). Só segue se o gate passar.
+Each stage lists Objective, Deliverables, and Gate (acceptance). We only advance when the gate is satisfied.
 
-0) Foundation & Build
-	•	Objetivo: esqueleto do projeto, opções de build e estilo.
-	•	Entregáveis: CMake + presets (gcc/clang/msvc), -Wall -Wextra -Werror, opções MODBUS_*, clang-format, Doxygen básico, CI (GitHub Actions) com matrix.
-	•	Gate: CI verde (compila 3 toolchains), verificação de estilo, docs geradas.
+0) Foundation & build
+	•	Objective: project skeleton, build options, coding style.
+	•	Deliverables: CMake + presets (gcc/clang/msvc), -Wall -Wextra -Werror, MODBUS_* options, clang-format, basic Doxygen, GitHub Actions CI matrix.
+	•	Gate: CI green across three toolchains, style checks pass, docs generated.
 
-1) Tipos, erros, log e utilitários
-	•	Entregáveis: mb_types.h (tipos fixos), mb_err.h, logger MB_LOG(level, ...), ringbuf SPSC, CRC16.
-	•	Gate: unit tests 100% em utils; ASan/UBSan sem findings.
+1) Types, errors, logging, utilities
+	•	Deliverables: mb_types.h (fixed types), mb_err.h, MB_LOG(level, ...), SPSC ring buffer, CRC16 helpers.
+	•	Gate: 100% unit coverage on utilities; ASan/UBSan clean runs.
 
-2) PDU Codec (núcleo)
-	•	Entregáveis: encode/decode FC 0x03, 0x06, 0x10 + exceções; limites (PDU ≤ 253).
-	•	Gate: testes de tabela (vetores bons/ruins), cobertura ≥ 90%, fuzz 5 min sem crashes no decoder.
+2) PDU codec (core)
+	•	Deliverables: encode/decode FC 0x03, 0x06, 0x10 + exceptions; enforce PDU ≤ 253.
+	•	Gate: golden-table tests (valid/invalid vectors), coverage ≥ 90%, fuzz decoders for 5 minutes without crashes.
 
-3) Abstração de Transporte
-	•	Entregáveis: mb_transport_if.h (send/recv não-bloqueante), mb_frame.h.
-	•	Gate: mock de transporte passando testes de integração com PDU.
+3) Transport abstraction
+	•	Deliverables: mb_transport_if.h (non-blocking send/recv), mb_frame.h scaffolding.
+	•	Gate: transport mock passes integration tests with the PDU layer.
 
-4) RTU mínimo
-	•	Entregáveis: framing RTU (addr, PDU, CRC), stateful parser com timeout de silêncio (3.5 chars), TX com inter-char.
-	•	Gate: laço eco (loopback) em porta mock e UART simulada; teste de perda/duplicação de bytes.
+4) Minimal RTU
+	•	Deliverables: RTU framing (address, PDU, CRC), stateful parser with 3.5 char silence timeout, inter-char TX pacing.
+	•	Gate: loopback against mock port and simulated UART; lost/duplicated byte tests pass.
 
-5) Core FSM (cliente)
-	•	Entregáveis: transaction manager (fila), estados Idle→Sending→Waiting→Done/Timeout/Retry/Abort, retries exponenciais, cancel.
-	•	Gate: testes de stress (1k reqs), perda de pacotes simulada, sem deadlocks; watchdog interno nunca dispara em caso nominal.
+5) Client core FSM
+	•	Deliverables: transaction queue, Idle→Sending→Waiting→Done/Timeout/Retry/Abort states, exponential backoff retries, cancel support.
+	•	Gate: stress tests (1k requests), simulated packet loss, zero deadlocks; watchdog never fires in happy path.
 
-6) Servidor (slave)
-	•	Entregáveis: tabela de registradores com callbacks de leitura/escrita, checagem de faixa, exceções.
-	•	Gate: conformidade básica (cliente ↔ servidor local) com FC 03/06/16; injeção de frames inválidos gera exceções corretas.
+6) Server core
+	•	Deliverables: register table with read/write callbacks, range checks, exception generation.
+	•	Gate: basic compliance (local client ↔ server) with FC 03/06/16; invalid frame injection maps to correct exceptions.
 
 7) TCP (MBAP)
-	•	Entregáveis: MBAP header (TID, length, unit), mapeamento TID↔transação, multi-conexão opcional.
-	•	Gate: testes contra mbtget/modpoll (docker) no CI; throughput estável sob 1k rps (mock).
+	•	Deliverables: MBAP header (TID, length, unit), TID↔transaction mapping, optional multi-connection helper.
+	•	Gate: CI integration tests against mbtget/modpoll (docker); stable throughput at 1k rps (mock).
 
-8) Robustez avançada
-	•	Entregáveis: backpressure (limite de fila), anti-head-of-line (prioridades), timeouts por FC, poison pill para desbloqueio, métricas (contadores/latência).
-	•	Gate: testes de caos (latência/burst/perda 20–40%), sem starvation, sem leak (valgrind).
+8) Advanced robustness
+	•	Deliverables: backpressure (queue caps), anti-head-of-line priorities, per-FC timeouts, poison pill flush, metrics (counters/latency).
+	•	Gate: chaos tests (latency/bursts/loss 20–40%), no starvation, valgrind clean.
 
 9) Port/HALs
-	•	Entregáveis: port_posix, port_freertos, port_bare (tick + UART/TCP), locks opcionais (C11 atomics fallback).
-	•	Status: ✅ POSIX sockets, bare-metal tick adapter, FreeRTOS stream/queue shim e mutex portátil entregues.
-	•	Gate: exemplos rodando em POSIX e FreeRTOS (simulado).
+	•	Deliverables: port_posix, port_freertos, port_bare (tick + UART/TCP), optional locks (C11 atomics fallback).
+	•	Status: ✅ POSIX sockets, bare-metal tick adapter, FreeRTOS stream/queue shim, and portable mutexes delivered.
+	•	Gate: examples run on POSIX and simulated FreeRTOS.
 
-10) ASCII (opcional) + FCs extras
-	•	Entregáveis: ASCII framing; FC 01/02/04/05/0F/17 se necessário.
-	•	Status: 🔄 Helpers das FCs adicionados (req/resp validados); ASCII ainda pendente.
-	•	Gate: mesma bateria de testes do RTU/TCP.
+10) ASCII (optional) + extra FCs
+	•	Deliverables: ASCII framing; extend FC coverage (01/02/04/05/0F/17 as needed).
+	•	Status: 🔄 FC helpers landed (validated requests/responses); ASCII framing still pending.
+	•	Gate: same regression suite as RTU/TCP.
 
-11) Observabilidade & Debug
-	•	Entregáveis: eventos (state enter/leave), trace hex (on/off), callback de evento, contador por erro/FC, MB_DIAG.
-	•	Gate: exemplo mostra métricas e diagnóstico útil em falhas induzidas.
+11) Observability & debug
+	•	Deliverables: state enter/leave events, optional hex trace, observability callback, error/function counters, MB_DIAG plumbing.
+	•	Gate: example surfaces useful metrics and diagnoses induced failures.
 
-12) Documentação & API Stability
-	•	Entregáveis: guia de portas, guia de migração, cookbook (cliente/servidor), Doxygen completo, versão SemVer 1.0.0.
-	•	Gate: build da doc sem warnings; exemplos compilam e rodam; revisão de breaking changes = zero.
+12) Documentation & API stability
+	•	Deliverables: porting guide, migration guide, cookbook (client/server), complete Doxygen, SemVer 1.0.0 release.
+	•	Gate: docs build warning-free; examples build and run; breaking-change review yields zero blockers.
 
-13) Hardening & Release
-	•	Entregáveis: clang-tidy perfil segurança, MISRA-C checklist (não estrito), -fno-common -fstack-protector, FORTIFY_SOURCE quando disponível.
-	•	Gate: CI full (sanitizers + fuzz + cobertura + linters) verde; tag v1.0.0.
-	•	Status: ✅ clang-tidy endurecido, hardening flags e jobs de cobertura/fuzz/lint na CI.
+13) Hardening & release
+	•	Deliverables: security-focused clang-tidy profile, MISRA-C checklist (non-strict), -fno-common, -fstack-protector, FORTIFY_SOURCE when available.
+	•	Gate: full CI (sanitizers + fuzz + coverage + linters) green; tag v1.0.0.
+	•	Status: ✅ clang-tidy tightened, hardening flags enabled, coverage/fuzz/lint jobs active in CI.
 
-⸻
+14) Protocol parity & data helpers
+	•	Deliverables: close remaining FC gaps (0x05/0x07/0x11/0x16/0x17), extend exception catalog, add endian conversion helpers (float/int setters/getters mirroring libmodbus).
+	•	Gate: test matrix covering all new FCs, documentation updated with support table, API comparison versus libmodbus.
+	•	Status: ✅ deliverables shipped and documented.
 
-Estratégias de “à prova de travas” e perda de pacotes
-	•	Poll não-bloqueante: mb_client_poll()/mb_server_poll() avança a FSM em passos pequenos.
-	•	Timeouts por estado com deadlines (timestamp capturado na entrada do estado).
-	•	Watchdog interno: se um estado excede N×timeout → aborta transação, incrementa métrica, volta a Idle.
-	•	Retries exponenciais com jitter; limite por transação e por janela.
-	•	Fila de transações com backpressure (tamanho fixo), cancelamento e prioridades.
-	•	Ring buffer SPSC e pool de buffers (sem malloc), evitando fragmentação.
-	•	Validações: limites de ADU/PDU, CRC/MBAP, endereços, contagens, alinhamento.
-	•	Fail-fast: retorno de erro imediato e eventos de diagnóstico; nunca “engolir” erro silenciosamente.
+15) Compatibility & port convenience
+	•	Deliverables: quick mapping constructors (libmodbus `modbus_mapping_new` style), auto-generated `pkg-config`/`find_package` artifacts, migration guide, examples equivalent to classic libmodbus client/server tests.
+	•	Gate: examples build using only the installed package, migration guide covers 90% of libmodbus→modbus workflows, integration pipelines validate both demos.
 
-⸻
-
-Qualidade, testes e CI
-	•	Unit: CMocka/Ceedling para utils, codec e FSM.
-	•	Integração: cliente↔servidor in-process com transportes mock e RTU/TCP reais (docker modbus-tk, mbserver).
-	•	Fuzzing: libFuzzer/AFL em decoders (PDU/RTU/TCP).
-	•	Sanitizers: ASan/UBSan/TSan (quando aplicável).
-	•	Cobertura: gcov/lcov (alvo ≥ 85%).
-	•	Estática: clang-tidy, cppcheck (regras segurança), inclui MISRA subset.
-	•	CI: matrix gcc/clang/msvc; builds release/debug/sanitize; artifacts das docs/exemplos.
+16) Footprint & feature toggles
+	•	Deliverables: build flags to enable/disable client/server/transports, footprint documentation, CI presets validating combinations (client-only, server-only), flash/RAM usage metrics.
+	•	Gate: dedicated builds pass regression suite with single component enabled, report demonstrates ≥20% footprint reduction on reference targets.
 
 ⸻
 
-Sketch de API (rascunho)
+Deadlock-proof & packet loss strategies
+	•	Non-blocking polling: mb_client_poll()/mb_server_poll() advance the FSM in tiny steps.
+	•	Per-state deadlines (timestamp recorded on entry).
+	•	Internal watchdog: if a state exceeds N×timeout → abort transaction, increment metric, return to Idle.
+	•	Exponential retries with jitter; per-transaction and per-window limits.
+	•	Transaction queue with fixed-size backpressure, cancellation, priority support.
+	•	SPSC ring buffer and buffer pool (malloc-free) to avoid fragmentation.
+	•	Validation: ADU/PDU bounds, CRC/MBAP, address/count ranges, alignment checks.
+	•	Fail-fast: immediate error reporting and diagnostic events—never swallow failures silently.
 
-Comentários em inglês (como você costuma preferir nos códigos); texto em PT-BR.
+⸻
+
+Quality, tests & CI
+	•	Unit: cmocka/ceedling-style coverage for utilities, codec, FSM.
+	•	Integration: in-process client↔server with transport mocks plus RTU/TCP real flows (docker modbus-tk, mbserver).
+	•	Fuzzing: libFuzzer/AFL targeting PDU/RTU/TCP decoders.
+	•	Sanitizers: ASan/UBSan/TSan (where feasible).
+	•	Coverage: gcov/lcov (target ≥ 85%).
+	•	Static: clang-tidy, cppcheck (security rules), MISRA subset.
+	•	CI: gcc/clang/msvc matrix; release/debug/sanitize builds; doc & example artifacts.
+
+⸻
+
+API sketch (draft)
 
 /* include/modbus/modbus.h */
 #pragma once
@@ -174,7 +184,7 @@ typedef enum {
     MB_ESTATE,
 } mb_err_t;
 
-/* Forward decls */
+/* Forward declarations */
 struct mb_port;
 struct mb_client;
 struct mb_server;
@@ -192,8 +202,8 @@ typedef struct {
 typedef struct mb_port {
     void *user;                          /* UART/TCP handle, etc. */
     mb_transport_if_t io;                /* send/recv */
-    mb_time_ms_t (*now_ms)(void);        /* monotonic time */
-    void (*yield)(void);                 /* optional: cpu hint */
+    mb_time_ms_t (*now_ms)(void);        /* monotonic clock */
+    void (*yield)(void);                 /* optional CPU hint */
 } mb_port_t;
 
 /* Client transaction handle */
@@ -210,13 +220,13 @@ typedef struct {
     mb_err_t status;
 } mb_txn_t;
 
-/* Creation / lifecycle */
+/* Lifecycle */
 mb_err_t mb_client_create(mb_client **out, const mb_port_t *port, size_t queue_depth);
 mb_err_t mb_client_destroy(mb_client *c);
 
 /* Non-blocking submit */
 mb_err_t mb_client_submit(mb_client *c, mb_txn_t *txn);
-/* Poll advances FSM; call from main loop or timer */
+/* Poll advances the FSM; call from main loop or timer */
 mb_err_t mb_client_poll(mb_client *c);
 
 /* Helpers: common builders (FC 03/06/16) */
@@ -235,54 +245,61 @@ mb_err_t mb_server_poll(mb_server *s);
 }
 #endif
 
-Exemplo mínimo (cliente RTU) — não-bloqueante:
+Non-blocking RTU client example:
 
-/* loop de aplicação */
-mb_client *cli; mb_port_t port = my_rtu_port(); 
-mb_client_create(&cli, &port, /*queue*/8);
+/* application loop */
+mb_client *cli;
+mb_port_t port = my_rtu_port();
+mb_client_create(&cli, &port, /*queue*/ 8);
 
-uint8_t pdu[5]; size_t pdu_len = sizeof pdu;
+uint8_t pdu[5];
+size_t pdu_len = sizeof pdu;
 mb_build_read_holding(0x0000, 2, pdu, &pdu_len);
 
 uint8_t resp[64];
 mb_txn_t t = {
-  .unit_id = 1, .fc = 0x03, .pdu = pdu, .pdu_len = pdu_len,
-  .timeout_ms = 200, .resp_buf = resp, .resp_cap = sizeof resp
+    .unit_id = 1,
+    .fc = 0x03,
+    .pdu = pdu,
+    .pdu_len = pdu_len,
+    .timeout_ms = 200,
+    .resp_buf = resp,
+    .resp_cap = sizeof resp
 };
 mb_client_submit(cli, &t);
 
 for (;;) {
-  mb_client_poll(cli);
-  if (t.status == MB_OK && t.resp_len) {
-    const uint8_t *bytes; size_t n;
-    mb_parse_read_holding_resp(t.resp_buf+1, t.resp_len-1, &bytes, &n);
-    /* processa bytes... */
-  }
-  app_do_other_work();
+    mb_client_poll(cli);
+    if (t.status == MB_OK && t.resp_len) {
+        const uint8_t *bytes;
+        size_t n;
+        mb_parse_read_holding_resp(t.resp_buf + 1, t.resp_len - 1, &bytes, &n);
+        /* process bytes... */
+    }
+    app_do_other_work();
 }
 
+⸻
+
+Documentation
+	•	Doxygen for the API plus Sphinx (Breathe) guides (Port/HAL, cookbook, troubleshooting).
+	•	Examples: RTU/TCP client and server; POSIX and FreeRTOS variants.
+	•	CHANGELOG (SemVer), CONTRIBUTING, SECURITY.md, Design.md (FSM + diagrams).
 
 ⸻
 
-Documentação
-	•	Doxygen para API + Sphinx (Breathe) para guias (Port/HAL, cookbook, troubleshooting).
-	•	Exemplos: cliente RTU/TCP; servidor RTU/TCP; POSIX e FreeRTOS.
-	•	CHANGELOG (SemVer), CONTRIBUTING, SECURITY.md, Design.md (FSM + diagramas).
+Suggested two-week sprint slices
+	1.	Days 1–3: Stages 0–1 (foundation, utilities, logging) + CI.
+	2.	Days 4–7: Stages 2–3 (PDU codec + transport mock) with TDD and basic fuzzing.
+	3.	Days 8–10: Stages 4–5 (RTU + client FSM) + chaos testing.
+	4.	Days 11–14: Stage 6 (server) + initial docs and examples.
 
 ⸻
 
-Próximas 2 semanas (sugestão de sprints)
-	1.	Dia 1–3: Etapas 0–1 (foundation, utils, log) + CI.
-	2.	Dia 4–7: Etapa 2–3 (PDU codec + transporte mock) com TDD e fuzz básico.
-	3.	Dia 8–10: Etapa 4–5 (RTU + FSM cliente) + testes de caos.
-	4.	Dia 11–14: Etapa 6 (servidor) + docs iniciais e exemplos.
-
-⸻
-
-Extras que valem ouro
-	•	Config Kconfig/cmake-options para habilitar/desabilitar FCs e transportes.
-	•	Modo amalgamado (um .c + .h) para quem quiser integrar rápido.
-	•	Hooks de auditoria (ex.: antes de enviar/depois de receber) para trace/pcap.
-	•	Gerador de stubs (script) para FCs customizados.
+High-value extras
+	•	Expose cmake/Kconfig options to toggle FCs and transports.
+	•	Amalgamated distribution (single .c + .h) for quick integration.
+	•	Audit hooks (pre-send/post-receive) suitable for tracing/pcap capture.
+	•	Stub generator script for custom FCs.
 
 ⸻

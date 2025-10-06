@@ -36,10 +36,16 @@ typedef enum modbus_error {
     MODBUS_ERROR_NO_RESOURCES = -10,      /**< Requested resource could not be reserved. */
 
     /* Modbus exceptions (positive values) */
-    MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,      /**< Exception 1: Illegal function. */
-    MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS = 2,  /**< Exception 2: Illegal data address. */
-    MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE = 3,    /**< Exception 3: Illegal data value. */
-    MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE = 4  /**< Exception 4: Server device failure. */
+    MODBUS_EXCEPTION_ILLEGAL_FUNCTION = 1,            /**< Exception 1: Illegal function. */
+    MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS = 2,        /**< Exception 2: Illegal data address. */
+    MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE = 3,          /**< Exception 3: Illegal data value. */
+    MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE = 4,       /**< Exception 4: Server device failure. */
+    MODBUS_EXCEPTION_ACKNOWLEDGE = 5,                 /**< Exception 5: Acknowledge (processing). */
+    MODBUS_EXCEPTION_SERVER_DEVICE_BUSY = 6,          /**< Exception 6: Server device busy. */
+    MODBUS_EXCEPTION_NEGATIVE_ACKNOWLEDGE = 7,        /**< Exception 7: Negative acknowledge. */
+    MODBUS_EXCEPTION_MEMORY_PARITY_ERROR = 8,         /**< Exception 8: Memory parity error. */
+    MODBUS_EXCEPTION_GATEWAY_PATH_UNAVAILABLE = 10,   /**< Exception 10: Gateway path unavailable. */
+    MODBUS_EXCEPTION_GATEWAY_TARGET_DEVICE_FAILED = 11/**< Exception 11: Target device failed to respond. */
 } modbus_error_t;
 
 /**
@@ -65,6 +71,12 @@ typedef modbus_error_t mb_err_t;
 #define MB_EX_ILLEGAL_DATA_ADDRESS  MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS
 #define MB_EX_ILLEGAL_DATA_VALUE    MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE
 #define MB_EX_SERVER_DEVICE_FAILURE MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE
+#define MB_EX_ACKNOWLEDGE           MODBUS_EXCEPTION_ACKNOWLEDGE
+#define MB_EX_SERVER_DEVICE_BUSY    MODBUS_EXCEPTION_SERVER_DEVICE_BUSY
+#define MB_EX_NEGATIVE_ACKNOWLEDGE  MODBUS_EXCEPTION_NEGATIVE_ACKNOWLEDGE
+#define MB_EX_MEMORY_PARITY_ERROR   MODBUS_EXCEPTION_MEMORY_PARITY_ERROR
+#define MB_EX_GATEWAY_PATH_UNAVAILABLE MODBUS_EXCEPTION_GATEWAY_PATH_UNAVAILABLE
+#define MB_EX_GATEWAY_TARGET_FAILED MODBUS_EXCEPTION_GATEWAY_TARGET_DEVICE_FAILED
 
 static inline bool mb_err_is_ok(mb_err_t err)
 {
@@ -81,7 +93,16 @@ const char *mb_err_str(mb_err_t err);
  */
 static inline bool mb_err_is_exception(modbus_error_t err)
 {
-    return (err >= MODBUS_EXCEPTION_ILLEGAL_FUNCTION && err <= MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE);
+    return (err == MODBUS_EXCEPTION_ILLEGAL_FUNCTION) ||
+           (err == MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS) ||
+           (err == MODBUS_EXCEPTION_ILLEGAL_DATA_VALUE) ||
+           (err == MODBUS_EXCEPTION_SERVER_DEVICE_FAILURE) ||
+           (err == MODBUS_EXCEPTION_ACKNOWLEDGE) ||
+           (err == MODBUS_EXCEPTION_SERVER_DEVICE_BUSY) ||
+           (err == MODBUS_EXCEPTION_NEGATIVE_ACKNOWLEDGE) ||
+           (err == MODBUS_EXCEPTION_MEMORY_PARITY_ERROR) ||
+           (err == MODBUS_EXCEPTION_GATEWAY_PATH_UNAVAILABLE) ||
+           (err == MODBUS_EXCEPTION_GATEWAY_TARGET_DEVICE_FAILED);
 }
 
 /* Backward-compatible helpers ------------------------------------------------ */

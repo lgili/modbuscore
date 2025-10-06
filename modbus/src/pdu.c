@@ -589,6 +589,150 @@ mb_err_t mb_pdu_parse_write_single_coil_response(const mb_u8 *pdu, mb_size_t len
     return mb_pdu_parse_write_single_coil_request(pdu, len, out_address, out_coil_on);
 }
 
+mb_err_t mb_pdu_build_read_exception_status_request(mb_u8 *out, mb_size_t out_cap)
+{
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (!mb_pdu_validate_capacity(1U, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = MB_PDU_FC_READ_EXCEPTION_STATUS;
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_read_exception_status_request(const mb_u8 *pdu, mb_size_t len)
+{
+    if (pdu == NULL || len != 1U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (pdu[0] != MB_PDU_FC_READ_EXCEPTION_STATUS) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_build_read_exception_status_response(mb_u8 *out, mb_size_t out_cap, mb_u8 status)
+{
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (!mb_pdu_validate_capacity(2U, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = MB_PDU_FC_READ_EXCEPTION_STATUS;
+    out[1] = status;
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_read_exception_status_response(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_status)
+{
+    if (pdu == NULL || len != 2U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (pdu[0] != MB_PDU_FC_READ_EXCEPTION_STATUS) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (out_status != NULL) {
+        *out_status = pdu[1];
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_build_report_server_id_request(mb_u8 *out, mb_size_t out_cap)
+{
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (!mb_pdu_validate_capacity(1U, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = MB_PDU_FC_REPORT_SERVER_ID;
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_report_server_id_request(const mb_u8 *pdu, mb_size_t len)
+{
+    if (pdu == NULL || len != 1U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (pdu[0] != MB_PDU_FC_REPORT_SERVER_ID) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_build_report_server_id_response(mb_u8 *out, mb_size_t out_cap, const mb_u8 *payload, mb_size_t payload_len)
+{
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (payload_len > MB_PDU_FC11_MAX_PAYLOAD) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if ((payload_len > 0U) && (payload == NULL)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    const mb_size_t required = 2U + payload_len;
+    if (!mb_pdu_validate_capacity(required, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = MB_PDU_FC_REPORT_SERVER_ID;
+    out[1] = (mb_u8)payload_len;
+    if (payload_len > 0U) {
+        memcpy(&out[2], payload, payload_len);
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_report_server_id_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u8 *out_byte_count)
+{
+    if (pdu == NULL || len < 2U || len > MB_PDU_MAX) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (pdu[0] != MB_PDU_FC_REPORT_SERVER_ID) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    const mb_u8 byte_count = pdu[1];
+    if (byte_count > MB_PDU_FC11_MAX_PAYLOAD) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (len != (mb_size_t)(2U + byte_count)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (out_payload != NULL) {
+        *out_payload = (byte_count > 0U) ? &pdu[2] : NULL;
+    }
+
+    if (out_byte_count != NULL) {
+        *out_byte_count = byte_count;
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
 mb_err_t mb_pdu_build_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const mb_u16 *values, mb_u16 count)
 {
     if (out == NULL || values == NULL) {
@@ -828,6 +972,61 @@ mb_err_t mb_pdu_parse_write_multiple_coils_response(const mb_u8 *pdu, mb_size_t 
     }
 
     return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_build_mask_write_register_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask)
+{
+    const mb_size_t required = 7U;
+
+    if (out == NULL) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (!mb_pdu_validate_capacity(required, out_cap)) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    out[0] = MB_PDU_FC_MASK_WRITE_REGISTER;
+    mb_pdu_write_u16(&out[1], address);
+    mb_pdu_write_u16(&out[3], and_mask);
+    mb_pdu_write_u16(&out[5], or_mask);
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_parse_mask_write_register_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask)
+{
+    if (pdu == NULL || len != 7U) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (pdu[0] != MB_PDU_FC_MASK_WRITE_REGISTER) {
+        return MODBUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (out_address != NULL) {
+        *out_address = mb_pdu_read_u16(&pdu[1]);
+    }
+
+    if (out_and_mask != NULL) {
+        *out_and_mask = mb_pdu_read_u16(&pdu[3]);
+    }
+
+    if (out_or_mask != NULL) {
+        *out_or_mask = mb_pdu_read_u16(&pdu[5]);
+    }
+
+    return MODBUS_ERROR_NONE;
+}
+
+mb_err_t mb_pdu_build_mask_write_register_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask)
+{
+    return mb_pdu_build_mask_write_register_request(out, out_cap, address, and_mask, or_mask);
+}
+
+mb_err_t mb_pdu_parse_mask_write_register_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask)
+{
+    return mb_pdu_parse_mask_write_register_request(pdu, len, out_address, out_and_mask, out_or_mask);
 }
 
 mb_err_t mb_pdu_build_read_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 read_start_addr, mb_u16 read_quantity, mb_u16 write_start_addr, const mb_u16 *write_values, mb_u16 write_quantity)

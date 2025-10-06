@@ -177,6 +177,63 @@ TEST(PduFc05, ParseRejectsInvalidValue)
               mb_pdu_parse_write_single_coil_request(frame.data(), frame.size(), nullptr, nullptr));
 }
 
+TEST(PduFc07, BuildAndParse)
+{
+    mb_u8 request[1]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_exception_status_request(request, sizeof request));
+
+    EXPECT_EQ(MB_PDU_FC_READ_EXCEPTION_STATUS, request[0]);
+    EXPECT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_exception_status_request(request, sizeof request));
+
+    mb_u8 response[2]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_read_exception_status_response(response, sizeof response, 0xAAU));
+
+    mb_u8 status = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_read_exception_status_response(response, sizeof response, &status));
+    EXPECT_EQ(0xAAU, status);
+}
+
+TEST(PduFc07, ParseRequestRejectsWrongLength)
+{
+    const std::array<mb_u8, 2> frame{MB_PDU_FC_READ_EXCEPTION_STATUS, 0x00U};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_read_exception_status_request(frame.data(), frame.size()));
+}
+
+TEST(PduFc11, BuildAndParse)
+{
+    mb_u8 request[1]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_report_server_id_request(request, sizeof request));
+    EXPECT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_report_server_id_request(request, sizeof request));
+
+    const std::array<mb_u8, 3> payload{0x42U, 0x10U, 0x01U};
+    mb_u8 response[2 + payload.size()]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_report_server_id_response(response, sizeof response, payload.data(), payload.size()));
+
+    const mb_u8 *parsed_payload = nullptr;
+    mb_u8 byte_count = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_report_server_id_response(response, sizeof response, &parsed_payload, &byte_count));
+
+    ASSERT_NE(nullptr, parsed_payload);
+    EXPECT_EQ(payload.size(), static_cast<size_t>(byte_count));
+    EXPECT_TRUE(std::equal(payload.begin(), payload.end(), parsed_payload));
+}
+
+TEST(PduFc11, ParseResponseRejectsLengthMismatch)
+{
+    const std::array<mb_u8, 4> frame{MB_PDU_FC_REPORT_SERVER_ID, 0x03U, 0xDEU, 0xADU};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_report_server_id_response(frame.data(), frame.size(), nullptr, nullptr));
+}
+
 TEST(PduFc0F, BuildRequest)
 {
     mb_u8 buffer[6 + 2]{};
@@ -233,6 +290,39 @@ TEST(PduFc0F, BuildAndParseResponse)
 
     EXPECT_EQ(0x0002U, addr);
     EXPECT_EQ(8U, count);
+}
+
+TEST(PduFc16Mask, BuildAndParse)
+{
+    mb_u8 buffer[7]{};
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_mask_write_register_request(buffer, sizeof buffer, 0x1234U, 0x0F0FU, 0xF0F0U));
+
+    mb_u16 address = 0U;
+    mb_u16 and_mask = 0U;
+    mb_u16 or_mask = 0U;
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_mask_write_register_request(buffer, sizeof buffer, &address, &and_mask, &or_mask));
+
+    EXPECT_EQ(0x1234U, address);
+    EXPECT_EQ(0x0F0FU, and_mask);
+    EXPECT_EQ(0xF0F0U, or_mask);
+
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_build_mask_write_register_response(buffer, sizeof buffer, 0x1234U, 0x0F0FU, 0xF0F0U));
+    ASSERT_EQ(MODBUS_ERROR_NONE,
+              mb_pdu_parse_mask_write_register_response(buffer, sizeof buffer, &address, &and_mask, &or_mask));
+
+    EXPECT_EQ(0x1234U, address);
+    EXPECT_EQ(0x0F0FU, and_mask);
+    EXPECT_EQ(0xF0F0U, or_mask);
+}
+
+TEST(PduFc16Mask, ParseRejectsInvalidLength)
+{
+    const std::array<mb_u8, 6> frame{MB_PDU_FC_MASK_WRITE_REGISTER, 0x00U, 0x10U, 0xFFU, 0x00U, 0xAAU};
+    EXPECT_EQ(MODBUS_ERROR_INVALID_ARGUMENT,
+              mb_pdu_parse_mask_write_register_request(frame.data(), frame.size(), nullptr, nullptr, nullptr));
 }
 
 TEST(PduFc17, BuildRequest)

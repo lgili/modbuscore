@@ -39,8 +39,13 @@
 #include <modbus/utils.h>
 #include <modbus/fsm.h>
 #include <modbus/core.h>
+#if MB_CONF_BUILD_SERVER
 #include <modbus/server.h>
+#endif
+
+#if MB_CONF_BUILD_CLIENT
 #include <modbus/client.h>
+#endif
 
 #if defined(_WIN32)
 #include <modbus/port/win.h>

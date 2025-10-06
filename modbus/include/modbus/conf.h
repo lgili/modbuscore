@@ -17,6 +17,14 @@
 #ifndef MODBUS_CONF_H
 #define MODBUS_CONF_H
 
+#ifndef MB_CONF_BUILD_CLIENT
+#define MB_CONF_BUILD_CLIENT 1
+#endif
+
+#ifndef MB_CONF_BUILD_SERVER
+#define MB_CONF_BUILD_SERVER 1
+#endif
+
 #define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.

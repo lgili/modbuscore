@@ -191,6 +191,51 @@ int modbus_binary_search(variable_modbus_t modbus_variables[], uint16_t low, uin
 // NOLINTEND(bugprone-easily-swappable-parameters)
 
 /**
+ * @brief Extracts a 32-bit unsigned integer from two holding registers using ABCD order.
+ */
+uint32_t modbus_get_uint32_abcd(const uint16_t *registers);
+
+/**
+ * @brief Extracts a 32-bit unsigned integer from two holding registers using DCBA order.
+ */
+uint32_t modbus_get_uint32_dcba(const uint16_t *registers);
+
+/**
+ * @brief Extracts a 32-bit unsigned integer from two holding registers using BADC order.
+ */
+uint32_t modbus_get_uint32_badc(const uint16_t *registers);
+
+/**
+ * @brief Extracts a 32-bit unsigned integer from two holding registers using CDAB order.
+ */
+uint32_t modbus_get_uint32_cdab(const uint16_t *registers);
+
+void modbus_set_uint32_abcd(uint32_t value, uint16_t *dest);
+void modbus_set_uint32_dcba(uint32_t value, uint16_t *dest);
+void modbus_set_uint32_badc(uint32_t value, uint16_t *dest);
+void modbus_set_uint32_cdab(uint32_t value, uint16_t *dest);
+
+int32_t modbus_get_int32_abcd(const uint16_t *registers);
+int32_t modbus_get_int32_dcba(const uint16_t *registers);
+int32_t modbus_get_int32_badc(const uint16_t *registers);
+int32_t modbus_get_int32_cdab(const uint16_t *registers);
+
+void modbus_set_int32_abcd(int32_t value, uint16_t *dest);
+void modbus_set_int32_dcba(int32_t value, uint16_t *dest);
+void modbus_set_int32_badc(int32_t value, uint16_t *dest);
+void modbus_set_int32_cdab(int32_t value, uint16_t *dest);
+
+float modbus_get_float_abcd(const uint16_t *registers);
+float modbus_get_float_dcba(const uint16_t *registers);
+float modbus_get_float_badc(const uint16_t *registers);
+float modbus_get_float_cdab(const uint16_t *registers);
+
+void modbus_set_float_abcd(float value, uint16_t *dest);
+void modbus_set_float_dcba(float value, uint16_t *dest);
+void modbus_set_float_badc(float value, uint16_t *dest);
+void modbus_set_float_cdab(float value, uint16_t *dest);
+
+/**
  * @brief Calculates the Modbus CRC-16 using a bit-by-bit algorithm.
  *
  * This function iterates over each byte in the given data buffer and updates the

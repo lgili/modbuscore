@@ -10,6 +10,12 @@
 #ifndef MODBUS_SERVER_H
 #define MODBUS_SERVER_H
 
+#include <modbus/conf.h>
+
+#if !MB_CONF_BUILD_SERVER
+#error "Modbus server support is disabled (enable MODBUS_ENABLE_SERVER to use this header)."
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 

@@ -24,8 +24,11 @@ extern "C" {
 #define MB_PDU_FC_READ_INPUT_REGISTERS          0x04U
 #define MB_PDU_FC_WRITE_SINGLE_COIL             0x05U
 #define MB_PDU_FC_WRITE_SINGLE_REGISTER         0x06U
+#define MB_PDU_FC_READ_EXCEPTION_STATUS         0x07U
 #define MB_PDU_FC_WRITE_MULTIPLE_COILS          0x0FU
 #define MB_PDU_FC_WRITE_MULTIPLE_REGISTERS      0x10U
+#define MB_PDU_FC_REPORT_SERVER_ID              0x11U
+#define MB_PDU_FC_MASK_WRITE_REGISTER           0x16U
 #define MB_PDU_FC_READ_WRITE_MULTIPLE_REGISTERS 0x17U
 
 #define MB_PDU_EXCEPTION_BIT 0x80U
@@ -52,6 +55,8 @@ extern "C" {
 #define MB_PDU_FC17_MAX_READ_REGISTERS   125U
 #define MB_PDU_FC17_MIN_WRITE_REGISTERS  1U
 #define MB_PDU_FC17_MAX_WRITE_REGISTERS  121U
+
+#define MB_PDU_FC11_MAX_PAYLOAD 251U
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 mb_err_t mb_pdu_build_read_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
@@ -88,6 +93,16 @@ mb_err_t mb_pdu_parse_write_single_coil_request(const mb_u8 *pdu, mb_size_t len,
 mb_err_t mb_pdu_build_write_single_coil_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, bool coil_on);
 mb_err_t mb_pdu_parse_write_single_coil_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, bool *out_coil_on);
 
+mb_err_t mb_pdu_build_read_exception_status_request(mb_u8 *out, mb_size_t out_cap);
+mb_err_t mb_pdu_parse_read_exception_status_request(const mb_u8 *pdu, mb_size_t len);
+mb_err_t mb_pdu_build_read_exception_status_response(mb_u8 *out, mb_size_t out_cap, mb_u8 status);
+mb_err_t mb_pdu_parse_read_exception_status_response(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_status);
+
+mb_err_t mb_pdu_build_report_server_id_request(mb_u8 *out, mb_size_t out_cap);
+mb_err_t mb_pdu_parse_report_server_id_request(const mb_u8 *pdu, mb_size_t len);
+mb_err_t mb_pdu_build_report_server_id_response(mb_u8 *out, mb_size_t out_cap, const mb_u8 *payload, mb_size_t payload_len);
+mb_err_t mb_pdu_parse_report_server_id_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u8 *out_byte_count);
+
 mb_err_t mb_pdu_build_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const mb_u16 *values, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count, const mb_u8 **out_payload);
 mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code);
@@ -101,6 +116,11 @@ mb_err_t mb_pdu_build_write_multiple_coils_request(mb_u8 *out, mb_size_t out_cap
 mb_err_t mb_pdu_parse_write_multiple_coils_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count, mb_u8 *out_byte_count, const mb_u8 **out_payload);
 mb_err_t mb_pdu_build_write_multiple_coils_response(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_coils_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count);
+
+mb_err_t mb_pdu_build_mask_write_register_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask);
+mb_err_t mb_pdu_parse_mask_write_register_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask);
+mb_err_t mb_pdu_build_mask_write_register_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask);
+mb_err_t mb_pdu_parse_mask_write_register_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask);
 
 mb_err_t mb_pdu_build_read_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 read_start_addr, mb_u16 read_quantity, mb_u16 write_start_addr, const mb_u16 *write_values, mb_u16 write_quantity);
 mb_err_t mb_pdu_parse_read_write_multiple_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_read_addr, mb_u16 *out_read_quantity, mb_u16 *out_write_addr, mb_u16 *out_write_quantity, const mb_u8 **out_write_payload);

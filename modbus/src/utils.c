@@ -30,6 +30,7 @@
 
 #include <modbus/utils.h>
 #include <stddef.h>
+#include <string.h>
 
 #ifndef CRC_POLYNOMIAL
 #define CRC_POLYNOMIAL 0xA001U /**< CRC polynomial used for Modbus CRC-16 calculation */
@@ -79,6 +80,96 @@ static const uint16_t crc_table[256] = {
     0x4400, 0x84C1, 0x8581, 0x4540, 0x8701, 0x47C0, 0x4680, 0x8641,
     0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040
 };
+
+static void modbus_regs_to_bytes_abcd(const uint16_t *registers, uint8_t out[4])
+{
+    if (out == NULL) {
+        return;
+    }
+
+    if (registers == NULL) {
+        out[0] = 0U;
+        out[1] = 0U;
+        out[2] = 0U;
+        out[3] = 0U;
+        return;
+    }
+
+    out[0] = (uint8_t)((registers[0] >> 8) & 0xFFU);
+    out[1] = (uint8_t)(registers[0] & 0xFFU);
+    out[2] = (uint8_t)((registers[1] >> 8) & 0xFFU);
+    out[3] = (uint8_t)(registers[1] & 0xFFU);
+}
+
+static void modbus_bytes_to_regs_abcd(const uint8_t bytes[4], uint16_t *dest)
+{
+    if (dest == NULL || bytes == NULL) {
+        return;
+    }
+
+    dest[0] = (uint16_t)(((uint16_t)bytes[0] << 8) | (uint16_t)bytes[1]);
+    dest[1] = (uint16_t)(((uint16_t)bytes[2] << 8) | (uint16_t)bytes[3]);
+}
+
+static uint32_t modbus_bytes_to_u32(const uint8_t bytes[4])
+{
+    return ((uint32_t)bytes[0] << 24) |
+           ((uint32_t)bytes[1] << 16) |
+           ((uint32_t)bytes[2] << 8)  |
+           (uint32_t)bytes[3];
+}
+
+static void modbus_u32_to_bytes(uint32_t value, uint8_t out[4])
+{
+    out[0] = (uint8_t)((value >> 24) & 0xFFU);
+    out[1] = (uint8_t)((value >> 16) & 0xFFU);
+    out[2] = (uint8_t)((value >> 8) & 0xFFU);
+    out[3] = (uint8_t)(value & 0xFFU);
+}
+
+static void modbus_reorder_bytes(const uint8_t in[4], uint8_t out[4], uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3)
+{
+    out[0] = in[b0];
+    out[1] = in[b1];
+    out[2] = in[b2];
+    out[3] = in[b3];
+}
+
+static uint32_t modbus_get_u32_ordered(const uint16_t *registers, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3)
+{
+    uint8_t abcd[4];
+    uint8_t ordered[4];
+    modbus_regs_to_bytes_abcd(registers, abcd);
+    modbus_reorder_bytes(abcd, ordered, b0, b1, b2, b3);
+    return modbus_bytes_to_u32(ordered);
+}
+
+static void modbus_set_u32_ordered(uint32_t value, uint16_t *dest, uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3)
+{
+    if (dest == NULL) {
+        return;
+    }
+
+    uint8_t abcd[4];
+    uint8_t ordered[4];
+    modbus_u32_to_bytes(value, abcd);
+    modbus_reorder_bytes(abcd, ordered, b0, b1, b2, b3);
+    modbus_bytes_to_regs_abcd(ordered, dest);
+}
+
+static float modbus_float_from_u32(uint32_t raw)
+{
+    float value = 0.0f;
+    memcpy(&value, &raw, sizeof(value));
+    return value;
+}
+
+static uint32_t modbus_u32_from_float(float value)
+{
+    uint32_t raw = 0U;
+    memcpy(&raw, &value, sizeof(raw));
+    return raw;
+}
 
 /**
  * @brief Safely reads an 8-bit unsigned integer from a buffer.
@@ -254,6 +345,126 @@ int modbus_binary_search(variable_modbus_t modbus_variables[], uint16_t low, uin
     return -1; // Not found
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
+
+uint32_t modbus_get_uint32_abcd(const uint16_t *registers)
+{
+    return modbus_get_u32_ordered(registers, 0U, 1U, 2U, 3U);
+}
+
+uint32_t modbus_get_uint32_dcba(const uint16_t *registers)
+{
+    return modbus_get_u32_ordered(registers, 3U, 2U, 1U, 0U);
+}
+
+uint32_t modbus_get_uint32_badc(const uint16_t *registers)
+{
+    return modbus_get_u32_ordered(registers, 1U, 0U, 3U, 2U);
+}
+
+uint32_t modbus_get_uint32_cdab(const uint16_t *registers)
+{
+    return modbus_get_u32_ordered(registers, 2U, 3U, 0U, 1U);
+}
+
+void modbus_set_uint32_abcd(uint32_t value, uint16_t *dest)
+{
+    modbus_set_u32_ordered(value, dest, 0U, 1U, 2U, 3U);
+}
+
+void modbus_set_uint32_dcba(uint32_t value, uint16_t *dest)
+{
+    modbus_set_u32_ordered(value, dest, 3U, 2U, 1U, 0U);
+}
+
+void modbus_set_uint32_badc(uint32_t value, uint16_t *dest)
+{
+    modbus_set_u32_ordered(value, dest, 1U, 0U, 3U, 2U);
+}
+
+void modbus_set_uint32_cdab(uint32_t value, uint16_t *dest)
+{
+    modbus_set_u32_ordered(value, dest, 2U, 3U, 0U, 1U);
+}
+
+int32_t modbus_get_int32_abcd(const uint16_t *registers)
+{
+    return (int32_t)modbus_get_uint32_abcd(registers);
+}
+
+int32_t modbus_get_int32_dcba(const uint16_t *registers)
+{
+    return (int32_t)modbus_get_uint32_dcba(registers);
+}
+
+int32_t modbus_get_int32_badc(const uint16_t *registers)
+{
+    return (int32_t)modbus_get_uint32_badc(registers);
+}
+
+int32_t modbus_get_int32_cdab(const uint16_t *registers)
+{
+    return (int32_t)modbus_get_uint32_cdab(registers);
+}
+
+void modbus_set_int32_abcd(int32_t value, uint16_t *dest)
+{
+    modbus_set_uint32_abcd((uint32_t)value, dest);
+}
+
+void modbus_set_int32_dcba(int32_t value, uint16_t *dest)
+{
+    modbus_set_uint32_dcba((uint32_t)value, dest);
+}
+
+void modbus_set_int32_badc(int32_t value, uint16_t *dest)
+{
+    modbus_set_uint32_badc((uint32_t)value, dest);
+}
+
+void modbus_set_int32_cdab(int32_t value, uint16_t *dest)
+{
+    modbus_set_uint32_cdab((uint32_t)value, dest);
+}
+
+float modbus_get_float_abcd(const uint16_t *registers)
+{
+    return modbus_float_from_u32(modbus_get_uint32_abcd(registers));
+}
+
+float modbus_get_float_dcba(const uint16_t *registers)
+{
+    return modbus_float_from_u32(modbus_get_uint32_dcba(registers));
+}
+
+float modbus_get_float_badc(const uint16_t *registers)
+{
+    return modbus_float_from_u32(modbus_get_uint32_badc(registers));
+}
+
+float modbus_get_float_cdab(const uint16_t *registers)
+{
+    return modbus_float_from_u32(modbus_get_uint32_cdab(registers));
+}
+
+void modbus_set_float_abcd(float value, uint16_t *dest)
+{
+    modbus_set_uint32_abcd(modbus_u32_from_float(value), dest);
+}
+
+void modbus_set_float_dcba(float value, uint16_t *dest)
+{
+    modbus_set_uint32_dcba(modbus_u32_from_float(value), dest);
+}
+
+void modbus_set_float_badc(float value, uint16_t *dest)
+{
+    modbus_set_uint32_badc(modbus_u32_from_float(value), dest);
+}
+
+void modbus_set_float_cdab(float value, uint16_t *dest)
+{
+    modbus_set_uint32_cdab(modbus_u32_from_float(value), dest);
+}
 
 /**
  * @brief Calculates the Modbus CRC-16 using a bit-by-bit algorithm.

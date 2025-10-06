@@ -34,6 +34,18 @@ mb_diag_err_slot_t mb_diag_slot_from_error(mb_err_t err)
         return MB_DIAG_ERR_SLOT_EXCEPTION_ILLEGAL_DATA_VALUE;
     case MB_EX_SERVER_DEVICE_FAILURE:
         return MB_DIAG_ERR_SLOT_EXCEPTION_SERVER_DEVICE_FAILURE;
+    case MB_EX_ACKNOWLEDGE:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_ACKNOWLEDGE;
+    case MB_EX_SERVER_DEVICE_BUSY:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_SERVER_DEVICE_BUSY;
+    case MB_EX_NEGATIVE_ACKNOWLEDGE:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_NEGATIVE_ACKNOWLEDGE;
+    case MB_EX_MEMORY_PARITY_ERROR:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_MEMORY_PARITY_ERROR;
+    case MB_EX_GATEWAY_PATH_UNAVAILABLE:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_GATEWAY_PATH_UNAVAILABLE;
+    case MB_EX_GATEWAY_TARGET_FAILED:
+        return MB_DIAG_ERR_SLOT_EXCEPTION_GATEWAY_TARGET_DEVICE_FAILED;
     default:
         break;
     }
@@ -99,6 +111,18 @@ const char *mb_diag_err_slot_str(mb_diag_err_slot_t slot)
         return "ex-illegal-data-value";
     case MB_DIAG_ERR_SLOT_EXCEPTION_SERVER_DEVICE_FAILURE:
         return "ex-server-device-failure";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_ACKNOWLEDGE:
+        return "ex-acknowledge";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_SERVER_DEVICE_BUSY:
+        return "ex-server-device-busy";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_NEGATIVE_ACKNOWLEDGE:
+        return "ex-negative-acknowledge";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_MEMORY_PARITY_ERROR:
+        return "ex-memory-parity-error";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_GATEWAY_PATH_UNAVAILABLE:
+        return "ex-gateway-path-unavailable";
+    case MB_DIAG_ERR_SLOT_EXCEPTION_GATEWAY_TARGET_DEVICE_FAILED:
+        return "ex-gateway-target-device-failed";
     case MB_DIAG_ERR_SLOT_MAX:
         return "invalid";
     default:

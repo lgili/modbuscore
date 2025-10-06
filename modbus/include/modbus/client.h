@@ -10,6 +10,12 @@
 #ifndef MODBUS_CLIENT_H
 #define MODBUS_CLIENT_H
 
+#include <modbus/conf.h>
+
+#if !MB_CONF_BUILD_CLIENT
+#error "Modbus client support is disabled (enable MODBUS_ENABLE_CLIENT to use this header)."
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 

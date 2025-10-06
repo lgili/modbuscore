@@ -15,12 +15,18 @@ set(SOURCES
   src/utils.c
   src/fsm.c
   src/core.c
-  src/server.c
-  src/client.c
   src/port/bare.c
   src/port/freertos.c
   src/port/mutex.c
 )
+
+if(MODBUS_ENABLE_SERVER)
+  list(APPEND SOURCES src/server.c)
+endif()
+
+if(MODBUS_ENABLE_CLIENT)
+  list(APPEND SOURCES src/client.c)
+endif()
 
 if(NOT WIN32)
   list(APPEND SOURCES src/port/posix.c)
@@ -52,14 +58,20 @@ set(HEADERS_PUBLIC
   include/modbus/utils.h
   include/modbus/fsm.h
   include/modbus/core.h
-  include/modbus/server.h
-  include/modbus/client.h
   include/modbus/port/mutex.h
   include/modbus/port/posix.h
   include/modbus/port/freertos.h
   include/modbus/port/bare.h
   
 )
+
+if(MODBUS_ENABLE_SERVER)
+  list(APPEND HEADERS_PUBLIC include/modbus/server.h)
+endif()
+
+if(MODBUS_ENABLE_CLIENT)
+  list(APPEND HEADERS_PUBLIC include/modbus/client.h)
+endif()
 
 if(WIN32)
   list(APPEND HEADERS_PUBLIC include/modbus/port/win.h)
@@ -72,6 +84,23 @@ set(HEADERS_PRIVATE
 
 # Include LibraryConfig.cmake
 include(${PROJECT_SOURCE_DIR}/cmake/LibraryConfig.cmake)
+
+if(MODBUS_ENABLE_CLIENT)
+  set(_mb_conf_build_client 1)
+else()
+  set(_mb_conf_build_client 0)
+endif()
+
+if(MODBUS_ENABLE_SERVER)
+  set(_mb_conf_build_server 1)
+else()
+  set(_mb_conf_build_server 0)
+endif()
+
+target_compile_definitions(${LIBRARY_NAME} PUBLIC
+  MB_CONF_BUILD_CLIENT=${_mb_conf_build_client}
+  MB_CONF_BUILD_SERVER=${_mb_conf_build_server}
+)
 
 # Optional SEGGER RTT transport for logging
 find_package(SEGGER_RTT QUIET)

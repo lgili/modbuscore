@@ -17,7 +17,7 @@ HALs can evolve independently.
   user callbacks or static storage, with strict bounds checking (Gate 6).
 - **RTU and TCP transports** – shared MBAP encoder/decoder, optional
   multi-connection helper for Modbus TCP, and reusable RTU framing utilities.
-- **Extended PDU codec** – supports FC 01/02/03/04/05/06/0F/10/17 helpers with
+- **Extended PDU codec** – supports FC 01/02/03/04/05/06/07/0F/10/11/16/17 helpers with
   strict validation, covering the extra function codes from Gate 10.
 - **Backpressure & observability** – configurable queue capacity, per-function
   timeouts, poison-pill flush and latency/response metrics for both client and
@@ -49,7 +49,35 @@ HALs can evolve independently.
 | 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
 | 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
 | 11 | Observability & debug (events, tracing, diagnostics) | ✅ |
-| 10 | Extra FCs (01/02/04/05/0F/17) | ⏳ (ASCII framing próximo) |
+| 10 | Extra FCs (01/02/04/05/0F/17) | ⏳ (ASCII framing coming next) |
+| 14 | Protocol parity & data helpers | ✅ |
+
+## Function code coverage
+
+| FC  | Name                      | Scope               | Status |
+|-----|---------------------------|---------------------|--------|
+|0x01 | Read Coils                | Client/Server       | ✅ |
+|0x02 | Read Discrete Inputs      | Client/Server       | ✅ |
+|0x03 | Read Holding Registers    | Client/Server       | ✅ |
+|0x04 | Read Input Registers      | Client/Server       | ✅ |
+|0x05 | Write Single Coil         | Client/Server       | ✅ |
+|0x06 | Write Single Register     | Client/Server       | ✅ |
+|0x07 | Read Exception Status     | Client              | ✅ |
+|0x0F | Write Multiple Coils      | Client/Server       | ✅ |
+|0x10 | Write Multiple Registers  | Client/Server       | ✅ |
+|0x11 | Report Server ID          | Server              | ✅ |
+|0x16 | Mask Write Register       | Client/Server       | ✅ |
+|0x17 | Read/Write Multiple Regs  | Client/Server       | ✅ |
+
+ASCII framing remains scheduled for Gate 10.
+
+## libmodbus parity helpers
+
+Starting at Gate 14 the library exposes 32-bit integer and `float` converters
+compatible with `libmodbus` (`modbus_get_uint32_*`, `modbus_get_float_*` and
+the matching setters). Each variant honours the byte-order conventions
+ABCD/DCBA/BADC/CDAB, making migrations painless without manual buffer shuffles.
+Refer to `modbus/utils.h` for the full getter/setter roster.
 
 Future gates (8+) track robustness, HAL ports, additional FCs and release
 hardening.  See `update_plan.md` for the full roadmap.
@@ -100,6 +128,23 @@ Release build:
 cmake --preset host-release
 cmake --build --preset host-release
 ```
+
+### Minimise footprint
+
+The library can be built with only the client or server runtime to trim flash
+usage on embedded targets. Disable the unused component at configure time:
+
+```bash
+cmake -S . -B build/host-server-only -G Ninja \
+  -DMODBUS_ENABLE_CLIENT=OFF
+
+cmake -S . -B build/host-client-only -G Ninja \
+  -DMODBUS_ENABLE_SERVER=OFF
+```
+
+Each option defaults to `ON`; at least one must remain enabled. When a feature
+is disabled its public headers are omitted (or raise a compile-time error if
+included directly), preventing accidental linkage against non-existent code.
 
 Sanitizers:
 
