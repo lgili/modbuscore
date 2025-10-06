@@ -37,6 +37,75 @@
 #define MB_CONF_TRANSPORT_TCP 1
 #endif
 
+#define MB_CONF_PROFILE_TINY   0
+#define MB_CONF_PROFILE_LEAN   1
+#define MB_CONF_PROFILE_FULL   2
+#define MB_CONF_PROFILE_CUSTOM 3
+
+#ifndef MB_CONF_PROFILE
+#define MB_CONF_PROFILE MB_CONF_PROFILE_LEAN
+#endif
+
+#ifndef MB_CONF_ENABLE_FC01
+#define MB_CONF_ENABLE_FC01 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC02
+#define MB_CONF_ENABLE_FC02 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC03
+#define MB_CONF_ENABLE_FC03 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC04
+#define MB_CONF_ENABLE_FC04 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC05
+#define MB_CONF_ENABLE_FC05 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC06
+#define MB_CONF_ENABLE_FC06 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC07
+#define MB_CONF_ENABLE_FC07 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC0F
+#define MB_CONF_ENABLE_FC0F 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC10
+#define MB_CONF_ENABLE_FC10 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC11
+#define MB_CONF_ENABLE_FC11 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC16
+#define MB_CONF_ENABLE_FC16 1
+#endif
+
+#ifndef MB_CONF_ENABLE_FC17
+#define MB_CONF_ENABLE_FC17 1
+#endif
+
+#ifndef MB_CONF_DIAG_ENABLE_COUNTERS
+#define MB_CONF_DIAG_ENABLE_COUNTERS 1
+#endif
+
+#ifndef MB_CONF_DIAG_ENABLE_TRACE
+#define MB_CONF_DIAG_ENABLE_TRACE 0
+#endif
+
+#ifndef MB_CONF_DIAG_TRACE_DEPTH
+#define MB_CONF_DIAG_TRACE_DEPTH 64
+#endif
+
 #define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.
@@ -109,5 +178,27 @@
  */
 
 /* Add more configurations as needed */
+
+typedef enum mb_conf_client_poll_phase {
+	MB_CONF_CLIENT_POLL_PHASE_ENTER = 0,
+	MB_CONF_CLIENT_POLL_PHASE_AFTER_TRANSPORT,
+	MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE,
+	MB_CONF_CLIENT_POLL_PHASE_EXIT
+} mb_conf_client_poll_phase_t;
+
+typedef enum mb_conf_server_poll_phase {
+	MB_CONF_SERVER_POLL_PHASE_ENTER = 0,
+	MB_CONF_SERVER_POLL_PHASE_AFTER_TRANSPORT,
+	MB_CONF_SERVER_POLL_PHASE_AFTER_STATE,
+	MB_CONF_SERVER_POLL_PHASE_EXIT
+} mb_conf_server_poll_phase_t;
+
+#ifndef MB_CONF_CLIENT_POLL_HOOK
+#define MB_CONF_CLIENT_POLL_HOOK(client_ptr, phase) do { (void)(client_ptr); (void)(phase); } while (0)
+#endif
+
+#ifndef MB_CONF_SERVER_POLL_HOOK
+#define MB_CONF_SERVER_POLL_HOOK(server_ptr, phase) do { (void)(server_ptr); (void)(phase); } while (0)
+#endif
 
 #endif /* MODBUS_CONF_H */

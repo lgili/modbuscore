@@ -148,7 +148,7 @@ static void client_emit_state_event(mb_client_t *client,
                                     mb_event_type_t type,
                                     mb_client_state_t state)
 {
-    if (client == NULL || client->observer_cb == NULL) {
+    if (client == NULL) {
         return;
     }
 
@@ -158,7 +158,11 @@ static void client_emit_state_event(mb_client_t *client,
         .timestamp = client_now(client),
     };
     event.data.client_state.state = (mb_u8)state;
-    client->observer_cb(&event, client->observer_user);
+    mb_diag_state_capture_event(&client->diag, &event);
+
+    if (client->observer_cb != NULL) {
+        client->observer_cb(&event, client->observer_user);
+    }
 }
 
 static void client_emit_tx_event(mb_client_t *client,
@@ -166,7 +170,7 @@ static void client_emit_tx_event(mb_client_t *client,
                                  const mb_client_txn_t *txn,
                                  mb_err_t status)
 {
-    if (client == NULL || client->observer_cb == NULL || txn == NULL) {
+    if (client == NULL || txn == NULL) {
         return;
     }
 
@@ -178,7 +182,11 @@ static void client_emit_tx_event(mb_client_t *client,
     event.data.client_txn.function = txn->request_view.function;
     event.data.client_txn.status = status;
     event.data.client_txn.expect_response = txn->expect_response;
-    client->observer_cb(&event, client->observer_user);
+    mb_diag_state_capture_event(&client->diag, &event);
+
+    if (client->observer_cb != NULL) {
+        client->observer_cb(&event, client->observer_user);
+    }
 }
 
 static void client_transition_state(mb_client_t *client, mb_client_state_t next)
@@ -422,7 +430,7 @@ static void client_finalize(mb_client_t *client,
     txn->completed = true;
     txn->callback_pending = true;
 
-    mb_diag_record_error(&client->diag, status);
+    mb_diag_state_record_error(&client->diag, status);
     client_emit_tx_event(client, MB_EVENT_CLIENT_TX_COMPLETE, txn, status);
 
     if (txn->cfg.callback) {
@@ -732,7 +740,7 @@ static mb_err_t mb_client_init_common(mb_client_t *client,
     client->pending_count = 0U;
     memset(client->fc_timeouts, 0, sizeof(client->fc_timeouts));
     memset(&client->metrics, 0, sizeof(client->metrics));
-    mb_diag_reset(&client->diag);
+    mb_diag_state_reset(&client->diag);
 
     for (mb_size_t i = 0U; i < txn_pool_len; ++i) {
         memset(&txn_pool[i], 0, sizeof(mb_client_txn_t));
@@ -782,7 +790,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (request->request.payload_len > MB_PDU_MAX) {
-        mb_diag_record_error(&client->diag, MB_ERR_INVALID_ARGUMENT);
+        mb_diag_state_record_error(&client->diag, MB_ERR_INVALID_ARGUMENT);
         return MB_ERR_INVALID_ARGUMENT;
     }
 
@@ -790,7 +798,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     if (!is_poison && client->queue_capacity > 0U) {
         const mb_size_t inflight = client_total_inflight(client);
         if (inflight >= client->queue_capacity) {
-            mb_diag_record_error(&client->diag, MB_ERR_NO_RESOURCES);
+            mb_diag_state_record_error(&client->diag, MB_ERR_NO_RESOURCES);
             return MB_ERR_NO_RESOURCES;
         }
     }
@@ -804,7 +812,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (txn == NULL) {
-        mb_diag_record_error(&client->diag, MB_ERR_NO_RESOURCES);
+        mb_diag_state_record_error(&client->diag, MB_ERR_NO_RESOURCES);
         return MB_ERR_NO_RESOURCES;
     }
 
@@ -841,7 +849,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     if (!txn->poison) {
-        mb_diag_record_fc(&client->diag, txn->request_view.function);
+        mb_diag_state_record_fc(&client->diag, txn->request_view.function);
     }
     client_emit_tx_event(client, MB_EVENT_CLIENT_TX_SUBMIT, txn, MB_OK);
 
@@ -905,7 +913,11 @@ mb_err_t mb_client_poll(mb_client_t *client)
         return MB_ERR_INVALID_ARGUMENT;
     }
 
+    MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_ENTER);
+
     mb_err_t status = client_transport_poll(client);
+
+    MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_TRANSPORT);
 
     mb_client_txn_t *txn = client->current;
     if (txn != NULL) {
@@ -921,6 +933,8 @@ mb_err_t mb_client_poll(mb_client_t *client)
         if (client->state == MB_CLIENT_STATE_WAITING && txn != NULL) {
             if (txn->deadline > 0U && now >= txn->deadline) {
                 client_retry(client);
+                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
+                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
                 return status;
             }
 
@@ -928,6 +942,8 @@ mb_err_t mb_client_poll(mb_client_t *client)
                 client_finalize(client, txn, MB_ERR_TRANSPORT, NULL);
                 client->current = NULL;
                 client_start_next(client);
+                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
+                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
                 return status;
             }
         }
@@ -937,6 +953,8 @@ mb_err_t mb_client_poll(mb_client_t *client)
         client_start_next(client);
     }
 
+    MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
+    MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
     return status;
 }
 
@@ -1015,7 +1033,20 @@ void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag)
         return;
     }
 
-    *out_diag = client->diag;
+#if MB_CONF_DIAG_ENABLE_COUNTERS
+    *out_diag = client->diag.counters;
+#else
+    memset(out_diag, 0, sizeof(*out_diag));
+#endif
+}
+
+void mb_client_get_diag_snapshot(const mb_client_t *client, mb_diag_snapshot_t *out_snapshot)
+{
+    if (client == NULL || out_snapshot == NULL) {
+        return;
+    }
+
+    mb_diag_snapshot(&client->diag, out_snapshot);
 }
 
 void mb_client_reset_diag(mb_client_t *client)
@@ -1024,7 +1055,7 @@ void mb_client_reset_diag(mb_client_t *client)
         return;
     }
 
-    mb_diag_reset(&client->diag);
+    mb_diag_state_reset(&client->diag);
 }
 
 void mb_client_set_event_callback(mb_client_t *client, mb_event_callback_t callback, void *user_ctx)

@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <modbus/conf.h>
 #include <modbus/frame.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
@@ -94,11 +95,63 @@ typedef struct {
     mb_u64 error[MB_DIAG_ERR_SLOT_MAX];
 } mb_diag_counters_t;
 
+#if MB_CONF_DIAG_ENABLE_TRACE && (MB_CONF_DIAG_TRACE_DEPTH <= 0)
+#error "MB_CONF_DIAG_TRACE_DEPTH must be greater than zero when trace diagnostics are enabled"
+#endif
+
+#if MB_CONF_DIAG_ENABLE_TRACE
+typedef struct {
+    mb_time_ms_t timestamp;
+    mb_event_source_t source;
+    mb_event_type_t type;
+    mb_u8 function;
+    mb_err_t status;
+} mb_diag_trace_entry_t;
+
+typedef struct {
+    mb_diag_trace_entry_t entries[MB_CONF_DIAG_TRACE_DEPTH];
+    mb_u16 head;
+    mb_u16 count;
+} mb_diag_trace_buffer_t;
+#endif
+
+typedef struct {
+#if MB_CONF_DIAG_ENABLE_COUNTERS
+    mb_diag_counters_t counters;
+#endif
+#if MB_CONF_DIAG_ENABLE_TRACE
+    mb_diag_trace_buffer_t trace;
+#endif
+#if !MB_CONF_DIAG_ENABLE_COUNTERS && !MB_CONF_DIAG_ENABLE_TRACE
+    mb_u8 reserved;
+#endif
+} mb_diag_state_t;
+
+typedef struct {
+#if MB_CONF_DIAG_ENABLE_COUNTERS
+    mb_diag_counters_t counters;
+#endif
+#if MB_CONF_DIAG_ENABLE_TRACE
+    mb_diag_trace_entry_t trace[MB_CONF_DIAG_TRACE_DEPTH];
+    mb_u16 trace_len;
+#endif
+#if !MB_CONF_DIAG_ENABLE_COUNTERS && !MB_CONF_DIAG_ENABLE_TRACE
+    mb_u8 reserved;
+#endif
+} mb_diag_snapshot_t;
+
 void mb_diag_reset(mb_diag_counters_t *diag);
 void mb_diag_record_fc(mb_diag_counters_t *diag, mb_u8 function);
 void mb_diag_record_error(mb_diag_counters_t *diag, mb_err_t err);
 mb_diag_err_slot_t mb_diag_slot_from_error(mb_err_t err);
 const char *mb_diag_err_slot_str(mb_diag_err_slot_t slot);
+
+void mb_diag_state_init(mb_diag_state_t *state);
+void mb_diag_state_reset(mb_diag_state_t *state);
+void mb_diag_state_record_fc(mb_diag_state_t *state, mb_u8 function);
+void mb_diag_state_record_error(mb_diag_state_t *state, mb_err_t err);
+void mb_diag_state_capture_event(mb_diag_state_t *state, const mb_event_t *event);
+void mb_diag_snapshot(const mb_diag_state_t *state, mb_diag_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
 }

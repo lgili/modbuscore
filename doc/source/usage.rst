@@ -1,6 +1,13 @@
 Usage Guide
 ===========
 
+.. note::
+
+    This walkthrough focuses on the host-side API and currently available
+    helpers.  Keep an eye on :doc:`install_use` for the end-to-end quickstart
+    index once the embedded samples transition from placeholders to runnable
+    demos.
+
 Initialisation
 --------------
 

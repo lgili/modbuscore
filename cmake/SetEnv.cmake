@@ -73,47 +73,54 @@ set(CONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
 
 # Configuration
 set(GENERATED_DIR       "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set(VERSION_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
-set(PROJECT_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}Config.cmake")
-set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
-set(PKG_CONFIG_FILE "${GENERATED_DIR}/${LIBRARY_NAME}.pc")
+set(VERSION_CONFIG_FILE "")
+set(PROJECT_CONFIG_FILE "")
+set(TARGETS_EXPORT_NAME "")
+set(PKG_CONFIG_FILE "")
 
-# Include module with functions:
-#   - write_basic_package_version_file(...)
-#   - configure_package_config_file(...)
-include(CMakePackageConfigHelpers)
+if(MODBUS_INSTALL)
+  set(VERSION_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
+  set(PROJECT_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}Config.cmake")
+  set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
+  set(PKG_CONFIG_FILE "${GENERATED_DIR}/${LIBRARY_NAME}.pc")
 
-# Configure '<PROJECT-NAME>ConfigVersion.cmake'
-# Use:
-#   - PROJECT_VERSION
-write_basic_package_version_file(
-    "${VERSION_CONFIG_FILE}"
-    VERSION "${${PROJECT_NAME}_VERSION}"
-    COMPATIBILITY SameMajorVersion
-)
+  # Include module with functions:
+  #   - write_basic_package_version_file(...)
+  #   - configure_package_config_file(...)
+  include(CMakePackageConfigHelpers)
 
-# Configure '<PROJECT-NAME>Config.cmake'
-# Use variables:
-#   - TARGETS_EXPORT_NAME
-#   - PROJECT_NAME
-configure_package_config_file(
-    "${PROJECT_SOURCE_DIR}/cmake/Config.cmake.in"
-    "${PROJECT_CONFIG_FILE}"
-      INSTALL_DESTINATION "${CONFIG_INSTALL_DIR}"
-)
+  # Configure '<PROJECT-NAME>ConfigVersion.cmake'
+  # Use:
+  #   - PROJECT_VERSION
+  write_basic_package_version_file(
+      "${VERSION_CONFIG_FILE}"
+      VERSION "${${PROJECT_NAME}_VERSION}"
+      COMPATIBILITY SameMajorVersion
+  )
 
-configure_file(
-  "${PROJECT_SOURCE_DIR}/cmake/modbus.pc.in"
-  "${PKG_CONFIG_FILE}"
-  @ONLY
-)
+  # Configure '<PROJECT-NAME>Config.cmake'
+  # Use variables:
+  #   - TARGETS_EXPORT_NAME
+  #   - PROJECT_NAME
+  configure_package_config_file(
+      "${PROJECT_SOURCE_DIR}/cmake/Config.cmake.in"
+      "${PROJECT_CONFIG_FILE}"
+        INSTALL_DESTINATION "${CONFIG_INSTALL_DIR}"
+  )
 
-# Uninstall targets
-configure_file("${PROJECT_SOURCE_DIR}/cmake/Uninstall.cmake.in"
-  "${GENERATED_DIR}/Uninstall.cmake"
-  IMMEDIATE @ONLY)
-add_custom_target(uninstall
-  COMMAND ${CMAKE_COMMAND} -P ${GENERATED_DIR}/Uninstall.cmake)
+  configure_file(
+    "${PROJECT_SOURCE_DIR}/cmake/modbus.pc.in"
+    "${PKG_CONFIG_FILE}"
+    @ONLY
+  )
+
+  # Uninstall targets
+  configure_file("${PROJECT_SOURCE_DIR}/cmake/Uninstall.cmake.in"
+    "${GENERATED_DIR}/Uninstall.cmake"
+    IMMEDIATE @ONLY)
+  add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -P ${GENERATED_DIR}/Uninstall.cmake)
+endif()
 
 # Always full RPATH (for shared libraries)
 #  https://gitlab.kitware.com/cmake/community/-/wikis/doc/cmake/RPATH-handling

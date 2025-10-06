@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+
+permissions:
+  contents: write
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -107,6 +111,32 @@ jobs:
           name: coverage-html
           path: build/host-coverage/coverage_html
         if: success()
+
+  footprint-metrics:
+    if: ${{ false }} # Placeholder until baseline thresholds are finalised
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install footprint tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc g++ binutils
+        shell: bash
+      - name: Configure footprint preset
+        run: cmake --preset host-footprint -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+        shell: bash
+      - name: Build footprint artifacts
+        run: cmake --build --preset host-footprint
+        shell: bash
+      - name: Generate footprint report
+        run: python3 scripts/ci/size_report.py --build-dir build/host-footprint --profile LEAN --output build/host-footprint/footprint.json
+        shell: bash
+      - name: Upload footprint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: footprint-report
+          path: build/host-footprint/footprint.json
 
   fuzz:
     if: ${{ false }} # Temporarily disabled due to known toolchain issues
@@ -239,3 +269,18 @@ jobs:
             kill "$(cat server.pid)" || true
           fi
         shell: bash
+
+  interop-matrix:
+    if: ${{ false }} # Stub reserved for the Gate 26/36 interop roll-out
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Produce stub interop report
+        run: python3 scripts/ci/interop_matrix_stub.py --output build/interop/stub.json
+        shell: bash
+      - name: Upload interop matrix stub
+        uses: actions/upload-artifact@v4
+        with:
+          name: interop-matrix-stub
+          path: build/interop/stub.json

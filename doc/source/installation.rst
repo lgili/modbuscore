@@ -1,6 +1,12 @@
 Installation
 ============
 
+.. note::
+
+   This page focuses on the current "build from source" workflow.  For a
+   bird's-eye view, including placeholders for upcoming prebuilt archives and
+   package feeds, see :doc:`install_use`.
+
 Prerequisites
 -------------
 

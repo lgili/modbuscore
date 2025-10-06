@@ -3,6 +3,77 @@ cmake_minimum_required(VERSION 3.20)
 project(Modbus VERSION 1.0.0 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
+# High-level configuration profiles (pre-Gate 17 scaffolding)
+# ---------------------------------------------------------------------------
+set(MODBUS_PROFILE "LEAN" CACHE STRING "Select the Modbus configuration profile (TINY, LEAN, FULL, CUSTOM).")
+set_property(CACHE MODBUS_PROFILE PROPERTY STRINGS TINY LEAN FULL CUSTOM)
+
+set(_MB_CONF_PROFILE_ID 1) # LEAN by default
+
+set(_MODBUS_DEFAULT_ENABLE_CLIENT ON)
+set(_MODBUS_DEFAULT_ENABLE_SERVER ON)
+set(_MODBUS_DEFAULT_TRANSPORT_RTU ON)
+set(_MODBUS_DEFAULT_TRANSPORT_ASCII ON)
+set(_MODBUS_DEFAULT_TRANSPORT_TCP ON)
+
+set(_MB_CONF_ENABLE_FC01 1)
+set(_MB_CONF_ENABLE_FC02 1)
+set(_MB_CONF_ENABLE_FC03 1)
+set(_MB_CONF_ENABLE_FC04 1)
+set(_MB_CONF_ENABLE_FC05 1)
+set(_MB_CONF_ENABLE_FC06 1)
+set(_MB_CONF_ENABLE_FC07 1)
+set(_MB_CONF_ENABLE_FC0F 1)
+set(_MB_CONF_ENABLE_FC10 1)
+set(_MB_CONF_ENABLE_FC11 1)
+set(_MB_CONF_ENABLE_FC16 1)
+set(_MB_CONF_ENABLE_FC17 1)
+
+if(MODBUS_PROFILE STREQUAL "TINY")
+    set(_MB_CONF_PROFILE_ID 0)
+    set(_MODBUS_DEFAULT_ENABLE_SERVER OFF)
+    set(_MODBUS_DEFAULT_TRANSPORT_ASCII OFF)
+    set(_MODBUS_DEFAULT_TRANSPORT_TCP OFF)
+
+    set(_MB_CONF_ENABLE_FC01 0)
+    set(_MB_CONF_ENABLE_FC02 0)
+    set(_MB_CONF_ENABLE_FC04 0)
+    set(_MB_CONF_ENABLE_FC05 0)
+    set(_MB_CONF_ENABLE_FC07 0)
+    set(_MB_CONF_ENABLE_FC0F 0)
+    set(_MB_CONF_ENABLE_FC11 0)
+    set(_MB_CONF_ENABLE_FC16 0)
+    set(_MB_CONF_ENABLE_FC17 0)
+elseif(MODBUS_PROFILE STREQUAL "LEAN")
+    set(_MB_CONF_PROFILE_ID 1)
+    set(_MODBUS_DEFAULT_TRANSPORT_ASCII OFF)
+
+    set(_MB_CONF_ENABLE_FC07 0)
+    set(_MB_CONF_ENABLE_FC11 0)
+    set(_MB_CONF_ENABLE_FC16 0)
+elseif(MODBUS_PROFILE STREQUAL "FULL")
+    set(_MB_CONF_PROFILE_ID 2)
+elseif(MODBUS_PROFILE STREQUAL "CUSTOM")
+    set(_MB_CONF_PROFILE_ID 3)
+else()
+    message(FATAL_ERROR "Unknown MODBUS_PROFILE value: ${MODBUS_PROFILE}")
+endif()
+
+set(MB_CONF_PROFILE_ID ${_MB_CONF_PROFILE_ID})
+set(MB_CONF_ENABLE_FC01 ${_MB_CONF_ENABLE_FC01})
+set(MB_CONF_ENABLE_FC02 ${_MB_CONF_ENABLE_FC02})
+set(MB_CONF_ENABLE_FC03 ${_MB_CONF_ENABLE_FC03})
+set(MB_CONF_ENABLE_FC04 ${_MB_CONF_ENABLE_FC04})
+set(MB_CONF_ENABLE_FC05 ${_MB_CONF_ENABLE_FC05})
+set(MB_CONF_ENABLE_FC06 ${_MB_CONF_ENABLE_FC06})
+set(MB_CONF_ENABLE_FC07 ${_MB_CONF_ENABLE_FC07})
+set(MB_CONF_ENABLE_FC0F ${_MB_CONF_ENABLE_FC0F})
+set(MB_CONF_ENABLE_FC10 ${_MB_CONF_ENABLE_FC10})
+set(MB_CONF_ENABLE_FC11 ${_MB_CONF_ENABLE_FC11})
+set(MB_CONF_ENABLE_FC16 ${_MB_CONF_ENABLE_FC16})
+set(MB_CONF_ENABLE_FC17 ${_MB_CONF_ENABLE_FC17})
+
+# ---------------------------------------------------------------------------
 # Build configuration knobs (Gate 0 deliverables)
 # ---------------------------------------------------------------------------
 option(MODBUS_FORCE_C99 "Force building the library with C99 instead of C11." OFF)
@@ -15,13 +86,17 @@ option(MODBUS_BUILD_FUZZERS "Build libFuzzer harnesses (requires Clang)." OFF)
 option(MODBUS_ENABLE_COVERAGE "Enable code coverage instrumentation (GCC/Clang)." OFF)
 option(MODBUS_ENABLE_ASAN "Enable AddressSanitizer when supported." OFF)
 option(MODBUS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer when supported." OFF)
-option(MODBUS_ENABLE_CLIENT "Build Modbus client components." ON)
-option(MODBUS_ENABLE_SERVER "Build Modbus server components." ON)
-option(MODBUS_ENABLE_TRANSPORT_RTU "Build Modbus RTU transport components." ON)
-option(MODBUS_ENABLE_TRANSPORT_ASCII "Build Modbus ASCII transport components." ON)
-option(MODBUS_ENABLE_TRANSPORT_TCP "Build Modbus TCP transport components." ON)
+option(MODBUS_ENABLE_CLIENT "Build Modbus client components." ${_MODBUS_DEFAULT_ENABLE_CLIENT})
+option(MODBUS_ENABLE_SERVER "Build Modbus server components." ${_MODBUS_DEFAULT_ENABLE_SERVER})
+option(MODBUS_ENABLE_TRANSPORT_RTU "Build Modbus RTU transport components." ${_MODBUS_DEFAULT_TRANSPORT_RTU})
+option(MODBUS_ENABLE_TRANSPORT_ASCII "Build Modbus ASCII transport components." ${_MODBUS_DEFAULT_TRANSPORT_ASCII})
+option(MODBUS_ENABLE_TRANSPORT_TCP "Build Modbus TCP transport components." ${_MODBUS_DEFAULT_TRANSPORT_TCP})
 option(MODBUS_PEDANTIC_WARNINGS "Add -Wconversion/-Wsign-conversion diagnostics." OFF)
 option(MODBUS_USE_SYSTEM_GTEST "Use an existing GTest installation instead of downloading it." OFF)
+option(MODBUS_INSTALL "Generate install rules and package configuration artifacts." ON)
+option(MODBUS_DIAG_ENABLE_COUNTERS "Collect lightweight diagnostic counters." ON)
+option(MODBUS_DIAG_ENABLE_TRACE "Enable diagnostic trace ring buffer." OFF)
+set(MODBUS_DIAG_TRACE_DEPTH 64 CACHE STRING "Maximum number of diagnostic trace entries to retain.")
 
 if(NOT MODBUS_ENABLE_CLIENT AND NOT MODBUS_ENABLE_SERVER)
     message(FATAL_ERROR "At least one of MODBUS_ENABLE_CLIENT or MODBUS_ENABLE_SERVER must be ON.")
@@ -33,6 +108,24 @@ endif()
 
 if(MODBUS_ENABLE_SERVER AND NOT MODBUS_ENABLE_TRANSPORT_RTU)
     message(FATAL_ERROR "Modbus server support currently relies on the RTU transport. Enable MODBUS_ENABLE_TRANSPORT_RTU or disable MODBUS_ENABLE_SERVER.")
+endif()
+
+if(MODBUS_DIAG_ENABLE_COUNTERS)
+    set(MB_CONF_DIAG_ENABLE_COUNTERS 1)
+else()
+    set(MB_CONF_DIAG_ENABLE_COUNTERS 0)
+endif()
+
+if(MODBUS_DIAG_ENABLE_TRACE)
+    set(MB_CONF_DIAG_ENABLE_TRACE 1)
+else()
+    set(MB_CONF_DIAG_ENABLE_TRACE 0)
+endif()
+
+set(MB_CONF_DIAG_TRACE_DEPTH ${MODBUS_DIAG_TRACE_DEPTH})
+
+if(MODBUS_DIAG_ENABLE_TRACE AND MODBUS_DIAG_TRACE_DEPTH LESS 1)
+    message(FATAL_ERROR "MODBUS_DIAG_TRACE_DEPTH must be at least 1 when MODBUS_DIAG_ENABLE_TRACE is ON.")
 endif()
 
 if(MODBUS_FORCE_C99)
@@ -144,6 +237,11 @@ include(${PROJECT_SOURCE_DIR}/cmake/SetEnv.cmake)
 # Core library
 # ---------------------------------------------------------------------------
 add_subdirectory(${LIBRARY_FOLDER})
+
+# Expose embedded integration scaffolding (documentation/assets only for now).
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/embedded/CMakeLists.txt")
+    add_subdirectory(embedded EXCLUDE_FROM_ALL)
+endif()
 
 # ---------------------------------------------------------------------------
 # Examples

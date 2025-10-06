@@ -84,6 +84,18 @@
             }
         },
         {
+            "name": "host-footprint",
+            "displayName": "Host Footprint Probe",
+            "description": "MinSizeRel build tuned for footprint metrics",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_PROFILE": "LEAN",
+                "MODBUS_INSTALL": "ON"
+            }
+        },
+        {
             "name": "host-asan",
             "displayName": "Host ASan/UBSan",
             "description": "Debug build with sanitizers",
@@ -187,6 +199,11 @@
             "name": "host-release",
             "displayName": "Build Host Release",
             "configurePreset": "host-release"
+        },
+        {
+            "name": "host-footprint",
+            "displayName": "Build Host Footprint",
+            "configurePreset": "host-footprint"
         },
         {
             "name": "host-asan",

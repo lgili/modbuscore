@@ -6,9 +6,12 @@ Modbus C Library
    :caption: Contents
 
    introduction
+   install_use
    installation
    usage
    ports
+   embedded
+   distribution
    cookbook
    migration
    api

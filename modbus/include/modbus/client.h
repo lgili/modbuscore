@@ -136,7 +136,7 @@ typedef struct mb_client {
     mb_size_t pending_count;
     mb_time_ms_t fc_timeouts[256];
     mb_client_metrics_t metrics;
-    mb_diag_counters_t diag;
+    mb_diag_state_t diag;
     mb_event_callback_t observer_cb;
     void *observer_user;
     bool trace_hex;
@@ -325,6 +325,17 @@ void mb_client_reset_metrics(mb_client_t *client);
  * @param out_diag Destination structure; left untouched when NULL.
  */
 void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag);
+
+/**
+ * @brief Captures a snapshot of diagnostic counters and trace entries.
+ *
+ * Trace data is only populated when ::MB_CONF_DIAG_ENABLE_TRACE is enabled at
+ * build time. The snapshot is safe to inspect outside of the polling context.
+ *
+ * @param client        Client instance.
+ * @param out_snapshot  Destination snapshot; left untouched when NULL.
+ */
+void mb_client_get_diag_snapshot(const mb_client_t *client, mb_diag_snapshot_t *out_snapshot);
 
 /**
  * @brief Clears the diagnostic counters collected for this client.

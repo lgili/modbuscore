@@ -43,48 +43,52 @@ target_include_directories(
 #   - <prefix>/lib/libfoo.a
 #   - header location after install: <prefix>/foo/foo.h
 #   - headers can be included by C++ code `#include <foo/foo.h>`
-install(
-    TARGETS              "${LIBRARY_NAME}"
-    EXPORT               "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION  "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION  "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION  "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
+if(MODBUS_INSTALL)
+  install(
+      TARGETS              "${LIBRARY_NAME}"
+      EXPORT               "${TARGETS_EXPORT_NAME}"
+      LIBRARY DESTINATION  "${CMAKE_INSTALL_LIBDIR}"
+      ARCHIVE DESTINATION  "${CMAKE_INSTALL_LIBDIR}"
+      RUNTIME DESTINATION  "${CMAKE_INSTALL_BINDIR}"
+      INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  )
 
-# Headers:
-#   - foo/*.h -> <prefix>/include/foo/*.h
-install(
-    FILES ${HEADERS_PUBLIC}
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${LIBRARY_FOLDER}"
-)
+  # Headers:
+  #   - foo/*.h -> <prefix>/include/foo/*.h
+  install(
+      FILES ${HEADERS_PUBLIC}
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${LIBRARY_FOLDER}"
+  )
 
-# Headers:
-#   - generated_headers/foo/version.h -> <prefix>/include/foo/version.h
-install(
-    FILES       "${GENERATED_HEADERS_DIR}/${LIBRARY_FOLDER}/version.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${LIBRARY_FOLDER}"
-)
+  # Headers:
+  #   - generated_headers/foo/version.h -> <prefix>/include/foo/version.h
+  install(
+      FILES       "${GENERATED_HEADERS_DIR}/${LIBRARY_FOLDER}/version.h"
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${LIBRARY_FOLDER}"
+  )
 
-# Config
-#   - <prefix>/lib/cmake/Foo/FooConfig.cmake
-#   - <prefix>/lib/cmake/Foo/FooConfigVersion.cmake
-install(
-    FILES       "${PROJECT_CONFIG_FILE}"
-                "${VERSION_CONFIG_FILE}"
+  # Config
+  #   - <prefix>/lib/cmake/Foo/FooConfig.cmake
+  #   - <prefix>/lib/cmake/Foo/FooConfigVersion.cmake
+  install(
+      FILES       "${PROJECT_CONFIG_FILE}"
+                  "${VERSION_CONFIG_FILE}"
+      DESTINATION "${CONFIG_INSTALL_DIR}"
+  )
+
+  if(PKG_CONFIG_FILE)
+    install(
+      FILES "${PKG_CONFIG_FILE}"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+    )
+  endif()
+
+  # Config
+  #   - <prefix>/lib/cmake/Foo/FooTargets.cmake
+  install(
+    EXPORT      "${TARGETS_EXPORT_NAME}"
+    FILE        "${PROJECT_NAME}Targets.cmake"
     DESTINATION "${CONFIG_INSTALL_DIR}"
-)
-
-install(
-  FILES "${PKG_CONFIG_FILE}"
-  DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
-)
-
-# Config
-#   - <prefix>/lib/cmake/Foo/FooTargets.cmake
-install(
-  EXPORT      "${TARGETS_EXPORT_NAME}"
-  FILE        "${PROJECT_NAME}Targets.cmake"
-  DESTINATION "${CONFIG_INSTALL_DIR}"
-  NAMESPACE   "${PROJECT_NAME}::"
-)
+    NAMESPACE   "${PROJECT_NAME}::"
+  )
+endif()
