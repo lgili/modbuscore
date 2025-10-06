@@ -99,7 +99,8 @@ hardening.  See `update_plan.md` for the full roadmap.
 
 > Need a guided tour? Check out the living stub at
 > [Install & Use overview](doc/source/install_use.rst) for the full roadmap.
-> It links the build instructions below with upcoming prebuilt artefacts and
+> It links the build instructions below with the first embedded quickstart
+> (`embedded/quickstarts/drop_in/modbus_amalgamated.c/.h`) and the upcoming prebuilt artefacts and
 > package feeds as they land.
 
 ### Requirements

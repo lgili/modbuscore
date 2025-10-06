@@ -662,7 +662,7 @@ static mb_err_t server_accept_adu(mb_server_t *server,
     if (!mb_err_is_ok(status) || adu == NULL) {
         server->metrics.errors += 1U;
         const mb_err_t diag_status = (!mb_err_is_ok(status)) ? status : MB_ERR_INVALID_ARGUMENT;
-    mb_diag_state_record_error(&server->diag, diag_status);
+        mb_diag_state_record_error(&server->diag, diag_status);
         return status;
     }
 
@@ -673,7 +673,7 @@ static mb_err_t server_accept_adu(mb_server_t *server,
 
     const mb_size_t pdu_len = adu->payload_len + 1U;
     if (pdu_len > MB_PDU_MAX) {
-    mb_diag_state_record_error(&server->diag, MB_ERR_INVALID_ARGUMENT);
+        mb_diag_state_record_error(&server->diag, MB_ERR_INVALID_ARGUMENT);
         server_record_drop(server, adu, broadcast, kExceptionIllegalDataValue);
         return MB_ERR_INVALID_ARGUMENT;
     }
@@ -681,14 +681,14 @@ static mb_err_t server_accept_adu(mb_server_t *server,
     const bool high_priority = server_is_high_priority_fc(adu->function);
     if (!high_priority && !broadcast && server->queue_capacity > 0U &&
         server_total_inflight(server) >= server->queue_capacity) {
-    mb_diag_state_record_error(&server->diag, MB_ERR_NO_RESOURCES);
+        mb_diag_state_record_error(&server->diag, MB_ERR_NO_RESOURCES);
         server_record_drop(server, adu, broadcast, kExceptionServerDeviceFailure);
         return MB_ERR_NO_RESOURCES;
     }
 
     mb_server_request_t *req = server_alloc_request(server);
     if (req == NULL) {
-    mb_diag_state_record_error(&server->diag, MB_ERR_NO_RESOURCES);
+        mb_diag_state_record_error(&server->diag, MB_ERR_NO_RESOURCES);
         server_record_drop(server, adu, broadcast, kExceptionServerDeviceFailure);
         return MB_ERR_NO_RESOURCES;
     }

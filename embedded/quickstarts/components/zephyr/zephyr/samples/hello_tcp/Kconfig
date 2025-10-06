@@ -1,0 +1,23 @@
+menu "Modbus hello TCP sample"
+
+config MODBUS_HELLO_SERVER_ADDR
+    string "Modbus/TCP server IPv4 address"
+    default "192.0.2.1"
+    help
+        IPv4 address of the Modbus/TCP server to connect to.
+
+config MODBUS_HELLO_SERVER_PORT
+    int "Modbus/TCP server port"
+    range 1 65535
+    default 502
+    help
+        TCP port number of the Modbus server.
+
+config MODBUS_HELLO_POLL_INTERVAL_MS
+    int "Polling interval (ms)"
+    range 1 1000
+    default 10
+    help
+        Delay in milliseconds between mb_client_poll() calls.
+
+endmenu

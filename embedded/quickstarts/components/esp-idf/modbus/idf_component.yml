@@ -1,0 +1,12 @@
+name: modbus_quickstart
+version: 0.1.0
+summary: "Single-file Modbus RTU client with UART transport glue"
+description: |
+  Wraps the amalgamated Modbus client into an ESP-IDF component together with a
+  minimal UART transport adapter. Suitable for rapid prototyping and for
+  verifying Modbus RTU integrations on ESP32-class targets.
+url: https://github.com/lgili/modbus
+dependencies:
+  idf:
+    version: ">=5.0"
+  espressif/esp_driver_uart: "*"

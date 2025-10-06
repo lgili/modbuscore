@@ -1,0 +1,54 @@
+menu "Modbus quickstart"
+
+config MODBUS_QUICKSTART_UART_PORT
+    int "Default UART port"
+    range 0 2
+    default 1
+    help
+        UART controller used by the quickstart transport. Override at runtime
+        by filling modbus_esp_quickstart_config_t.
+
+config MODBUS_QUICKSTART_UART_BAUDRATE
+    int "Default UART baudrate"
+    default 115200
+    help
+        Baudrate applied during modbus_esp_quickstart_init() unless a different
+        value is provided in the runtime configuration.
+
+config MODBUS_QUICKSTART_UART_RX_BUFFER
+    int "UART RX buffer size"
+    default 256
+    help
+        Size of the ESP-IDF driver RX buffer allocated by uart_driver_install().
+
+config MODBUS_QUICKSTART_UART_TX_BUFFER
+    int "UART TX buffer size"
+    default 256
+    help
+        Size of the ESP-IDF driver TX buffer allocated by uart_driver_install().
+
+config MODBUS_QUICKSTART_CLIENT_POOL_SIZE
+    int "Client transaction pool size"
+    range 1 32
+    default 4
+    help
+        Number of transaction descriptors allocated by the quickstart helper.
+        Increase the value if you plan to queue multiple concurrent requests.
+
+config MODBUS_QUICKSTART_CLIENT_QUEUE_CAPACITY
+    int "Client queue capacity override"
+    range 0 32
+    default 0
+    help
+        Optional override for mb_client_set_queue_capacity(). Leave as zero to
+        keep the queue capacity equal to the pool size.
+
+config MODBUS_QUICKSTART_YIELD_MS
+    int "Yield hint in milliseconds"
+    range 0 20
+    default 1
+    help
+        Delay used by the transport yield hook. Set to zero to call taskYIELD()
+        instead of vTaskDelay().
+
+endmenu

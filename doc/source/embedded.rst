@@ -8,16 +8,16 @@ firmware bring-up:
 * **Vendor ports** that expose DMA + IDLE UART recipes, timers, and HAL glue.
 * **Checklists and porting wizard** content copied from the roadmap.
 
-The files are currently placeholders while Gates 17–20 are in progress, but
-the directory structure and documentation references are ready for upcoming
-drops.
+Gate 17 already ships the drop-in amalgamated sources plus ESP-IDF and Zephyr
+components.  Bare-metal and vendor-specific ports remain in-flight under the
+next milestones.
 
 .. todo::
 
-	 Publish detailed quickstarts for:
+	 Expand the quickstarts with bare-metal loop and FreeRTOS task recipes and
+	 publish the vendor HAL ports:
 
-	 * ``quickstarts/`` – bare-metal loop, FreeRTOS task wiring, Zephyr module,
-		 and ESP-IDF component recipes.
+	 * ``quickstarts/`` – bare-metal loop and FreeRTOS task wiring examples.
 	 * ``ports/stm32-ll-dma-idle/`` – circular DMA + IDLE line walkthrough.
 	 * ``ports/nxp-lpuart-idle/`` – low-power friendly LPUART integration.
 

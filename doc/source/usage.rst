@@ -4,9 +4,11 @@ Usage Guide
 .. note::
 
     This walkthrough focuses on the host-side API and currently available
-    helpers.  Keep an eye on :doc:`install_use` for the end-to-end quickstart
-    index once the embedded samples transition from placeholders to runnable
-    demos.
+    helpers.  Embedded quickstarts are published under ``embedded/quickstarts``:
+    the drop-in translation unit, an ESP-IDF component with UART transport, and
+    a Zephyr module with a sockets-based Modbus/TCP bridge.  Keep an eye on
+    :doc:`install_use` for additional examples (bare-metal loops, vendor HALs)
+    as they land.
 
 Initialisation
 --------------

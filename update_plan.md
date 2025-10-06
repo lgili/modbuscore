@@ -11,6 +11,10 @@ Vision & principles
 		1.	Drop-in single file: modbus_amalgamated.c/.h (client, baseline RTU, PDU core).
 		2.	Component packages: components/esp-idf/modbus/ (CMakeLists, menuconfig), zephyr/module.yml + Kconfig.modbus.
 		3.	Vendor HAL samples: ports/stm32-ll-dma-idle/, ports/nxp-lpuart-idle/ with UART RX DMA + IDLE-line integration.
+		• Progress 2025-10-06: Added `scripts/amalgamate.py` generator and published the `quickstarts/drop_in` pair so firmware teams can copy two files for a baseline RTU client.
+		• Progress 2025-10-06: Published ESP-IDF (`quickstarts/components/esp-idf/modbus`) and Zephyr (`quickstarts/components/zephyr`) quickstart packages bundling transport adapters around the amalgamated client.
+		• Progress 2025-10-07: Drafted vendor HAL samples in `quickstarts/ports/stm32-ll-dma-idle` and `quickstarts/ports/nxp-lpuart-idle` showing DMA+IDLE hooks, ISR glue, and request helpers wired to the drop-in client.
+		• Progress 2025-10-07: Polished STM32/NXP helpers, added the Renesas RL78 SCI quickstart, refreshed the quickstart index, and wired everything to the new `mb_embed` request shims. Hardware validation of the ESP-IDF hello-RTU and Zephyr hello-TCP tracks remains.
 		• embedded/porting-wizard.md: one-page checklist (clock/baud/timers/now_ms/yield/ISR vs thread).
 		• include/modbus/mb_embed.h: ergonomic shims (builder/parser helpers + queue wrappers).
 		• Gate: run hello-RTU on ESP-IDF (hardware UART) and hello-TCP on Zephyr (sockets) by following only the quickstart README, with no changes to the core library.

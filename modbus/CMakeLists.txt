@@ -68,6 +68,7 @@ set(HEADERS_PUBLIC
   include/modbus/transport.h
   include/modbus/transport_if.h
   include/modbus/base.h
+  include/modbus/mb_embed.h
   include/modbus/utils.h
   include/modbus/fsm.h
   include/modbus/core.h

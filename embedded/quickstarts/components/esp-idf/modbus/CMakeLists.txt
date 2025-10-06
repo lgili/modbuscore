@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS
+        "src/modbus_esp_quickstart.c"
+        "../../../drop_in/modbus_amalgamated.c"
+    INCLUDE_DIRS
+        "include"
+        "../../../drop_in"
+    REQUIRES
+        driver
+        freertos
+)
