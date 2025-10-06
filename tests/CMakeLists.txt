@@ -41,7 +41,6 @@ endif()
 
 set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_fsm.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_core.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_crc.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_ringbuf.cpp
@@ -51,13 +50,27 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_err.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_bare.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_ascii_transport.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_transport.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_transport.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_multi.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_throughput.cpp
 )
+
+if(MODBUS_ENABLE_TRANSPORT_RTU)
+  list(APPEND TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_core.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_transport_if.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_transport.cpp
+  )
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_ASCII)
+  list(APPEND TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_ascii_transport.cpp)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_TCP)
+  list(APPEND TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_transport.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_multi.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_tcp_throughput.cpp
+  )
+endif()
 
 if(NOT WIN32)
   list(APPEND TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_port_posix.cpp)

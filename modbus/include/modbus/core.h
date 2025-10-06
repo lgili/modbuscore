@@ -70,6 +70,7 @@
 extern "C"{
 #endif
 
+#include <modbus/conf.h>
 #include <modbus/base.h>        /**< For modbus_context_t, modbus_error_t, etc. */
 #include <modbus/utils.h>       /**< For safe reads from buffers, etc. */
 
@@ -123,6 +124,7 @@ typedef enum {
  * }
  * ```
  */
+#if MB_CONF_TRANSPORT_RTU
 uint16_t modbus_build_rtu_frame(uint8_t address, uint8_t function_code,
                                 const uint8_t *data, uint16_t data_length,
                                 uint8_t *out_buffer, uint16_t out_buffer_size);
@@ -228,6 +230,7 @@ modbus_error_t modbus_send_frame(modbus_context_t *ctx, const uint8_t *frame, ui
  * ```
  */
 modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, uint16_t out_size, uint16_t *out_length);
+#endif /* MB_CONF_TRANSPORT_RTU */
 
 /**
  * @brief Helper function to check if a given function code indicates an error response.

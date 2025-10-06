@@ -1,3 +1,7 @@
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_TCP
+
 #include <modbus/transport/tcp_multi.h>
 
 #include <string.h>
@@ -167,3 +171,5 @@ mb_size_t mb_tcp_multi_active_count(const mb_tcp_multi_transport_t *multi)
 {
     return multi ? multi->active_count : 0U;
 }
+
+#endif /* MB_CONF_TRANSPORT_TCP */

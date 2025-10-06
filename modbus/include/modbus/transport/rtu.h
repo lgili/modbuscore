@@ -8,6 +8,9 @@
 
 #include <stdbool.h>
 
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_RTU
 #include <modbus/frame.h>
 #include <modbus/pdu.h>
 #include <modbus/transport_if.h>
@@ -53,5 +56,7 @@ mb_err_t mb_rtu_submit(mb_rtu_transport_t *rtu, const mb_adu_view_t *adu);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* MB_CONF_TRANSPORT_RTU */
 
 #endif /* MODBUS_TRANSPORT_RTU_H */

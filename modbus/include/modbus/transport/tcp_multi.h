@@ -10,6 +10,8 @@
 #include <stddef.h>
 
 #include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_TCP
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
 #include <modbus/transport/tcp.h>
@@ -80,5 +82,7 @@ mb_size_t mb_tcp_multi_active_count(const mb_tcp_multi_transport_t *multi);
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* MB_CONF_TRANSPORT_TCP */
 
 #endif /* MODBUS_TRANSPORT_TCP_MULTI_H */

@@ -23,8 +23,12 @@
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
 #include <modbus/observe.h>
+#if MB_CONF_TRANSPORT_RTU
 #include <modbus/transport/rtu.h>
+#endif
+#if MB_CONF_TRANSPORT_TCP
 #include <modbus/transport/tcp.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,8 +117,12 @@ typedef struct {
 
 typedef struct mb_client {
     const mb_transport_if_t *iface;
+#if MB_CONF_TRANSPORT_RTU
     mb_rtu_transport_t rtu;
+#endif
+#if MB_CONF_TRANSPORT_TCP
     mb_tcp_transport_t tcp;
+#endif
     mb_client_transport_t transport;
     mb_client_txn_t *pool;
     mb_size_t pool_size;
@@ -149,10 +157,12 @@ typedef struct mb_client {
  * @retval MB_OK                 Initialisation succeeded.
  * @retval MB_ERR_INVALID_ARGUMENT  One of the arguments was NULL or invalid.
  */
+#if MB_CONF_TRANSPORT_RTU
 mb_err_t mb_client_init(mb_client_t *client,
                         const mb_transport_if_t *iface,
                         mb_client_txn_t *txn_pool,
                         mb_size_t txn_pool_len);
+#endif
 
 /**
  * @brief Initialises a client instance targeting Modbus TCP transports.
@@ -165,10 +175,12 @@ mb_err_t mb_client_init(mb_client_t *client,
  * @retval MB_OK                 Initialisation succeeded.
  * @retval MB_ERR_INVALID_ARGUMENT  One of the arguments was NULL or invalid.
  */
+#if MB_CONF_TRANSPORT_TCP
 mb_err_t mb_client_init_tcp(mb_client_t *client,
                             const mb_transport_if_t *iface,
                             mb_client_txn_t *txn_pool,
                             mb_size_t txn_pool_len);
+#endif
 
 /**
  * @brief Queues a Modbus request for transmission.

@@ -26,6 +26,45 @@
             "inherits": "host-base"
         },
         {
+            "name": "host-client-only",
+            "displayName": "Host Client Only",
+            "description": "Client-only build disabling server components",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_SERVER": "OFF"
+            }
+        },
+        {
+            "name": "host-server-only",
+            "displayName": "Host Server Only",
+            "description": "Server-only build disabling client components",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_CLIENT": "OFF"
+            }
+        },
+        {
+            "name": "host-rtu-only",
+            "displayName": "Host RTU Only",
+            "description": "Build with only RTU transport enabled",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_TRANSPORT_ASCII": "OFF",
+                "MODBUS_ENABLE_TRANSPORT_TCP": "OFF"
+            }
+        },
+        {
+            "name": "host-tcp-only",
+            "displayName": "Host TCP Only",
+            "description": "Build with only TCP transport enabled",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_SERVER": "OFF",
+                "MODBUS_ENABLE_TRANSPORT_RTU": "OFF",
+                "MODBUS_ENABLE_TRANSPORT_ASCII": "OFF"
+            }
+        },
+        {
             "name": "host-debug-examples",
             "displayName": "Host Debug (examples)",
             "description": "Debug build with examples enabled",
@@ -120,6 +159,26 @@
             "configurePreset": "host-debug"
         },
         {
+            "name": "host-client-only",
+            "displayName": "Build Host Client Only",
+            "configurePreset": "host-client-only"
+        },
+        {
+            "name": "host-server-only",
+            "displayName": "Build Host Server Only",
+            "configurePreset": "host-server-only"
+        },
+        {
+            "name": "host-rtu-only",
+            "displayName": "Build Host RTU Only",
+            "configurePreset": "host-rtu-only"
+        },
+        {
+            "name": "host-tcp-only",
+            "displayName": "Build Host TCP Only",
+            "configurePreset": "host-tcp-only"
+        },
+        {
             "name": "host-debug-examples",
             "displayName": "Build Host Debug (examples)",
             "configurePreset": "host-debug-examples"
@@ -169,6 +228,26 @@
             "name": "all",
             "displayName": "Run ctest",
             "configurePreset": "host-debug"
+        },
+        {
+            "name": "client-only",
+            "displayName": "Run tests (client only)",
+            "configurePreset": "host-client-only"
+        },
+        {
+            "name": "server-only",
+            "displayName": "Run tests (server only)",
+            "configurePreset": "host-server-only"
+        },
+        {
+            "name": "rtu-only",
+            "displayName": "Run tests (RTU only)",
+            "configurePreset": "host-rtu-only"
+        },
+        {
+            "name": "tcp-only",
+            "displayName": "Run tests (TCP only)",
+            "configurePreset": "host-tcp-only"
         }
     ]
 }

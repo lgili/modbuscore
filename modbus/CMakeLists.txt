@@ -3,16 +3,11 @@ set(SOURCES
   src/ringbuf.c
   src/mempool.c
   src/pdu.c
-  src/mapping.c
   src/frame.c
   src/transport.c
-  src/transport/ascii/ascii.c
-  src/transport/tcp/tcp.c
-  src/transport/tcp/tcp_multi.c
   src/mb_log.c
   src/mb_err.c
   src/observe.c
-  src/transport/rtu/rtu.c
   src/log.c
   src/utils.c
   src/fsm.c
@@ -22,8 +17,26 @@ set(SOURCES
   src/port/mutex.c
 )
 
+if(MODBUS_ENABLE_TRANSPORT_ASCII)
+  list(APPEND SOURCES src/transport/ascii/ascii.c)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_TCP)
+  list(APPEND SOURCES
+    src/transport/tcp/tcp.c
+    src/transport/tcp/tcp_multi.c
+  )
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_RTU)
+  list(APPEND SOURCES src/transport/rtu/rtu.c)
+endif()
+
 if(MODBUS_ENABLE_SERVER)
-  list(APPEND SOURCES src/server.c)
+  list(APPEND SOURCES
+    src/server.c
+    src/mapping.c
+  )
 endif()
 
 if(MODBUS_ENABLE_CLIENT)
@@ -53,10 +66,6 @@ set(HEADERS_PUBLIC
   include/modbus/conf.h
   include/modbus/mapping.h
   include/modbus/transport.h
-  include/modbus/transport/ascii.h
-  include/modbus/transport/rtu.h
-  include/modbus/transport/tcp.h
-  include/modbus/transport/tcp_multi.h
   include/modbus/transport_if.h
   include/modbus/base.h
   include/modbus/utils.h
@@ -68,6 +77,21 @@ set(HEADERS_PUBLIC
   include/modbus/port/bare.h
   
 )
+
+if(MODBUS_ENABLE_TRANSPORT_ASCII)
+  list(APPEND HEADERS_PUBLIC include/modbus/transport/ascii.h)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_RTU)
+  list(APPEND HEADERS_PUBLIC include/modbus/transport/rtu.h)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_TCP)
+  list(APPEND HEADERS_PUBLIC
+    include/modbus/transport/tcp.h
+    include/modbus/transport/tcp_multi.h
+  )
+endif()
 
 if(MODBUS_ENABLE_SERVER)
   list(APPEND HEADERS_PUBLIC include/modbus/server.h)
@@ -101,9 +125,30 @@ else()
   set(_mb_conf_build_server 0)
 endif()
 
+if(MODBUS_ENABLE_TRANSPORT_RTU)
+  set(_mb_conf_transport_rtu 1)
+else()
+  set(_mb_conf_transport_rtu 0)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_ASCII)
+  set(_mb_conf_transport_ascii 1)
+else()
+  set(_mb_conf_transport_ascii 0)
+endif()
+
+if(MODBUS_ENABLE_TRANSPORT_TCP)
+  set(_mb_conf_transport_tcp 1)
+else()
+  set(_mb_conf_transport_tcp 0)
+endif()
+
 target_compile_definitions(${LIBRARY_NAME} PUBLIC
   MB_CONF_BUILD_CLIENT=${_mb_conf_build_client}
   MB_CONF_BUILD_SERVER=${_mb_conf_build_server}
+  MB_CONF_TRANSPORT_RTU=${_mb_conf_transport_rtu}
+  MB_CONF_TRANSPORT_ASCII=${_mb_conf_transport_ascii}
+  MB_CONF_TRANSPORT_TCP=${_mb_conf_transport_tcp}
 )
 
 # Optional SEGGER RTT transport for logging

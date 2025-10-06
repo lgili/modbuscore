@@ -6,6 +6,9 @@
 #ifndef MODBUS_TRANSPORT_TCP_H
 #define MODBUS_TRANSPORT_TCP_H
 
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_TCP
 #include <modbus/frame.h>
 #include <modbus/pdu.h>
 #include <modbus/transport_if.h>
@@ -50,5 +53,7 @@ mb_err_t mb_tcp_submit(mb_tcp_transport_t *tcp,
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* MB_CONF_TRANSPORT_TCP */
 
 #endif /* MODBUS_TRANSPORT_TCP_H */

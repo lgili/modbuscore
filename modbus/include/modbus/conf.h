@@ -25,6 +25,18 @@
 #define MB_CONF_BUILD_SERVER 1
 #endif
 
+#ifndef MB_CONF_TRANSPORT_RTU
+#define MB_CONF_TRANSPORT_RTU 1
+#endif
+
+#ifndef MB_CONF_TRANSPORT_ASCII
+#define MB_CONF_TRANSPORT_ASCII 1
+#endif
+
+#ifndef MB_CONF_TRANSPORT_TCP
+#define MB_CONF_TRANSPORT_TCP 1
+#endif
+
 #define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.

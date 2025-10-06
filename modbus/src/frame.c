@@ -83,6 +83,7 @@ mb_err_t mb_frame_rtu_decode(const mb_u8 *adu,
     return MODBUS_ERROR_NONE;
 }
 
+#if MB_CONF_TRANSPORT_ASCII
 static mb_u8 mb_frame_ascii_lrc(const mb_u8 *data, mb_size_t len)
 {
     mb_u32 sum = 0U;
@@ -268,3 +269,4 @@ mb_err_t mb_frame_ascii_decode(const mb_u8 *ascii,
 
     return MODBUS_ERROR_NONE;
 }
+#endif /* MB_CONF_TRANSPORT_ASCII */

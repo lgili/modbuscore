@@ -63,6 +63,7 @@
 
 #include <string.h>
 
+#include <modbus/conf.h>
 #include <modbus/core.h>
 #include <modbus/frame.h>
 #include <modbus/transport_if.h>
@@ -112,6 +113,7 @@
  * }
  * ```
  */
+#if MB_CONF_TRANSPORT_RTU
 uint16_t modbus_build_rtu_frame(uint8_t address, uint8_t function_code,
                                 const uint8_t *data, uint16_t data_length,
                                 uint8_t *out_buffer, uint16_t out_buffer_size) {
@@ -368,6 +370,7 @@ modbus_error_t modbus_receive_frame(modbus_context_t *ctx, uint8_t *out_buffer, 
     *out_length = (uint16_t)bytes_read;
     return MODBUS_ERROR_NONE;
 }
+#endif /* MB_CONF_TRANSPORT_RTU */
 
 /**
  * @brief Converts a Modbus exception code to a `modbus_error_t`.

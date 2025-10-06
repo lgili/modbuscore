@@ -17,11 +17,22 @@ option(MODBUS_ENABLE_ASAN "Enable AddressSanitizer when supported." OFF)
 option(MODBUS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer when supported." OFF)
 option(MODBUS_ENABLE_CLIENT "Build Modbus client components." ON)
 option(MODBUS_ENABLE_SERVER "Build Modbus server components." ON)
+option(MODBUS_ENABLE_TRANSPORT_RTU "Build Modbus RTU transport components." ON)
+option(MODBUS_ENABLE_TRANSPORT_ASCII "Build Modbus ASCII transport components." ON)
+option(MODBUS_ENABLE_TRANSPORT_TCP "Build Modbus TCP transport components." ON)
 option(MODBUS_PEDANTIC_WARNINGS "Add -Wconversion/-Wsign-conversion diagnostics." OFF)
 option(MODBUS_USE_SYSTEM_GTEST "Use an existing GTest installation instead of downloading it." OFF)
 
 if(NOT MODBUS_ENABLE_CLIENT AND NOT MODBUS_ENABLE_SERVER)
     message(FATAL_ERROR "At least one of MODBUS_ENABLE_CLIENT or MODBUS_ENABLE_SERVER must be ON.")
+endif()
+
+if(NOT MODBUS_ENABLE_TRANSPORT_RTU AND NOT MODBUS_ENABLE_TRANSPORT_ASCII AND NOT MODBUS_ENABLE_TRANSPORT_TCP)
+    message(FATAL_ERROR "At least one transport must be enabled. Enable RTU, ASCII, TCP or a custom backend.")
+endif()
+
+if(MODBUS_ENABLE_SERVER AND NOT MODBUS_ENABLE_TRANSPORT_RTU)
+    message(FATAL_ERROR "Modbus server support currently relies on the RTU transport. Enable MODBUS_ENABLE_TRANSPORT_RTU or disable MODBUS_ENABLE_SERVER.")
 endif()
 
 if(MODBUS_FORCE_C99)

@@ -1,3 +1,7 @@
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_TCP
+
 #include <modbus/transport/tcp.h>
 
 #include <string.h>
@@ -106,7 +110,6 @@ mb_err_t mb_tcp_submit(mb_tcp_transport_t *tcp,
 
     return MB_OK;
 }
-
 static mb_err_t mb_tcp_process_frame(mb_tcp_transport_t *tcp)
 {
     while (tcp->rx_len >= MB_TCP_HEADER_SIZE) {
@@ -192,3 +195,5 @@ mb_err_t mb_tcp_poll(mb_tcp_transport_t *tcp)
 
     return mb_tcp_process_frame(tcp);
 }
+
+#endif /* MB_CONF_TRANSPORT_TCP */

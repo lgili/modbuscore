@@ -8,6 +8,9 @@
 
 #include <stdbool.h>
 
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_ASCII
 #include <modbus/frame.h>
 #include <modbus/pdu.h>
 #include <modbus/transport_if.h>
@@ -54,5 +57,6 @@ mb_err_t mb_ascii_submit(mb_ascii_transport_t *ascii, const mb_adu_view_t *adu);
 #ifdef __cplusplus
 }
 #endif
+#endif /* MB_CONF_TRANSPORT_ASCII */
 
 #endif /* MODBUS_TRANSPORT_ASCII_H */

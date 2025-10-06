@@ -9,14 +9,24 @@
 #define MB_CLIENT_TIMEOUT_DEFAULT MB_CLIENT_DEFAULT_TIMEOUT_MS
 #define MB_CLIENT_BACKOFF_DEFAULT MB_CLIENT_DEFAULT_RETRY_BACKOFF_MS
 
+#if MB_CONF_TRANSPORT_RTU
+static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
+                                   const mb_adu_view_t *adu,
+                                   mb_err_t status,
+                                   void *user);
+#endif
+#if MB_CONF_TRANSPORT_TCP
 static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
                                    const mb_adu_view_t *adu,
                                    mb_u16 transaction_id,
                                    mb_err_t status,
                                    void *user);
+#endif
 static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *txn);
 static mb_err_t client_transport_poll(mb_client_t *client);
+#if MB_CONF_TRANSPORT_TCP
 static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid);
+#endif
 
 static mb_time_ms_t client_now(const mb_client_t *client)
 {
@@ -358,6 +368,7 @@ static mb_client_txn_t *client_dequeue(mb_client_t *client)
     return txn;
 }
 
+#if MB_CONF_TRANSPORT_TCP
 static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid)
 {
     if (client == NULL) {
@@ -376,6 +387,7 @@ static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid)
 
     return NULL;
 }
+#endif
 
 static void client_finalize(mb_client_t *client,
                             mb_client_txn_t *txn,
@@ -466,10 +478,16 @@ static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *tx
     client_trace_request(client, txn, "client.tx");
 
     switch (client->transport) {
+#if MB_CONF_TRANSPORT_RTU
     case MB_CLIENT_TRANSPORT_RTU:
         frame_len = 1U + 1U + txn->request_view.payload_len + 2U;
         status = mb_rtu_submit(&client->rtu, &txn->request_view);
         break;
+#else
+    case MB_CLIENT_TRANSPORT_RTU:
+        return MB_ERR_INVALID_ARGUMENT;
+#endif
+#if MB_CONF_TRANSPORT_TCP
     case MB_CLIENT_TRANSPORT_TCP:
         if (txn->tid == 0U) {
             txn->tid = client->next_tid++;
@@ -480,6 +498,10 @@ static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *tx
         frame_len = MB_TCP_HEADER_SIZE + 1U + txn->request_view.payload_len;
         status = mb_tcp_submit(&client->tcp, &txn->request_view, txn->tid);
         break;
+#else
+    case MB_CLIENT_TRANSPORT_TCP:
+        return MB_ERR_INVALID_ARGUMENT;
+#endif
     default:
         return MB_ERR_INVALID_ARGUMENT;
     }
@@ -498,17 +520,28 @@ static mb_err_t client_transport_poll(mb_client_t *client)
     }
 
     switch (client->transport) {
+#if MB_CONF_TRANSPORT_RTU
     case MB_CLIENT_TRANSPORT_RTU:
         return mb_rtu_poll(&client->rtu);
+#else
+    case MB_CLIENT_TRANSPORT_RTU:
+        return MB_ERR_INVALID_ARGUMENT;
+#endif
+#if MB_CONF_TRANSPORT_TCP
     case MB_CLIENT_TRANSPORT_TCP: {
         mb_err_t status = mb_tcp_poll(&client->tcp);
         return (status == MB_ERR_TIMEOUT) ? MB_OK : status;
     }
+#else
+    case MB_CLIENT_TRANSPORT_TCP:
+        return MB_ERR_INVALID_ARGUMENT;
+#endif
     default:
         return MB_ERR_INVALID_ARGUMENT;
     }
 }
 
+#if MB_CONF_TRANSPORT_TCP
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
                                    const mb_adu_view_t *adu,
@@ -559,6 +592,7 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
     client_start_next(client);
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
+#endif
 
 static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
 {
@@ -642,6 +676,7 @@ static void client_retry(mb_client_t *client)
     client_transition_state(client, MB_CLIENT_STATE_BACKOFF);
 }
 
+#if MB_CONF_TRANSPORT_RTU
 static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
                                    const mb_adu_view_t *adu,
                                    mb_err_t status,
@@ -671,6 +706,7 @@ static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
     client_transition_state(client, MB_CLIENT_STATE_IDLE);
     client_start_next(client);
 }
+#endif
 
 static mb_err_t mb_client_init_common(mb_client_t *client,
                                       const mb_transport_if_t *iface,
@@ -705,6 +741,7 @@ static mb_err_t mb_client_init_common(mb_client_t *client,
     return MB_OK;
 }
 
+#if MB_CONF_TRANSPORT_RTU
 mb_err_t mb_client_init(mb_client_t *client,
                         const mb_transport_if_t *iface,
                         mb_client_txn_t *txn_pool,
@@ -718,7 +755,9 @@ mb_err_t mb_client_init(mb_client_t *client,
     client->transport = MB_CLIENT_TRANSPORT_RTU;
     return mb_rtu_init(&client->rtu, iface, mb_client_rtu_callback, client);
 }
+#endif
 
+#if MB_CONF_TRANSPORT_TCP
 mb_err_t mb_client_init_tcp(mb_client_t *client,
                             const mb_transport_if_t *iface,
                             mb_client_txn_t *txn_pool,
@@ -732,6 +771,7 @@ mb_err_t mb_client_init_tcp(mb_client_t *client,
     client->transport = MB_CLIENT_TRANSPORT_TCP;
     return mb_tcp_init(&client->tcp, iface, mb_client_tcp_callback, client);
 }
+#endif
 
 mb_err_t mb_client_submit(mb_client_t *client,
                           const mb_client_request_t *request,

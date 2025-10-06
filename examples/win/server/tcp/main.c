@@ -79,7 +79,7 @@ int main(void) {
     printf("[Info] Holding registers registered successfully.\n");
 
     // Add device information
-    const char vendor_name[] = "Embraco_Modbus_Slave_TCP";
+    const char vendor_name[] = "Modbus_Slave_TCP";
     error = modbus_slave_add_device_info(&ctx, vendor_name, sizeof(vendor_name) - 1);
     if (error != MODBUS_ERROR_NONE) {
         printf("[Error] Failed to add device information. Error code: %d\n", error);

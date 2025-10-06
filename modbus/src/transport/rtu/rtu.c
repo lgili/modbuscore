@@ -1,3 +1,7 @@
+#include <modbus/conf.h>
+
+#if MB_CONF_TRANSPORT_RTU
+
 #include <modbus/transport/rtu.h>
 
 #include <string.h>
@@ -146,3 +150,4 @@ mb_err_t mb_rtu_submit(mb_rtu_transport_t *rtu, const mb_adu_view_t *adu)
 
     return MODBUS_ERROR_NONE;
 }
+#endif /* MB_CONF_TRANSPORT_RTU */

@@ -32,10 +32,16 @@
 #include <modbus/base.h>
 #include <modbus/transport.h>
 #include <modbus/transport_if.h>
+#if MB_CONF_TRANSPORT_RTU
 #include <modbus/transport/rtu.h>
+#endif
+#if MB_CONF_TRANSPORT_ASCII
 #include <modbus/transport/ascii.h>
+#endif
+#if MB_CONF_TRANSPORT_TCP
 #include <modbus/transport/tcp.h>
 #include <modbus/transport/tcp_multi.h>
+#endif
 #include <modbus/frame.h>
 #include <modbus/utils.h>
 #include <modbus/fsm.h>
