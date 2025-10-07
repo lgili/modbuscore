@@ -87,11 +87,20 @@ typedef struct mb_client_txn {
     mb_u8 request_storage[MB_PDU_MAX];
     mb_u8 response_storage[MB_PDU_MAX];
     mb_u16 tid;
+    mb_poll_tx_phase_t tx_phase;
+    mb_poll_rx_phase_t rx_phase;
+    mb_time_ms_t tx_deadline_ms;
+    mb_time_ms_t rx_deadline_ms;
+    bool rx_pending;
+    mb_err_t rx_status;
+    mb_adu_view_t rx_view;
     struct mb_client_txn *next;
 } mb_client_txn_t;
 
 typedef enum {
     MB_CLIENT_STATE_IDLE = 0,
+    MB_CLIENT_STATE_PREPARING,
+    MB_CLIENT_STATE_SENDING,
     MB_CLIENT_STATE_WAITING,
     MB_CLIENT_STATE_BACKOFF
 } mb_client_state_t;
@@ -113,6 +122,8 @@ typedef struct {
     mb_u64 bytes_rx;
     mb_u64 response_count;
     mb_u64 response_latency_total_ms;
+    mb_time_ms_t step_max_jitter_ms;
+    mb_time_ms_t step_avg_jitter_ms;
 } mb_client_metrics_t;
 
 typedef struct mb_client {
@@ -140,6 +151,7 @@ typedef struct mb_client {
     mb_event_callback_t observer_cb;
     void *observer_user;
     bool trace_hex;
+    mb_poll_jitter_t poll_jitter;
 } mb_client_t;
 
 /**
@@ -243,6 +255,22 @@ mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn);
  * @retval other             Error codes bubbled up from the active transport.
  */
 mb_err_t mb_client_poll(mb_client_t *client);
+
+/**
+ * @brief Advances the client FSM by at most @p steps micro-steps.
+ *
+ * This variant mirrors @ref mb_client_poll but enforces a cooperative budget,
+ * ensuring the caller regains control after a bounded amount of work. Passing
+ * ``0`` consumes as many steps as required (legacy behaviour).
+ *
+ * @param client Client instance.
+ * @param steps  Maximum micro-steps to execute (0 means unbounded).
+ *
+ * @retval MB_OK             Operation succeeded or no work was required.
+ * @retval MB_ERR_INVALID_ARGUMENT  @p client was NULL.
+ * @retval other             Error codes bubbled up from the active transport.
+ */
+mb_err_t mb_client_poll_with_budget(mb_client_t *client, mb_size_t steps);
 
 /**
  * @brief Configures the watchdog window for in-flight transactions.

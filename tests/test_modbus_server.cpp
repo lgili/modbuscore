@@ -255,6 +255,64 @@ TEST_F(MbServerTest, WritesMultipleRegisters)
     EXPECT_EQ(storage_rw_[3], 0x0506U);
 }
 
+TEST_F(MbServerTest, PollWithBudgetRequiresMultipleSteps)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    sendPdu(req_pdu, 5U, kUnitId);
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> scratch{};
+
+    for (int i = 0; i < 5; ++i) {
+        mock_advance_time(1U);
+        EXPECT_EQ(MB_OK, mb_server_poll_with_budget(&server_, 1U));
+        EXPECT_EQ(0U, mock_get_tx_data(scratch.data(), static_cast<uint16_t>(scratch.size())));
+    }
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MB_OK, mb_server_poll_with_budget(&server_, 1U));
+    const uint16_t len = mock_get_tx_data(scratch.data(), static_cast<uint16_t>(scratch.size()));
+    ASSERT_GT(len, 0U);
+
+    mb_adu_view_t response{};
+    ASSERT_TRUE(mb_err_is_ok(mb_frame_rtu_decode(scratch.data(), len, &response)));
+    EXPECT_EQ(response.unit_id, kUnitId);
+    EXPECT_EQ(response.function, MB_PDU_FC_READ_HOLDING_REGISTERS);
+    mock_clear_tx_buffer();
+}
+
+TEST_F(MbServerTest, PollWithBudgetHandlesSubstateTimeout)
+{
+    mb_u8 req_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(req_pdu, sizeof req_pdu, 0x0010U, 0x0001U));
+
+    sendPdu(req_pdu, 5U, kUnitId);
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> scratch{};
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MB_OK, mb_server_poll_with_budget(&server_, 1U));
+    EXPECT_EQ(0U, mock_get_tx_data(scratch.data(), static_cast<uint16_t>(scratch.size())));
+
+    mock_advance_time(static_cast<uint16_t>(MB_CONF_SERVER_SUBSTATE_DEADLINE_MS + 1U));
+    EXPECT_EQ(MB_OK, mb_server_poll_with_budget(&server_, 1U));
+    EXPECT_EQ(0U, mock_get_tx_data(scratch.data(), static_cast<uint16_t>(scratch.size())));
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MB_OK, mb_server_poll_with_budget(&server_, 1U));
+    const uint16_t len = mock_get_tx_data(scratch.data(), static_cast<uint16_t>(scratch.size()));
+    ASSERT_GT(len, 0U);
+
+    mb_adu_view_t response{};
+    ASSERT_TRUE(mb_err_is_ok(mb_frame_rtu_decode(scratch.data(), len, &response)));
+    EXPECT_EQ(response.unit_id, kUnitId);
+    EXPECT_EQ(static_cast<mb_u8>(MB_PDU_FC_READ_HOLDING_REGISTERS | MB_PDU_EXCEPTION_BIT), response.function);
+    ASSERT_EQ(1U, response.payload_len);
+    EXPECT_EQ(MB_EX_SERVER_DEVICE_FAILURE, response.payload[0]);
+    mock_clear_tx_buffer();
+}
+
 TEST_F(MbServerTest, BroadcastWriteDoesNotRespond)
 {
     mb_u8 req_pdu[5];

@@ -20,6 +20,7 @@
  */
 
 #include <modbus/modbus.h>
+#include <modbus/fsm.h>
 #include "gtest/gtest.h"
 
 extern "C" {
@@ -53,6 +54,10 @@ static bool guard_deny_called = false;
 static bool guard_result = true;
 static bool default_action_called = false;
 static bool timeout_action_called = false;
+static bool drop_callback_called = false;
+static uint8_t drop_callback_last_event = 0U;
+
+static uint16_t fake_now_value = 0U;
 
 static void reset_test_flags() {
     action_start_called = false;
@@ -62,6 +67,9 @@ static void reset_test_flags() {
     guard_result = true;
     default_action_called = false;
     timeout_action_called = false;
+    drop_callback_called = false;
+    drop_callback_last_event = 0U;
+    fake_now_value = 0U;
 }
 
 // Actions
@@ -88,6 +96,16 @@ static void default_action(fsm_t *fsm) {
 static void timeout_default_action(fsm_t *fsm) {
     (void)fsm;
     timeout_action_called = true;
+}
+
+static uint16_t fake_now(void) {
+    return fake_now_value;
+}
+
+static void on_event_drop(fsm_t *fsm, uint8_t event) {
+    (void)fsm;
+    drop_callback_called = true;
+    drop_callback_last_event = event;
 }
 
 // Guards
@@ -201,12 +219,12 @@ TEST(FsmMisc, RunWithNullFsm) {
 }
 
 TEST_F(FsmTest, QueueFullDropsEvents) {
-    const uint8_t initial_tail = fsm.event_queue.tail;
+    const auto initial_tail = static_cast<uint8_t>(fsm.event_queue.tail);
     for (uint8_t i = 0; i < (FSM_EVENT_QUEUE_SIZE - 1U); ++i) {
         fsm_handle_event(&fsm, static_cast<uint8_t>(i));
     }
 
-    const uint8_t tail_after_fill = fsm.event_queue.tail;
+    const auto tail_after_fill = static_cast<uint8_t>(fsm.event_queue.tail);
     EXPECT_NE(initial_tail, tail_after_fill);
 
     fsm_handle_event(&fsm, 0xAAU);
@@ -233,5 +251,41 @@ TEST(FsmTimeout, TimeoutTriggersEvent) {
 
     EXPECT_TRUE(timeout_fsm.has_timeout);
     EXPECT_TRUE(timeout_action_called);
+}
+
+TEST(FsmConfig, ExternalQueueAndCallbacks) {
+    reset_test_flags();
+
+    fsm_t cfg_fsm{};
+    uint8_t external_queue[2]{};
+
+    fsm_config_t config{};
+    config.queue_storage = external_queue;
+    config.queue_capacity = sizeof external_queue;
+    config.time_fn = fake_now;
+    config.on_event_drop = on_event_drop;
+
+    fake_now_value = 42U;
+
+    fsm_init_with_config(&cfg_fsm, &state_idle, NULL, &config);
+
+    EXPECT_EQ(fake_now_value, cfg_fsm.state_entry_time);
+    ASSERT_EQ(static_cast<fsm_queue_index_t>(sizeof external_queue), cfg_fsm.event_queue.capacity);
+    ASSERT_EQ(external_queue, cfg_fsm.event_queue.events);
+
+    // First event fits in the queue
+    fsm_handle_event(&cfg_fsm, TEST_EVENT_START);
+    EXPECT_FALSE(drop_callback_called);
+
+    // Second event overflows the tiny queue and should trigger the drop callback
+    fsm_handle_event(&cfg_fsm, TEST_EVENT_NEXT);
+    EXPECT_TRUE(drop_callback_called);
+    EXPECT_EQ(TEST_EVENT_NEXT, drop_callback_last_event);
+
+    // Process the queued event and ensure custom time source is used for transitions
+    fake_now_value = 100U;
+    fsm_run(&cfg_fsm);
+    EXPECT_TRUE(action_start_called);
+    EXPECT_EQ(cfg_fsm.state_entry_time, fake_now_value);
 }
 

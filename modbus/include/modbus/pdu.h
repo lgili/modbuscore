@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include <modbus/conf.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
 
@@ -59,74 +60,98 @@ extern "C" {
 #define MB_PDU_FC11_MAX_PAYLOAD 251U
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+#if MB_CONF_ENABLE_FC01
 mb_err_t mb_pdu_build_read_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
 mb_err_t mb_pdu_parse_read_coils_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_quantity);
 
 mb_err_t mb_pdu_build_read_coils_response(mb_u8 *out, mb_size_t out_cap, const bool *coils, mb_u16 count);
 mb_err_t mb_pdu_parse_read_coils_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u8 *out_byte_count);
+#endif
 
+#if MB_CONF_ENABLE_FC02
 mb_err_t mb_pdu_build_read_discrete_inputs_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
 mb_err_t mb_pdu_parse_read_discrete_inputs_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_quantity);
 
 mb_err_t mb_pdu_build_read_discrete_inputs_response(mb_u8 *out, mb_size_t out_cap, const bool *inputs, mb_u16 count);
 mb_err_t mb_pdu_parse_read_discrete_inputs_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u8 *out_byte_count);
+#endif
 
+#if MB_CONF_ENABLE_FC03
 mb_err_t mb_pdu_build_read_holding_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
 mb_err_t mb_pdu_parse_read_holding_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_quantity);
 
 mb_err_t mb_pdu_build_read_holding_response(mb_u8 *out, mb_size_t out_cap, const mb_u16 *registers, mb_u16 count);
 mb_err_t mb_pdu_parse_read_holding_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u16 *out_register_count);
+#endif
 
+#if MB_CONF_ENABLE_FC04
 mb_err_t mb_pdu_build_read_input_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity);
 mb_err_t mb_pdu_parse_read_input_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_quantity);
 
 mb_err_t mb_pdu_build_read_input_response(mb_u8 *out, mb_size_t out_cap, const mb_u16 *registers, mb_u16 count);
 mb_err_t mb_pdu_parse_read_input_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u16 *out_register_count);
+#endif
 
+#if MB_CONF_ENABLE_FC06
 mb_err_t mb_pdu_build_write_single_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 value);
 mb_err_t mb_pdu_parse_write_single_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_value);
 mb_err_t mb_pdu_build_write_single_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 value);
 mb_err_t mb_pdu_parse_write_single_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_value);
+#endif
 
+#if MB_CONF_ENABLE_FC05
 mb_err_t mb_pdu_build_write_single_coil_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, bool coil_on);
 mb_err_t mb_pdu_parse_write_single_coil_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, bool *out_coil_on);
 mb_err_t mb_pdu_build_write_single_coil_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, bool coil_on);
 mb_err_t mb_pdu_parse_write_single_coil_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, bool *out_coil_on);
+#endif
 
+#if MB_CONF_ENABLE_FC07
 mb_err_t mb_pdu_build_read_exception_status_request(mb_u8 *out, mb_size_t out_cap);
 mb_err_t mb_pdu_parse_read_exception_status_request(const mb_u8 *pdu, mb_size_t len);
 mb_err_t mb_pdu_build_read_exception_status_response(mb_u8 *out, mb_size_t out_cap, mb_u8 status);
 mb_err_t mb_pdu_parse_read_exception_status_response(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_status);
+#endif
 
+#if MB_CONF_ENABLE_FC11
 mb_err_t mb_pdu_build_report_server_id_request(mb_u8 *out, mb_size_t out_cap);
 mb_err_t mb_pdu_parse_report_server_id_request(const mb_u8 *pdu, mb_size_t len);
 mb_err_t mb_pdu_build_report_server_id_response(mb_u8 *out, mb_size_t out_cap, const mb_u8 *payload, mb_size_t payload_len);
 mb_err_t mb_pdu_parse_report_server_id_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u8 *out_byte_count);
+#endif
 
+#if MB_CONF_ENABLE_FC10
 mb_err_t mb_pdu_build_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const mb_u16 *values, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count, const mb_u8 **out_payload);
-mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code);
-mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_function, mb_u8 *out_exception);
-
 
 mb_err_t mb_pdu_build_write_multiple_response(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count);
+#endif
 
+#if MB_CONF_ENABLE_FC0F
 mb_err_t mb_pdu_build_write_multiple_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const bool *coils, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_coils_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count, mb_u8 *out_byte_count, const mb_u8 **out_payload);
 mb_err_t mb_pdu_build_write_multiple_coils_response(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 count);
 mb_err_t mb_pdu_parse_write_multiple_coils_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_addr, mb_u16 *out_count);
+#endif
 
+#if MB_CONF_ENABLE_FC16
 mb_err_t mb_pdu_build_mask_write_register_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask);
 mb_err_t mb_pdu_parse_mask_write_register_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask);
 mb_err_t mb_pdu_build_mask_write_register_response(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask);
 mb_err_t mb_pdu_parse_mask_write_register_response(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_address, mb_u16 *out_and_mask, mb_u16 *out_or_mask);
+#endif
 
+#if MB_CONF_ENABLE_FC17
 mb_err_t mb_pdu_build_read_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 read_start_addr, mb_u16 read_quantity, mb_u16 write_start_addr, const mb_u16 *write_values, mb_u16 write_quantity);
 mb_err_t mb_pdu_parse_read_write_multiple_request(const mb_u8 *pdu, mb_size_t len, mb_u16 *out_read_addr, mb_u16 *out_read_quantity, mb_u16 *out_write_addr, mb_u16 *out_write_quantity, const mb_u8 **out_write_payload);
 
 mb_err_t mb_pdu_build_read_write_multiple_response(mb_u8 *out, mb_size_t out_cap, const mb_u16 *read_registers, mb_u16 read_quantity);
 mb_err_t mb_pdu_parse_read_write_multiple_response(const mb_u8 *pdu, mb_size_t len, const mb_u8 **out_payload, mb_u16 *out_register_count);
+#endif
+
+mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code);
+mb_err_t mb_pdu_parse_exception(const mb_u8 *pdu, mb_size_t len, mb_u8 *out_function, mb_u8 *out_exception);
 // NOLINTEND(bugprone-easily-swappable-parameters)
 
 #ifdef __cplusplus

@@ -3,8 +3,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 
 #include <modbus/mb_log.h>
+#include <modbus/core.h>
+#include <modbus/pdu.h>
 
 #define MB_CLIENT_TIMEOUT_DEFAULT MB_CLIENT_DEFAULT_TIMEOUT_MS
 #define MB_CLIENT_BACKOFF_DEFAULT MB_CLIENT_DEFAULT_RETRY_BACKOFF_MS
@@ -24,9 +27,56 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
 #endif
 static mb_err_t client_transport_submit(mb_client_t *client, mb_client_txn_t *txn);
 static mb_err_t client_transport_poll(mb_client_t *client);
+static void client_retry(mb_client_t *client);
 #if MB_CONF_TRANSPORT_TCP
 static mb_client_txn_t *client_find_by_tid(mb_client_t *client, mb_u16 tid);
 #endif
+
+static void client_reset_txn_phases(mb_client_txn_t *txn)
+{
+    if (txn == NULL) {
+        return;
+    }
+
+    txn->tx_phase = MB_POLL_TX_PHASE_IDLE;
+    txn->rx_phase = MB_POLL_RX_PHASE_IDLE;
+    txn->tx_deadline_ms = 0U;
+    txn->rx_deadline_ms = 0U;
+    txn->rx_pending = false;
+    txn->rx_status = MB_OK;
+    txn->rx_view.unit_id = 0U;
+    txn->rx_view.function = 0U;
+    txn->rx_view.payload = NULL;
+    txn->rx_view.payload_len = 0U;
+}
+
+static void client_jitter_sample(mb_client_t *client, mb_time_ms_t now)
+{
+    if (client == NULL) {
+        return;
+    }
+
+    mb_poll_jitter_t *jitter = &client->poll_jitter;
+    if (jitter->last_timestamp != 0U && now >= jitter->last_timestamp) {
+        const mb_time_ms_t delta = now - jitter->last_timestamp;
+        if (delta > jitter->max_delta_ms) {
+            jitter->max_delta_ms = delta;
+            client->metrics.step_max_jitter_ms = delta;
+        }
+        jitter->total_delta_ms += delta;
+        jitter->samples += 1U;
+        if (jitter->samples > 0U) {
+            client->metrics.step_avg_jitter_ms = (mb_time_ms_t)(jitter->total_delta_ms / jitter->samples);
+        }
+    }
+
+    jitter->last_timestamp = now;
+}
+
+static inline mb_size_t client_normalize_budget(mb_size_t steps)
+{
+    return (steps == 0U) ? (mb_size_t)SIZE_MAX : steps;
+}
 
 static mb_time_ms_t client_now(const mb_client_t *client)
 {
@@ -287,7 +337,7 @@ static mb_time_ms_t client_backoff_with_jitter(const mb_client_txn_t *txn,
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
 
-static void client_start_next(mb_client_t *client);
+static bool client_start_next(mb_client_t *client);
 
 static void client_enqueue(mb_client_t *client, mb_client_txn_t *txn)
 {
@@ -450,6 +500,7 @@ static void client_finalize(mb_client_t *client,
     txn->high_priority = false;
     txn->poison = false;
     txn->start_time = 0U;
+    client_reset_txn_phases(txn);
 }
 
 static void client_prepare_response(mb_client_txn_t *txn, const mb_adu_view_t *adu)
@@ -583,79 +634,234 @@ static void mb_client_tcp_callback(mb_tcp_transport_t *tcp,
         const mb_size_t adu_len = MB_TCP_HEADER_SIZE + 1U + adu->payload_len;
         client->metrics.bytes_rx += adu_len;
         client_trace_response(client, adu, "client.rx");
-    }
-
-    if (status == MB_OK) {
-        client_prepare_response(txn, adu);
-        client_finalize(client, txn, MB_OK, adu ? &txn->response_view : NULL);
+        mb_size_t payload_len = (adu->payload_len > MB_PDU_MAX) ? MB_PDU_MAX : adu->payload_len;
+        if (payload_len > 0U && adu->payload != NULL) {
+            memcpy(txn->response_storage, adu->payload, payload_len);
+        }
+        txn->rx_view.unit_id = adu->unit_id;
+        txn->rx_view.function = adu->function;
+        txn->rx_view.payload = (payload_len > 0U) ? txn->response_storage : NULL;
+        txn->rx_view.payload_len = payload_len;
+        txn->rx_phase = MB_POLL_RX_PHASE_HEADER;
     } else {
-        client_finalize(client, txn, status, NULL);
+        txn->rx_phase = MB_POLL_RX_PHASE_DISPATCH;
     }
 
-    if (client->current == txn) {
-        client->current = NULL;
-    }
+    txn->rx_status = status;
+    txn->rx_pending = true;
+    txn->tx_phase = MB_POLL_TX_PHASE_DRAIN;
+    txn->rx_deadline_ms = client_now(client) + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
 
-    client_transition_state(client, MB_CLIENT_STATE_IDLE);
-    client_start_next(client);
+    if (client->state != MB_CLIENT_STATE_BACKOFF) {
+        client_transition_state(client, MB_CLIENT_STATE_WAITING);
+    }
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
 #endif
 
-static void client_attempt_send(mb_client_t *client, mb_client_txn_t *txn)
+static bool client_start_next(mb_client_t *client)
 {
-    if (client == NULL || txn == NULL) {
-        return;
+    if (client == NULL) {
+        return false;
     }
 
-    const mb_time_ms_t now = client_now(client);
-    txn->timeout_ms = client_current_timeout_ms(txn);
-    txn->deadline = now + txn->timeout_ms;
-    txn->watchdog_deadline = (client->watchdog_ms > 0U) ? (now + client->watchdog_ms) : 0U;
-    txn->next_attempt_ms = 0U;
-    txn->start_time = now;
+    while (true) {
+        mb_client_txn_t *next = client_dequeue(client);
+        if (next == NULL) {
+            client->current = NULL;
+            client_transition_state(client, MB_CLIENT_STATE_IDLE);
+            return false;
+        }
 
-    if (txn->poison) {
-        client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
-        client->current = NULL;
-        client_transition_state(client, MB_CLIENT_STATE_IDLE);
-        client_start_next(client);
-        return;
+        const mb_time_ms_t now = client_now(client);
+        client->current = next;
+        client_reset_txn_phases(next);
+        next->tx_phase = MB_POLL_TX_PHASE_BUILD;
+        if (next->expect_response) {
+            next->rx_phase = MB_POLL_RX_PHASE_HEADER;
+            next->rx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        }
+        next->tx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        client_transition_state(client, MB_CLIENT_STATE_PREPARING);
+        return true;
     }
-
-    mb_err_t status = client_transport_submit(client, txn);
-    if (status != MB_OK) {
-        client_finalize(client, txn, status, NULL);
-        client->current = NULL;
-        client_transition_state(client, MB_CLIENT_STATE_IDLE);
-        return;
-    }
-
-    if (!txn->expect_response) {
-        client_finalize(client, txn, MB_OK, NULL);
-        client->current = NULL;
-        client_transition_state(client, MB_CLIENT_STATE_IDLE);
-        return;
-    }
-
-    client_transition_state(client, MB_CLIENT_STATE_WAITING);
 }
 
-static void client_start_next(mb_client_t *client)
+static bool client_process_tx_phase(mb_client_t *client, mb_client_txn_t *txn, mb_time_ms_t now)
 {
-    while (true) {
-        client->current = client_dequeue(client);
-        if (client->current == NULL) {
+    if (client == NULL || txn == NULL) {
+        return false;
+    }
+
+    switch (txn->tx_phase) {
+    case MB_POLL_TX_PHASE_BUILD:
+        txn->timeout_ms = client_current_timeout_ms(txn);
+        txn->deadline = now + txn->timeout_ms;
+        txn->watchdog_deadline = (client->watchdog_ms > 0U) ? (now + client->watchdog_ms) : 0U;
+        txn->next_attempt_ms = 0U;
+        txn->start_time = now;
+        if (txn->poison) {
+            client_finalize(client, txn, MB_ERR_CANCELLED, NULL);
+            client->current = NULL;
             client_transition_state(client, MB_CLIENT_STATE_IDLE);
-            return;
+            (void)client_start_next(client);
+            return true;
+        }
+        txn->tx_phase = MB_POLL_TX_PHASE_SEND;
+        txn->tx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        client_transition_state(client, MB_CLIENT_STATE_SENDING);
+        return true;
+
+    case MB_POLL_TX_PHASE_SEND: {
+        mb_err_t status = client_transport_submit(client, txn);
+        txn->tx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        if (status != MB_OK) {
+            client_finalize(client, txn, status, NULL);
+            client->current = NULL;
+            client_transition_state(client, MB_CLIENT_STATE_IDLE);
+            (void)client_start_next(client);
+            return true;
         }
 
-        client_attempt_send(client, client->current);
-        if (client->state == MB_CLIENT_STATE_WAITING || client->current != NULL) {
-            return;
+        if (!txn->expect_response) {
+            client_finalize(client, txn, MB_OK, NULL);
+            client->current = NULL;
+            client_transition_state(client, MB_CLIENT_STATE_IDLE);
+            (void)client_start_next(client);
+        } else {
+            txn->tx_phase = MB_POLL_TX_PHASE_DRAIN;
+            txn->rx_phase = MB_POLL_RX_PHASE_HEADER;
+            txn->rx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+            client_transition_state(client, MB_CLIENT_STATE_WAITING);
         }
-        /* Immediate completion, continue draining the queue. */
+        return true;
     }
+
+    case MB_POLL_TX_PHASE_DRAIN:
+    case MB_POLL_TX_PHASE_IDLE:
+    default:
+        break;
+    }
+
+    return false;
+}
+
+static bool client_process_rx_phase(mb_client_t *client, mb_client_txn_t *txn, mb_time_ms_t now)
+{
+    if (client == NULL || txn == NULL || !txn->rx_pending) {
+        return false;
+    }
+
+    switch (txn->rx_phase) {
+    case MB_POLL_RX_PHASE_HEADER:
+        txn->rx_phase = MB_POLL_RX_PHASE_BODY;
+        txn->rx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        return true;
+
+    case MB_POLL_RX_PHASE_BODY:
+        if (txn->rx_status == MB_OK) {
+            client_prepare_response(txn, &txn->rx_view);
+        }
+        txn->rx_phase = MB_POLL_RX_PHASE_VALIDATE;
+        txn->rx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        return true;
+
+    case MB_POLL_RX_PHASE_VALIDATE:
+        if (txn->rx_status == MB_OK && (txn->rx_view.function & MB_PDU_EXCEPTION_BIT) != 0U) {
+            mb_u8 buffer[2] = {txn->rx_view.function, 0U};
+            if (txn->rx_view.payload != NULL && txn->rx_view.payload_len >= 1U) {
+                buffer[1] = txn->rx_view.payload[0];
+                mb_u8 fc = 0U;
+                mb_u8 code = 0U;
+                if (mb_err_is_ok(mb_pdu_parse_exception(buffer, 2U, &fc, &code))) {
+                    txn->rx_status = modbus_exception_to_error(code);
+                } else {
+                    txn->rx_status = MB_ERR_INVALID_REQUEST;
+                }
+            } else {
+                txn->rx_status = MB_ERR_INVALID_REQUEST;
+            }
+        }
+        txn->rx_phase = MB_POLL_RX_PHASE_DISPATCH;
+        txn->rx_deadline_ms = now + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+        return true;
+
+    case MB_POLL_RX_PHASE_DISPATCH: {
+        const mb_adu_view_t *response_ptr = (txn->rx_status == MB_OK) ? &txn->response_view : NULL;
+        client_finalize(client, txn, txn->rx_status, response_ptr);
+        txn->rx_pending = false;
+        client->current = NULL;
+        client_transition_state(client, MB_CLIENT_STATE_IDLE);
+        (void)client_start_next(client);
+        return true;
+    }
+
+    case MB_POLL_RX_PHASE_IDLE:
+    default:
+        break;
+    }
+
+    return false;
+}
+
+static bool client_check_waiting(mb_client_t *client, mb_client_txn_t *txn, mb_time_ms_t now)
+{
+    if (client == NULL || txn == NULL) {
+        return false;
+    }
+
+    if (txn->deadline > 0U && now >= txn->deadline) {
+        client_retry(client);
+        return true;
+    }
+
+    if (client->watchdog_ms > 0U && txn->watchdog_deadline > 0U && now >= txn->watchdog_deadline) {
+        client_finalize(client, txn, MB_ERR_TRANSPORT, NULL);
+        client->current = NULL;
+        client_transition_state(client, MB_CLIENT_STATE_IDLE);
+        (void)client_start_next(client);
+        return true;
+    }
+
+    return false;
+}
+
+static bool client_run_step(mb_client_t *client, mb_time_ms_t now)
+{
+    if (client == NULL) {
+        return false;
+    }
+
+    mb_client_txn_t *txn = client->current;
+    if (txn == NULL) {
+        return client_start_next(client);
+    }
+
+    if (client->state == MB_CLIENT_STATE_BACKOFF) {
+        if (txn->next_attempt_ms > 0U && now >= txn->next_attempt_ms) {
+            txn->tx_phase = MB_POLL_TX_PHASE_BUILD;
+            txn->rx_phase = txn->expect_response ? MB_POLL_RX_PHASE_HEADER : MB_POLL_RX_PHASE_IDLE;
+            txn->rx_pending = false;
+            txn->next_attempt_ms = 0U;
+            client_transition_state(client, MB_CLIENT_STATE_PREPARING);
+            return true;
+        }
+        return false;
+    }
+
+    if (client_process_rx_phase(client, txn, now)) {
+        return true;
+    }
+
+    if (client_process_tx_phase(client, txn, now)) {
+        return true;
+    }
+
+    if (client->state == MB_CLIENT_STATE_WAITING) {
+        return client_check_waiting(client, txn, now);
+    }
+
+    return false;
 }
 
 static void client_retry(mb_client_t *client)
@@ -668,7 +874,7 @@ static void client_retry(mb_client_t *client)
     if (txn->retry_count >= txn->max_retries) {
         client_finalize(client, txn, MB_ERR_TIMEOUT, NULL);
         client->current = NULL;
-        client_start_next(client);
+        (void)client_start_next(client);
         return;
     }
 
@@ -680,6 +886,9 @@ static void client_retry(mb_client_t *client)
     txn->next_attempt_ms = now + delay;
     txn->deadline = 0U;
     txn->watchdog_deadline = 0U;
+    txn->tx_phase = MB_POLL_TX_PHASE_BUILD;
+    txn->rx_phase = MB_POLL_RX_PHASE_IDLE;
+    txn->rx_pending = false;
 
     client_transition_state(client, MB_CLIENT_STATE_BACKOFF);
 }
@@ -701,18 +910,26 @@ static void mb_client_rtu_callback(mb_rtu_transport_t *rtu,
         const mb_size_t adu_len = 1U + adu->payload_len + 2U;
         client->metrics.bytes_rx += adu_len;
         client_trace_response(client, adu, "client.rx");
-    }
-
-    if (status == MB_OK) {
-        client_prepare_response(txn, adu);
-        client_finalize(client, txn, MB_OK, adu ? &txn->response_view : NULL);
+        mb_size_t payload_len = (adu->payload_len > MB_PDU_MAX) ? MB_PDU_MAX : adu->payload_len;
+        if (payload_len > 0U && adu->payload != NULL) {
+            memcpy(txn->response_storage, adu->payload, payload_len);
+        }
+        txn->rx_view.unit_id = adu->unit_id;
+        txn->rx_view.function = adu->function;
+        txn->rx_view.payload = (payload_len > 0U) ? txn->response_storage : NULL;
+        txn->rx_view.payload_len = payload_len;
+        txn->rx_phase = MB_POLL_RX_PHASE_HEADER;
     } else {
-        client_finalize(client, txn, status, NULL);
+        txn->rx_phase = MB_POLL_RX_PHASE_DISPATCH;
     }
 
-    client->current = NULL;
-    client_transition_state(client, MB_CLIENT_STATE_IDLE);
-    client_start_next(client);
+    txn->rx_status = status;
+    txn->rx_pending = true;
+    txn->tx_phase = MB_POLL_TX_PHASE_DRAIN;
+    txn->rx_deadline_ms = client_now(client) + MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS;
+    if (client->state != MB_CLIENT_STATE_BACKOFF) {
+        client_transition_state(client, MB_CLIENT_STATE_WAITING);
+    }
 }
 #endif
 
@@ -744,6 +961,7 @@ static mb_err_t mb_client_init_common(mb_client_t *client,
 
     for (mb_size_t i = 0U; i < txn_pool_len; ++i) {
         memset(&txn_pool[i], 0, sizeof(mb_client_txn_t));
+        client_reset_txn_phases(&txn_pool[i]);
     }
 
     return MB_OK;
@@ -817,6 +1035,7 @@ mb_err_t mb_client_submit(mb_client_t *client,
     }
 
     memset(txn, 0, sizeof(*txn));
+    client_reset_txn_phases(txn);
     txn->in_use = true;
     txn->queued = true;
     txn->cfg = *request;
@@ -907,7 +1126,7 @@ mb_err_t mb_client_cancel(mb_client_t *client, mb_client_txn_t *txn)
     return MB_OK;
 }
 
-mb_err_t mb_client_poll(mb_client_t *client)
+mb_err_t mb_client_poll_with_budget(mb_client_t *client, mb_size_t steps)
 {
     if (client == NULL) {
         return MB_ERR_INVALID_ARGUMENT;
@@ -919,43 +1138,23 @@ mb_err_t mb_client_poll(mb_client_t *client)
 
     MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_TRANSPORT);
 
-    mb_client_txn_t *txn = client->current;
-    if (txn != NULL) {
+    mb_size_t remaining = client_normalize_budget(steps);
+    while (remaining-- > 0U) {
         const mb_time_ms_t now = client_now(client);
-
-        if (client->state == MB_CLIENT_STATE_BACKOFF) {
-            if (now >= txn->next_attempt_ms) {
-                client_attempt_send(client, txn);
-                txn = client->current;
-            }
+        if (!client_run_step(client, now)) {
+            break;
         }
-
-        if (client->state == MB_CLIENT_STATE_WAITING && txn != NULL) {
-            if (txn->deadline > 0U && now >= txn->deadline) {
-                client_retry(client);
-                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
-                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
-                return status;
-            }
-
-            if (client->watchdog_ms > 0U && txn->watchdog_deadline > 0U && now >= txn->watchdog_deadline) {
-                client_finalize(client, txn, MB_ERR_TRANSPORT, NULL);
-                client->current = NULL;
-                client_start_next(client);
-                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
-                MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
-                return status;
-            }
-        }
-    }
-
-    if (client->state == MB_CLIENT_STATE_IDLE && client->current == NULL) {
-        client_start_next(client);
+        client_jitter_sample(client, now);
     }
 
     MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
     MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
     return status;
+}
+
+mb_err_t mb_client_poll(mb_client_t *client)
+{
+    return mb_client_poll_with_budget(client, MB_CONF_CLIENT_POLL_BUDGET_STEPS);
 }
 
 void mb_client_set_watchdog(mb_client_t *client, mb_time_ms_t watchdog_ms)
@@ -1025,6 +1224,7 @@ void mb_client_reset_metrics(mb_client_t *client)
     }
 
     memset(&client->metrics, 0, sizeof(client->metrics));
+    memset(&client->poll_jitter, 0, sizeof(client->poll_jitter));
 }
 
 void mb_client_get_diag(const mb_client_t *client, mb_diag_counters_t *out_diag)

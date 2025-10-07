@@ -158,6 +158,49 @@ TEST_F(MbClientTest, CompletesSingleTransaction)
     EXPECT_EQ(4U, capture.response.payload[0]);
 }
 
+TEST_F(MbClientTest, PollWithBudgetAdvancesMicroSteps)
+{
+    CallbackCapture capture{};
+    mb_client_txn_t *txn = nullptr;
+    auto request = make_request(0x0000, 0x0001, &capture);
+    ASSERT_EQ(MODBUS_ERROR_NONE, mb_client_submit(&client_, &request, &txn));
+
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> frame{};
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MODBUS_ERROR_NONE, mb_client_poll_with_budget(&client_, 1U));
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MODBUS_ERROR_NONE, mb_client_poll_with_budget(&client_, 1U));
+    EXPECT_EQ(0U, mock_get_tx_data(frame.data(), frame.size()));
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MODBUS_ERROR_NONE, mb_client_poll_with_budget(&client_, 1U));
+    auto tx_len = mock_get_tx_data(frame.data(), frame.size());
+    ASSERT_GT(tx_len, 0U);
+    mock_clear_tx_buffer();
+
+    mb_adu_view_t response_adu{};
+    std::array<mb_u8, MB_RTU_BUFFER_SIZE> response_frame{};
+    mb_size_t response_len = 0U;
+    build_read_response(response_adu, response_frame, response_len, 1U);
+    ASSERT_EQ(0, mock_inject_rx_data(response_frame.data(), static_cast<uint16_t>(response_len)));
+
+    for (int i = 0; i < 3; ++i) {
+        mock_advance_time(1U);
+        EXPECT_EQ(MODBUS_ERROR_NONE, mb_client_poll_with_budget(&client_, 1U));
+        EXPECT_FALSE(capture.invoked);
+    }
+
+    mock_advance_time(1U);
+    EXPECT_EQ(MODBUS_ERROR_NONE, mb_client_poll_with_budget(&client_, 1U));
+    EXPECT_TRUE(capture.invoked);
+    EXPECT_EQ(MODBUS_ERROR_NONE, capture.status);
+    ASSERT_EQ(3U, capture.response.payload_len);
+    EXPECT_EQ(2U, capture.response.payload[0]);
+}
+
 TEST_F(MbClientTest, RetriesAndTimesOut)
 {
     CallbackCapture capture{};

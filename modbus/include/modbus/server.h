@@ -58,6 +58,7 @@ typedef mb_err_t (*mb_server_write_fn)(mb_u16 start_addr,
                                        mb_u16 quantity,
                                        void *user_ctx);
 
+typedef struct mb_server_region mb_server_region_t;
 typedef struct mb_server_request mb_server_request_t;
 
 struct mb_server_request {
@@ -75,6 +76,17 @@ struct mb_server_request {
     mb_time_ms_t deadline;
     mb_adu_view_t request_view;
     mb_u8 storage[MB_PDU_MAX];
+    mb_poll_rx_phase_t rx_phase;
+    mb_poll_tx_phase_t tx_phase;
+    mb_time_ms_t rx_deadline_ms;
+    mb_time_ms_t tx_deadline_ms;
+    mb_err_t rx_status;
+    const mb_server_region_t *region;
+    mb_u16 addr_start;
+    mb_u16 quantity;
+    mb_u16 single_value;
+    mb_size_t tx_pdu_len;
+    mb_u8 exception_code;
     mb_server_request_t *next;
 };
 
@@ -88,6 +100,8 @@ typedef struct {
     mb_u64 errors;
     mb_u64 timeouts;
     mb_u64 latency_total_ms;
+    mb_time_ms_t step_max_jitter_ms;
+    mb_time_ms_t step_avg_jitter_ms;
 } mb_server_metrics_t;
 
 typedef enum {
@@ -103,7 +117,7 @@ typedef enum {
  * fully contained inside a single region; otherwise an Illegal Data Address
  * exception is reported.
  */
-typedef struct {
+struct mb_server_region {
     mb_u16 start;                /**< First register address served by this region. */
     mb_u16 count;                /**< Number of registers in the region. */
     bool read_only;              /**< Reject write requests when true. */
@@ -111,7 +125,7 @@ typedef struct {
     mb_server_write_fn write_cb; /**< Optional write callback (may be `NULL`). */
     void *user_ctx;              /**< User context forwarded to callbacks. */
     mb_u16 *storage;             /**< Optional backing storage for direct access. */
-} mb_server_region_t;
+};
 
 /**
  * @brief Server runtime object.
@@ -139,6 +153,7 @@ typedef struct {
     void *observer_user;
     bool trace_hex;
     mb_server_state_t state;
+    mb_poll_jitter_t poll_jitter;
 
     mb_u8 rx_buffer[MB_PDU_MAX];
     mb_u8 tx_buffer[MB_PDU_MAX];
@@ -237,6 +252,21 @@ mb_err_t mb_server_add_storage(mb_server_t *server,
  * @retval other                 Error codes bubbled up from the active transport.
  */
 mb_err_t mb_server_poll(mb_server_t *server);
+
+/**
+ * @brief Advances the server FSM with a bounded micro-step budget.
+ *
+ * Behaviour mirrors @ref mb_server_poll while co-operating with the caller's
+ * scheduler. Supplying ``0`` preserves the legacy behaviour (unbounded).
+ *
+ * @param server Server instance.
+ * @param steps  Maximum micro-steps to execute (0 means unbounded).
+ *
+ * @retval MB_OK                 Operation succeeded or no work was pending.
+ * @retval MB_ERR_INVALID_ARGUMENT @p server was NULL.
+ * @retval other                 Transport error bubbled up from the active transport.
+ */
+mb_err_t mb_server_poll_with_budget(mb_server_t *server, mb_size_t steps);
 
 /**
  * @brief Returns the number of requests currently pending in the queue.

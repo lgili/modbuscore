@@ -89,17 +89,82 @@ extern uint16_t get_current_time_ms(void);
  * fsm_init(&my_fsm, &state_idle, &app_context);
  * ```
  */
-void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data) {
-    if (!fsm || !initial_state) {
-        // Optionally, log an error or handle the invalid arguments appropriately
-        return; // Invalid arguments
+static inline uint16_t fsm_now(const fsm_t *fsm)
+{
+    if (fsm == NULL) {
+        return 0U;
     }
+
+    if (fsm->time_fn != NULL) {
+        return fsm->time_fn();
+    }
+
+    return get_current_time_ms();
+}
+
+static void fsm_queue_reset(fsm_t *fsm)
+{
+    if (fsm == NULL) {
+        return;
+    }
+
+    fsm->event_queue.head = 0U;
+    fsm->event_queue.tail = 0U;
+}
+
+static void fsm_bind_queue(fsm_t *fsm, const fsm_config_t *config)
+{
+    if (fsm == NULL) {
+        return;
+    }
+
+    if (config != NULL && config->queue_storage != NULL && config->queue_capacity > 0U) {
+        fsm->event_queue.events = config->queue_storage;
+        fsm->event_queue.capacity = config->queue_capacity;
+    }
+#if FSM_CONF_INLINE_QUEUE
+    else {
+        fsm->event_queue.events = fsm->inline_queue;
+        fsm->event_queue.capacity = FSM_EVENT_QUEUE_SIZE;
+    }
+#else
+    else {
+        fsm->event_queue.events = NULL;
+        fsm->event_queue.capacity = 0U;
+    }
+#endif
+
+    if (fsm->event_queue.capacity < 2U) {
+        fsm->event_queue.events = NULL;
+        fsm->event_queue.capacity = 0U;
+    }
+
+    fsm_queue_reset(fsm);
+}
+
+void fsm_init_with_config(fsm_t *fsm,
+                          const fsm_state_t *initial_state,
+                          void *user_data,
+                          const fsm_config_t *config)
+{
+    if (fsm == NULL || initial_state == NULL) {
+        return;
+    }
+
     fsm->current_state = initial_state;
     fsm->user_data = user_data;
-    fsm->event_queue.head = 0;
-    fsm->event_queue.tail = 0;
-    fsm->state_entry_time = get_current_time_ms();
+    fsm->time_fn = (config != NULL && config->time_fn != NULL) ? config->time_fn : get_current_time_ms;
+    fsm->event_drop_cb = (config != NULL) ? config->on_event_drop : NULL;
+
+    fsm_bind_queue(fsm, config);
+
+    fsm->state_entry_time = fsm_now(fsm);
     fsm->has_timeout = false;
+}
+
+void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data)
+{
+    fsm_init_with_config(fsm, initial_state, user_data, NULL);
 }
 
 /**
@@ -126,13 +191,21 @@ void fsm_handle_event(fsm_t *fsm, uint8_t event) {
         // Optionally, log an error or handle the invalid FSM pointer
         return;
     }
-    uint8_t next_tail = (uint8_t)((fsm->event_queue.tail + 1U) % FSM_EVENT_QUEUE_SIZE);
+    if (fsm->event_queue.events == NULL || fsm->event_queue.capacity == 0U) {
+        return;
+    }
+
+    fsm_queue_index_t next_tail = fsm->event_queue.tail + 1U;
+    if (next_tail >= fsm->event_queue.capacity) {
+        next_tail = 0U;
+    }
+
     if (next_tail != fsm->event_queue.head) {
         fsm->event_queue.events[fsm->event_queue.tail] = event;
         fsm->event_queue.tail = next_tail;
-    } 
-    // If the queue is full, the event is simply not queued.
-    // Optionally, implement logging or error handling for discarded events.
+    } else if (fsm->event_drop_cb != NULL) {
+        fsm->event_drop_cb(fsm, event);
+    }
 }
 
 /**
@@ -167,20 +240,25 @@ void fsm_run(fsm_t *fsm) {
     fsm->has_timeout = false;
 
     // 1) se este estado tem timeout configurado, verifica se excedeu
-	if (s->timeout_ms > 0) {
-    	uint16_t now = get_current_time_ms();
-    	uint16_t elapsed = now - fsm->state_entry_time;
-    	if (elapsed >= s->timeout_ms) {
-        	// limpa fila e dispara evento de timeout
-        	fsm->event_queue.head = fsm->event_queue.tail;
+    if (s->timeout_ms > 0U) {
+        const uint16_t now = fsm_now(fsm);
+        const uint16_t elapsed = now - fsm->state_entry_time;
+        if (elapsed >= s->timeout_ms) {
+            // limpa fila e dispara evento de timeout
+            fsm_queue_reset(fsm);
             fsm->has_timeout = true;
-        	fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
-        	// atualiza timestamp (para não disparar repetidamente)f
-        	fsm->state_entry_time = now;
-    	}
-	}
+            fsm_handle_event(fsm, FSM_EVENT_STATE_TIMEOUT);
+            // atualiza timestamp (para não disparar repetidamente)
+            fsm->state_entry_time = now;
+        }
+    }
 
-
+    if (fsm->event_queue.events == NULL || fsm->event_queue.capacity == 0U) {
+        if (fsm->current_state->default_action) {
+            fsm->current_state->default_action(fsm);
+        }
+        return;
+    }
 
     // Check if we have an event to process
     if (fsm->event_queue.head == fsm->event_queue.tail) {
@@ -193,7 +271,10 @@ void fsm_run(fsm_t *fsm) {
 
     // Get next event from the queue
     uint8_t event = fsm->event_queue.events[fsm->event_queue.head];
-    fsm->event_queue.head = (uint8_t)((fsm->event_queue.head + 1U) % FSM_EVENT_QUEUE_SIZE);
+    fsm->event_queue.head = (fsm->event_queue.head + 1U);
+    if (fsm->event_queue.head >= fsm->event_queue.capacity) {
+        fsm->event_queue.head = 0U;
+    }
 
     // Try to find a matching transition for this event
     const fsm_state_t *state = fsm->current_state;
@@ -210,7 +291,7 @@ void fsm_run(fsm_t *fsm) {
                     transition->action(fsm);
                 }
                 fsm->current_state = transition->next_state;
-                fsm->state_entry_time = get_current_time_ms();
+                fsm->state_entry_time = fsm_now(fsm);
                 event_processed = true;
             } else {
                 /* Guard rejected transition, requeue event for future evaluation */

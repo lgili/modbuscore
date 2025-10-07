@@ -104,6 +104,38 @@ requests have been drained, e.g. before entering low-power modes.  The helper
 :func:`mb_server_inject_adu` is provided primarily for tests and simulations
 where the transport path is bypassed.
 
+Cooperative polling budgets
+---------------------------
+
+Gate 19 layered a micro-step scheduler on top of the existing poll loops.  The
+new :func:`mb_client_poll_with_budget` and :func:`mb_server_poll_with_budget`
+variants take an explicit ``steps`` parameter that caps how many FSM micro-steps
+are executed per call.  Passing ``0`` keeps the legacy behaviour (run until the
+machine idles), while any non-zero value bounds the work carried out during that
+tick.
+
+.. code-block:: c
+
+   while (app_running) {
+       mb_client_poll_with_budget(&client, 2U);
+       mb_server_poll_with_budget(&server, 1U);
+       do_other_work();
+   }
+
+Both FSMs enforce per-substate deadlines governed by
+``MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS`` and ``MB_CONF_SERVER_SUBSTATE_DEADLINE_MS``;
+expiring a deadline triggers a deterministic retry/exception path rather than
+wedging the scheduler.  Compile-time defaults for the budget can be provided via
+``MB_CONF_CLIENT_POLL_BUDGET_STEPS`` / ``MB_CONF_SERVER_POLL_BUDGET_STEPS`` so
+call sites can stick with the short form (`mb_client_poll` / `mb_server_poll`) if
+desired.
+
+Telemetry: the :c:type:`mb_client_metrics_t` and :c:type:`mb_server_metrics_t`
+structs now include ``step_max_jitter_ms`` and ``step_avg_jitter_ms`` fields.  To
+instrument individual phases, define ``MB_CONF_CLIENT_POLL_HOOK`` or
+``MB_CONF_SERVER_POLL_HOOK`` and collect statistics or toggle GPIOs around each
+micro-step without leaving the cooperative model.
+
 POSIX transport helper
 ----------------------
 

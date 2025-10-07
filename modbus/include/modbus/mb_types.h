@@ -69,6 +69,32 @@ typedef mb_u64 mb_time_ms_t;
 #define MB_ALIGN_UP(value, align) \
 	(((value) + ((align) - 1U)) & ~((align) - 1U))
 
+/* -------------------------------------------------------------------------- */
+/* Cooperative poll micro-step helpers                                        */
+/* -------------------------------------------------------------------------- */
+
+typedef enum {
+	MB_POLL_RX_PHASE_IDLE = 0,
+	MB_POLL_RX_PHASE_HEADER,
+	MB_POLL_RX_PHASE_BODY,
+	MB_POLL_RX_PHASE_VALIDATE,
+	MB_POLL_RX_PHASE_DISPATCH
+} mb_poll_rx_phase_t;
+
+typedef enum {
+	MB_POLL_TX_PHASE_IDLE = 0,
+	MB_POLL_TX_PHASE_BUILD,
+	MB_POLL_TX_PHASE_SEND,
+	MB_POLL_TX_PHASE_DRAIN
+} mb_poll_tx_phase_t;
+
+typedef struct {
+	mb_time_ms_t last_timestamp;
+	mb_time_ms_t max_delta_ms;
+	mb_u64 total_delta_ms;
+	mb_u32 samples;
+} mb_poll_jitter_t;
+
 /* Basic sanity checks ------------------------------------------------------ */
 
 MB_STATIC_ASSERT(sizeof(mb_u8) == 1,  "mb_u8 must be 8 bits");

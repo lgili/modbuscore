@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <modbus/conf.h>
 #include <modbus/client.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
@@ -102,6 +103,7 @@ static inline mb_err_t mb_embed_client_submit_raw(mb_client_t *client,
 /* Request helpers                                                            */
 /* -------------------------------------------------------------------------- */
 
+#if MB_CONF_ENABLE_FC03
 static inline mb_err_t mb_embed_submit_read_holding_registers(mb_client_t *client,
                                                               mb_u8 unit_id,
                                                               mb_u16 start_addr,
@@ -117,7 +119,9 @@ static inline mb_err_t mb_embed_submit_read_holding_registers(mb_client_t *clien
 
     return mb_embed_client_submit_raw(client, unit_id, pdu, sizeof(pdu), opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC04
 static inline mb_err_t mb_embed_submit_read_input_registers(mb_client_t *client,
                                                             mb_u8 unit_id,
                                                             mb_u16 start_addr,
@@ -133,7 +137,9 @@ static inline mb_err_t mb_embed_submit_read_input_registers(mb_client_t *client,
 
     return mb_embed_client_submit_raw(client, unit_id, pdu, sizeof(pdu), opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC01
 static inline mb_err_t mb_embed_submit_read_coils(mb_client_t *client,
                                                   mb_u8 unit_id,
                                                   mb_u16 start_addr,
@@ -149,7 +155,9 @@ static inline mb_err_t mb_embed_submit_read_coils(mb_client_t *client,
 
     return mb_embed_client_submit_raw(client, unit_id, pdu, sizeof(pdu), opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC06
 static inline mb_err_t mb_embed_submit_write_single_register(mb_client_t *client,
                                                              mb_u8 unit_id,
                                                              mb_u16 address,
@@ -165,7 +173,9 @@ static inline mb_err_t mb_embed_submit_write_single_register(mb_client_t *client
 
     return mb_embed_client_submit_raw(client, unit_id, pdu, sizeof(pdu), opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC10
 static inline mb_err_t mb_embed_submit_write_multiple_registers(mb_client_t *client,
                                                                 mb_u8 unit_id,
                                                                 mb_u16 start_addr,
@@ -183,7 +193,9 @@ static inline mb_err_t mb_embed_submit_write_multiple_registers(mb_client_t *cli
     const mb_size_t len = (mb_size_t)(6U + (count * 2U));
     return mb_embed_client_submit_raw(client, unit_id, pdu, len, opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC05
 static inline mb_err_t mb_embed_submit_write_single_coil(mb_client_t *client,
                                                          mb_u8 unit_id,
                                                          mb_u16 address,
@@ -199,7 +211,9 @@ static inline mb_err_t mb_embed_submit_write_single_coil(mb_client_t *client,
 
     return mb_embed_client_submit_raw(client, unit_id, pdu, sizeof(pdu), opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC0F
 static inline mb_err_t mb_embed_submit_write_multiple_coils(mb_client_t *client,
                                                             mb_u8 unit_id,
                                                             mb_u16 start_addr,
@@ -218,7 +232,9 @@ static inline mb_err_t mb_embed_submit_write_multiple_coils(mb_client_t *client,
     const mb_size_t len = (mb_size_t)(6U + byte_count);
     return mb_embed_client_submit_raw(client, unit_id, pdu, len, opts, out_txn);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC17
 static inline mb_err_t mb_embed_submit_readwrite_registers(mb_client_t *client,
                                                            mb_u8 unit_id,
                                                            mb_u16 read_start,
@@ -238,6 +254,7 @@ static inline mb_err_t mb_embed_submit_readwrite_registers(mb_client_t *client,
     const mb_size_t len = (mb_size_t)(10U + (write_quantity * 2U));
     return mb_embed_client_submit_raw(client, unit_id, pdu, len, opts, out_txn);
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
 /* Response helpers                                                           */

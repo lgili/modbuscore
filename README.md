@@ -1,7 +1,8 @@
 # Modbus C Library
 
 [![CI](https://github.com/lgili/modbus/actions/workflows/ci.yml/badge.svg)](https://github.com/lgili/modbus/actions/workflows/ci.yml)
-[![Docs](https://github.com/lgili/modbus/actions/workflows/ci.yml/badge.svg?label=docs)](https://lgili.github.io/modbus/)
+[![Docs](https://img.shields.io/website?label=docs&url=https%3A%2F%2Flgili.github.io%2Fmodbus%2Fdocs%2F)](https://lgili.github.io/modbus/docs/)
+[![Latest release](https://img.shields.io/github/v/release/lgili/modbus?display_name=tag)](https://github.com/lgili/modbus/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A modern, embedded-friendly implementation of Modbus RTU and Modbus TCP written
@@ -24,6 +25,9 @@ HALs can evolve independently.
 - **Backpressure & observability** – configurable queue capacity, per-function
   timeouts, poison-pill flush and latency/response metrics for both client and
   server paths (Gate 8).
+- **Cooperative micro-step polling** – bounded step budgets, substate
+  deadlines and jitter metrics for client and server FSMs so applications can
+  interleave Modbus work with other cooperative tasks (Gate 19).
 - **Portable HAL** – POSIX sockets, bare-metal tick adapters and FreeRTOS
   stream/queue bridges expose ready-made transports with optional mutex
   helpers (Gate 9).
@@ -148,10 +152,55 @@ cmake --preset host-release
 cmake --build --preset host-release
 ```
 
+### Cooperative polling & micro-step budgets
+
+Gate 19 introduces bounded poll loops so applications can share a single-threaded
+event loop without starving adjacent work.  Two new helpers mirror the legacy
+APIs while enforcing a step budget:
+
+- `mb_client_poll_with_budget(client, steps)`
+- `mb_server_poll_with_budget(server, steps)`
+
+Passing `steps == 0` preserves the previous behaviour (run until the FSM is out
+of work).  Typical integrations cap the budget to one or two micro-steps per
+iteration and interleave other duties in the same loop:
+
+```c
+while (app_running) {
+  mb_client_poll_with_budget(&client, 2U);
+  mb_server_poll_with_budget(&server, 1U);
+  service_sensors();
+}
+```
+
+Compile-time defaults can be set through `MB_CONF_CLIENT_POLL_BUDGET_STEPS` and
+`MB_CONF_SERVER_POLL_BUDGET_STEPS`.  Substate deadlines remain configurable via
+`MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS` / `MB_CONF_SERVER_SUBSTATE_DEADLINE_MS`,
+and the metrics structs now report per-step jitter so you can spot scheduling
+outliers.  Developers needing deeper insight can also hook
+`MB_CONF_CLIENT_POLL_HOOK` or `MB_CONF_SERVER_POLL_HOOK` to pulse trace probes
+around each phase.
+
 ### Minimise footprint
 
 The library can be built with only the client or server runtime to trim flash
 usage on embedded targets. Disable the unused component at configure time:
+
+### Footprint snapshot (host MinSizeRel)
+
+<!-- footprint:start -->
+| Target | Profile | ROM (archive) | ROM (objects) | RAM (objects) |
+|--------|---------|---------------|---------------|---------------|
+| host | TINY | 1263 | 18603 | 6066 |
+| host | LEAN | 1263 | 28667 | 8146 |
+| host | FULL | 1263 | 31579 | 8786 |
+| stm32g0 | TINY | 4169 | 0 | 0 |
+| stm32g0 | LEAN | 4757 | 0 | 0 |
+| stm32g0 | FULL | 4757 | 0 | 0 |
+| esp32c3 | TINY | 4882 | 0 | 0 |
+| esp32c3 | LEAN | 5424 | 0 | 0 |
+| esp32c3 | FULL | 5424 | 0 | 0 |
+<!-- footprint:end -->
 
 ```bash
 cmake -S . -B build/host-server-only -G Ninja \

@@ -32,6 +32,7 @@
 #include <modbus/base.h>
 #include <modbus/transport.h>
 #include <modbus/transport_if.h>
+#include <modbus/features.h>
 #if MB_CONF_TRANSPORT_RTU
 #include <modbus/transport/rtu.h>
 #endif

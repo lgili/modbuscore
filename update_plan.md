@@ -28,6 +28,8 @@ Vision & principles
 		• MODBUS_ENABLE_{CLIENT,SERVER,RTU,TCP,ASCII} with const tables in .rodata.
 		• CI script that reports ROM/RAM per profile (host and target, e.g., STM32G0/ESP32C3).
 		• Gate: automated report shows TINY ≤ x KiB ROM / ≤ y B RAM with limited FCs; FULL retains performance with no regressions.
+		• Progress 2025-10-08: Tightened TINY defaults to register-only FCs, introduced feature guards across headers/server paths, published the runtime feature descriptor (`modbus/features.h`), and added `scripts/ci/report_footprint.py` to emit ROM/RAM summaries per profile.
+		• Progress 2025-10-09: CI `footprint` job runs the host MinSizeRel sweep, verifies the README snapshot, and uploads a JSON artifact with current numbers.
 
 	⸻
 

@@ -193,6 +193,22 @@ typedef enum mb_conf_server_poll_phase {
 	MB_CONF_SERVER_POLL_PHASE_EXIT
 } mb_conf_server_poll_phase_t;
 
+#ifndef MB_CONF_CLIENT_POLL_BUDGET_STEPS
+#define MB_CONF_CLIENT_POLL_BUDGET_STEPS 0U
+#endif
+
+#ifndef MB_CONF_SERVER_POLL_BUDGET_STEPS
+#define MB_CONF_SERVER_POLL_BUDGET_STEPS 0U
+#endif
+
+#ifndef MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS
+#define MB_CONF_CLIENT_SUBSTATE_DEADLINE_MS 2U
+#endif
+
+#ifndef MB_CONF_SERVER_SUBSTATE_DEADLINE_MS
+#define MB_CONF_SERVER_SUBSTATE_DEADLINE_MS 2U
+#endif
+
 #ifndef MB_CONF_CLIENT_POLL_HOOK
 #define MB_CONF_CLIENT_POLL_HOOK(client_ptr, phase) do { (void)(client_ptr); (void)(phase); } while (0)
 #endif

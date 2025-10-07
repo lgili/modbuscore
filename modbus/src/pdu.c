@@ -27,6 +27,7 @@ static bool mb_pdu_validate_capacity(mb_size_t required, mb_size_t out_cap)
     return required <= out_cap;
 }
 
+#if MB_CONF_ENABLE_FC01 || MB_CONF_ENABLE_FC02 || MB_CONF_ENABLE_FC05 || MB_CONF_ENABLE_FC0F
 static mb_size_t mb_pdu_bits_to_bytes(mb_u16 bit_count)
 {
     return (mb_size_t)((bit_count + 7U) / 8U);
@@ -47,7 +48,9 @@ static bool mb_pdu_is_valid_coil_encoding(mb_u16 value)
 {
     return (value == MB_PDU_COIL_OFF_VALUE) || (value == MB_PDU_COIL_ON_VALUE);
 }
+#endif
 
+#if MB_CONF_ENABLE_FC01
 mb_err_t mb_pdu_build_read_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity)
 {
     const mb_size_t required = 5U;
@@ -155,6 +158,9 @@ mb_err_t mb_pdu_parse_read_coils_response(const mb_u8 *pdu, mb_size_t len, const
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC02
 mb_err_t mb_pdu_build_read_discrete_inputs_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity)
 {
     const mb_size_t required = 5U;
@@ -262,6 +268,9 @@ mb_err_t mb_pdu_parse_read_discrete_inputs_response(const mb_u8 *pdu, mb_size_t 
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC03
 mb_err_t mb_pdu_build_read_holding_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity)
 {
     const mb_size_t required = 5U;
@@ -373,6 +382,9 @@ mb_err_t mb_pdu_parse_read_holding_response(const mb_u8 *pdu, mb_size_t len, con
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC04
 mb_err_t mb_pdu_build_read_input_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, mb_u16 quantity)
 {
     const mb_size_t required = 5U;
@@ -484,6 +496,11 @@ mb_err_t mb_pdu_parse_read_input_response(const mb_u8 *pdu, mb_size_t len, const
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+// --------------------------------------------------------------------------
+
+#if MB_CONF_ENABLE_FC06
 mb_err_t mb_pdu_build_write_single_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 value)
 {
     const mb_size_t required = 5U;
@@ -534,6 +551,9 @@ mb_err_t mb_pdu_parse_write_single_response(const mb_u8 *pdu, mb_size_t len, mb_
     return mb_pdu_parse_write_single_request(pdu, len, out_address, out_value);
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC05
 mb_err_t mb_pdu_build_write_single_coil_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, bool coil_on)
 {
     const mb_size_t required = 5U;
@@ -589,6 +609,9 @@ mb_err_t mb_pdu_parse_write_single_coil_response(const mb_u8 *pdu, mb_size_t len
     return mb_pdu_parse_write_single_coil_request(pdu, len, out_address, out_coil_on);
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC07
 mb_err_t mb_pdu_build_read_exception_status_request(mb_u8 *out, mb_size_t out_cap)
 {
     if (out == NULL) {
@@ -648,6 +671,9 @@ mb_err_t mb_pdu_parse_read_exception_status_response(const mb_u8 *pdu, mb_size_t
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC11
 mb_err_t mb_pdu_build_report_server_id_request(mb_u8 *out, mb_size_t out_cap)
 {
     if (out == NULL) {
@@ -733,6 +759,9 @@ mb_err_t mb_pdu_parse_report_server_id_response(const mb_u8 *pdu, mb_size_t len,
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC10
 mb_err_t mb_pdu_build_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const mb_u16 *values, mb_u16 count)
 {
     if (out == NULL || values == NULL) {
@@ -854,6 +883,9 @@ mb_err_t mb_pdu_parse_write_multiple_response(const mb_u8 *pdu, mb_size_t len, m
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC0F
 mb_err_t mb_pdu_build_write_multiple_coils_request(mb_u8 *out, mb_size_t out_cap, mb_u16 start_addr, const bool *coils, mb_u16 count)
 {
     if (out == NULL || coils == NULL) {
@@ -974,6 +1006,9 @@ mb_err_t mb_pdu_parse_write_multiple_coils_response(const mb_u8 *pdu, mb_size_t 
     return MODBUS_ERROR_NONE;
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC16
 mb_err_t mb_pdu_build_mask_write_register_request(mb_u8 *out, mb_size_t out_cap, mb_u16 address, mb_u16 and_mask, mb_u16 or_mask)
 {
     const mb_size_t required = 7U;
@@ -1029,6 +1064,9 @@ mb_err_t mb_pdu_parse_mask_write_register_response(const mb_u8 *pdu, mb_size_t l
     return mb_pdu_parse_mask_write_register_request(pdu, len, out_address, out_and_mask, out_or_mask);
 }
 
+#endif
+
+#if MB_CONF_ENABLE_FC17
 mb_err_t mb_pdu_build_read_write_multiple_request(mb_u8 *out, mb_size_t out_cap, mb_u16 read_start_addr, mb_u16 read_quantity, mb_u16 write_start_addr, const mb_u16 *write_values, mb_u16 write_quantity)
 {
     if (out == NULL || write_values == NULL) {
@@ -1181,6 +1219,8 @@ mb_err_t mb_pdu_parse_read_write_multiple_response(const mb_u8 *pdu, mb_size_t l
 
     return MODBUS_ERROR_NONE;
 }
+#endif
+
 mb_err_t mb_pdu_build_exception(mb_u8 *out, mb_size_t out_cap, mb_u8 function, mb_u8 exception_code)
 {
     if (out == NULL) {

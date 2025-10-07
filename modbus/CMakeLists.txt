@@ -12,9 +12,9 @@ set(SOURCES
   src/utils.c
   src/fsm.c
   src/core.c
+  src/features.c
   src/port/bare.c
   src/port/freertos.c
-  src/port/mutex.c
 )
 
 if(MODBUS_ENABLE_TRANSPORT_ASCII)
@@ -43,7 +43,11 @@ if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
 endif()
 
-if(NOT WIN32)
+if(MODBUS_ENABLE_PORT_MUTEX)
+  list(APPEND SOURCES src/port/mutex.c)
+endif()
+
+if(NOT WIN32 AND MODBUS_ENABLE_PORT_POSIX)
   list(APPEND SOURCES src/port/posix.c)
 endif()
 
@@ -69,11 +73,10 @@ set(HEADERS_PUBLIC
   include/modbus/transport_if.h
   include/modbus/base.h
   include/modbus/mb_embed.h
+  include/modbus/features.h
   include/modbus/utils.h
   include/modbus/fsm.h
   include/modbus/core.h
-  include/modbus/port/mutex.h
-  include/modbus/port/posix.h
   include/modbus/port/freertos.h
   include/modbus/port/bare.h
   
@@ -100,6 +103,14 @@ endif()
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND HEADERS_PUBLIC include/modbus/client.h)
+endif()
+
+if(MODBUS_ENABLE_PORT_MUTEX)
+  list(APPEND HEADERS_PUBLIC include/modbus/port/mutex.h)
+endif()
+
+if(NOT WIN32 AND MODBUS_ENABLE_PORT_POSIX)
+  list(APPEND HEADERS_PUBLIC include/modbus/port/posix.h)
 endif()
 
 if(WIN32)
@@ -144,12 +155,26 @@ else()
   set(_mb_conf_transport_tcp 0)
 endif()
 
+if(MODBUS_ENABLE_PORT_MUTEX)
+  set(_mb_conf_port_mutex 1)
+else()
+  set(_mb_conf_port_mutex 0)
+endif()
+
+if(MODBUS_ENABLE_PORT_POSIX)
+  set(_mb_conf_port_posix 1)
+else()
+  set(_mb_conf_port_posix 0)
+endif()
+
 target_compile_definitions(${LIBRARY_NAME} PUBLIC
   MB_CONF_BUILD_CLIENT=${_mb_conf_build_client}
   MB_CONF_BUILD_SERVER=${_mb_conf_build_server}
   MB_CONF_TRANSPORT_RTU=${_mb_conf_transport_rtu}
   MB_CONF_TRANSPORT_ASCII=${_mb_conf_transport_ascii}
   MB_CONF_TRANSPORT_TCP=${_mb_conf_transport_tcp}
+  MB_CONF_PORT_MUTEX=${_mb_conf_port_mutex}
+  MB_CONF_PORT_POSIX=${_mb_conf_port_posix}
   MB_CONF_PROFILE=${MB_CONF_PROFILE_ID}
   MB_CONF_ENABLE_FC01=${MB_CONF_ENABLE_FC01}
   MB_CONF_ENABLE_FC02=${MB_CONF_ENABLE_FC02}

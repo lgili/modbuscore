@@ -34,7 +34,7 @@
  * };
  *
  * // Define the IDLE state
- * const fsm_state_t state_idle = FSM_STATE("IDLE", 0, state_idle_transitions, NULL);
+ * const fsm_state_t state_idle = FSM_STATE("IDLE", 0, state_idle_transitions, NULL, 0);
  *
  * // Define transitions for the RUNNING state
  * static const fsm_transition_t state_running_transitions[] = {
@@ -42,7 +42,7 @@
  * };
  *
  * // Define the RUNNING state
- * const fsm_state_t state_running = FSM_STATE("RUNNING", 1, state_running_transitions, on_run_action);
+ * const fsm_state_t state_running = FSM_STATE("RUNNING", 1, state_running_transitions, on_run_action, 0);
  *
  * // Initialize and use the FSM
  * fsm_t my_fsm;
@@ -76,6 +76,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef FSM_EVENT_QUEUE_SIZE
+#define FSM_EVENT_QUEUE_SIZE 20
+#endif
+
+#ifndef FSM_CONF_INLINE_QUEUE
+#define FSM_CONF_INLINE_QUEUE 1
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -84,7 +92,7 @@ extern "C" {
 #define FSM_EVENT_STATE_TIMEOUT  0xFF
 #endif
 
-
+typedef uint16_t fsm_queue_index_t;
 
 /**
  * @brief Opaque structure representing the FSM.
@@ -134,6 +142,10 @@ typedef void (*fsm_action_t)(fsm_t *fsm);
  */
 typedef bool (*fsm_guard_t)(fsm_t *fsm);
 
+typedef uint16_t (*fsm_time_fn_t)(void);
+
+typedef void (*fsm_event_drop_cb_t)(fsm_t *fsm, uint8_t event);
+
 /**
  * @brief Structure representing a single transition in the FSM.
  *
@@ -168,25 +180,23 @@ struct fsm_state {
 };
 
 /**
- * @brief Defines the size of the event queue.
- *
- * Adjust this as necessary. If the queue is full and a new event is handled,
- * the new event is discarded.
- */
-#ifndef FSM_EVENT_QUEUE_SIZE
-#define FSM_EVENT_QUEUE_SIZE 20
-#endif
-
-/**
  * @brief Structure for the FSM's event queue.
  *
  * Implements a circular buffer storing events until processed by `fsm_run()`.
  */
 typedef struct {
-    volatile uint8_t events[FSM_EVENT_QUEUE_SIZE];  /**< Circular buffer of events. */
-    volatile uint8_t head;                          /**< Index of the next event to process. */
-    volatile uint8_t tail;                          /**< Index where the next event will be added. */
+    uint8_t *events;                                /**< Circular buffer of events. */
+    volatile fsm_queue_index_t head;                /**< Index of the next event to process. */
+    volatile fsm_queue_index_t tail;                /**< Index where the next event will be added. */
+    fsm_queue_index_t capacity;                     /**< Total number of entries in the queue. */
 } fsm_event_queue_t;
+
+typedef struct {
+    uint8_t *queue_storage;             /**< Optional external queue storage (must hold at least 2 entries). */
+    fsm_queue_index_t queue_capacity;   /**< Capacity of the external queue. */
+    fsm_time_fn_t time_fn;              /**< Optional time function override. */
+    fsm_event_drop_cb_t on_event_drop;  /**< Optional callback for dropped events. */
+} fsm_config_t;
 
 /**
  * @brief Structure representing the finite state machine.
@@ -200,8 +210,13 @@ struct fsm {
     const fsm_state_t *current_state;   /**< Pointer to the current state. */
     void *user_data;                    /**< User data associated with the FSM instance. */
     fsm_event_queue_t event_queue;      /**< Event queue for handling asynchronous events. */
+    fsm_time_fn_t time_fn;              /**< Time retrieval callback. */
+    fsm_event_drop_cb_t event_drop_cb;  /**< Callback invoked when an event is dropped. */
     uint16_t state_entry_time;
     bool has_timeout;
+#if FSM_CONF_INLINE_QUEUE
+    uint8_t inline_queue[FSM_EVENT_QUEUE_SIZE]; /**< Default inline queue storage. */
+#endif
 };
 
 /**
@@ -220,6 +235,25 @@ struct fsm {
  * ```
  */
 void fsm_init(fsm_t *fsm, const fsm_state_t *initial_state, void *user_data);
+
+/**
+ * @brief Initializes the FSM with explicit configuration.
+ *
+ * Allows callers to override the time source, provide external queue storage,
+ * and install a callback for dropped events. If @p config is NULL, the FSM
+ * falls back to the default inline queue (when @ref FSM_CONF_INLINE_QUEUE is 1).
+ * When supplying external storage, ensure @p queue_capacity is at least 2 so
+ * that the circular buffer can distinguish between empty and full states.
+ *
+ * @param fsm            Pointer to the FSM instance.
+ * @param initial_state  Pointer to the initial state.
+ * @param user_data      Pointer to user-defined data (can be `NULL`).
+ * @param config         Optional configuration structure (can be `NULL`).
+ */
+void fsm_init_with_config(fsm_t *fsm,
+                          const fsm_state_t *initial_state,
+                          void *user_data,
+                          const fsm_config_t *config);
 
 /**
  * @brief Queues an event for the FSM.
@@ -282,13 +316,14 @@ void fsm_run(fsm_t *fsm);
  * static const fsm_transition_t idle_transitions[] = {
  *     FSM_TRANSITION(EVENT_START, state_running, start_action, NULL)
  * };
- * const fsm_state_t state_idle = FSM_STATE("IDLE", 0, idle_transitions, NULL);
+ * const fsm_state_t state_idle = FSM_STATE("IDLE", 0, idle_transitions, NULL, 0);
  * @endcode
  *
  * @param _name            Name of the state (string).
  * @param _state_id        Numeric ID of the state.
  * @param _transitions     Array of transitions.
  * @param _default_action  Default action function to execute when no events are pending (or `NULL`).
+ * @param _timeout         Timeout in milliseconds before @ref FSM_EVENT_STATE_TIMEOUT is emitted (0 to disable).
  *
  * @return Initialized `fsm_state_t` structure.
  */
