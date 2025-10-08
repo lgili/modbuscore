@@ -106,6 +106,20 @@
 #define MB_CONF_DIAG_TRACE_DEPTH 64
 #endif
 
+/**
+ * @brief Enable power management and idle callbacks (Gate 27)
+ * 
+ * When enabled, provides:
+ * - Idle detection
+ * - Callback when idle > threshold
+ * - Support for low-power modes and tickless RTOS
+ * 
+ * Cost: ~64 bytes RAM per client/server instance
+ */
+#ifndef MB_CONF_ENABLE_POWER_MANAGEMENT
+#define MB_CONF_ENABLE_POWER_MANAGEMENT 1
+#endif
+
 #define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.

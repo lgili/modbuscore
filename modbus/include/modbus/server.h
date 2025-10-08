@@ -26,6 +26,15 @@
 #include <modbus/transport_if.h>
 #include <modbus/transport/rtu.h>
 
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+#include <modbus/mb_power.h>
+#endif
+
+/* Forward declaration for power management (when not included above) */
+#if !MB_CONF_ENABLE_POWER_MANAGEMENT
+typedef struct mb_idle_config mb_idle_config_t;
+#endif
+
 #define MB_SERVER_DEFAULT_TIMEOUT_MS 200U
 #define MB_SERVER_MAX_TIMEOUT_MS     60000U
 
@@ -157,6 +166,9 @@ typedef struct {
 
     mb_u8 rx_buffer[MB_PDU_MAX];
     mb_u8 tx_buffer[MB_PDU_MAX];
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+    mb_idle_config_t idle_config;
+#endif
 } mb_server_t;
 
 /**

@@ -54,6 +54,9 @@ list(APPEND SOURCES src/mb_isr.c)
 # QoS and backpressure (Gate 24)
 list(APPEND SOURCES src/mb_qos.c)
 
+# Power management (Gate 27) - enabled by MB_CONF_ENABLE_POWER_MANAGEMENT
+list(APPEND SOURCES src/mb_power.c)
+
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
   # Add high-level convenience functions for common operations

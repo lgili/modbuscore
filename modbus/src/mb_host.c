@@ -20,9 +20,12 @@
 #include <errno.h>
 
 #if defined(_WIN32)
-#include <windows.h>
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+    // Disable deprecation warnings for standard C functions on MSVC
+    #pragma warning(disable: 4996)
 #else
-#include <unistd.h>
+    #include <unistd.h>
 #endif
 
 #if MB_CONF_TRANSPORT_TCP
@@ -85,6 +88,7 @@ static int parse_host_port(const char *host_port, char *host, size_t host_len, u
     if (host_part_len >= host_len) {
         return -1; // Host too long
     }
+    // Use memcpy instead of strncpy to avoid MSVC warnings
     memcpy(host, host_port, host_part_len);
     host[host_part_len] = '\0';
 

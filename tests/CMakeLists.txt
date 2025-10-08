@@ -57,6 +57,7 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_isr.cpp  # Gate 23: ISR-safe mode
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_qos.cpp  # Gate 24: QoS and backpressure
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_diag.cpp # Gate 25: Compact diagnostics
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_power.cpp # Gate 27: Power management
 )
 
 # Add concurrency tests when ThreadSanitizer is enabled

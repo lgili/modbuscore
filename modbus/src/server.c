@@ -5,6 +5,10 @@
 
 #include <modbus/mb_log.h>
 
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+#include <modbus/mb_power.h>
+#endif
+
 static const mb_u16 kExceptionIllegalFunction = MB_EX_ILLEGAL_FUNCTION;
 static const mb_u16 kExceptionIllegalDataAddress = MB_EX_ILLEGAL_DATA_ADDRESS;
 static const mb_u16 kExceptionIllegalDataValue = MB_EX_ILLEGAL_DATA_VALUE;
@@ -1143,6 +1147,13 @@ mb_err_t mb_server_poll_with_budget(mb_server_t *server, mb_size_t steps)
 
     MB_CONF_SERVER_POLL_HOOK(server, MB_CONF_SERVER_POLL_PHASE_AFTER_STATE);
     MB_CONF_SERVER_POLL_HOOK(server, MB_CONF_SERVER_POLL_PHASE_EXIT);
+
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+    // Invoke idle callback if server is idle and callback is registered
+    // This allows the application to enter low-power mode
+    (void)mb_server_invoke_idle_callback_internal(server);
+#endif
+
     return status;
 }
 

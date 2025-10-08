@@ -23,6 +23,16 @@
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
 #include <modbus/observe.h>
+
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+#include <modbus/mb_power.h>
+#endif
+
+/* Forward declaration for power management (when not included above) */
+#if !MB_CONF_ENABLE_POWER_MANAGEMENT
+typedef struct mb_idle_config mb_idle_config_t;
+#endif
+
 #if MB_CONF_TRANSPORT_RTU
 #include <modbus/transport/rtu.h>
 #endif
@@ -152,6 +162,9 @@ typedef struct mb_client {
     void *observer_user;
     bool trace_hex;
     mb_poll_jitter_t poll_jitter;
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+    mb_idle_config_t idle_config;
+#endif
 } mb_client_t;
 
 /**

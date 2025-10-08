@@ -9,6 +9,10 @@
 #include <modbus/core.h>
 #include <modbus/pdu.h>
 
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+#include <modbus/mb_power.h>
+#endif
+
 #define MB_CLIENT_TIMEOUT_DEFAULT MB_CLIENT_DEFAULT_TIMEOUT_MS
 #define MB_CLIENT_BACKOFF_DEFAULT MB_CLIENT_DEFAULT_RETRY_BACKOFF_MS
 
@@ -1149,6 +1153,13 @@ mb_err_t mb_client_poll_with_budget(mb_client_t *client, mb_size_t steps)
 
     MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_AFTER_STATE);
     MB_CONF_CLIENT_POLL_HOOK(client, MB_CONF_CLIENT_POLL_PHASE_EXIT);
+
+#if MB_CONF_ENABLE_POWER_MANAGEMENT
+    // Invoke idle callback if client is idle and callback is registered
+    // This allows the application to enter low-power mode
+    (void)mb_client_invoke_idle_callback_internal(client);
+#endif
+
     return status;
 }
 
