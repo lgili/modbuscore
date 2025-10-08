@@ -287,7 +287,7 @@ TEST_F(MbIovecTest, StatsTracking) {
 
 TEST_F(MbIovecTest, SimulateRingBufferTx) {
     // Simulate encoding a PDU directly into a ring buffer view
-    uint8_t ring[256];
+    uint8_t ring[256] = {0};
     mb_iovec_t vectors[2];
     mb_iovec_list_t list;
     

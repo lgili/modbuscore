@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <modbus/mb_isr.h>
 #include <modbus/mb_queue.h>
+#include <algorithm>
 #include <thread>
 #include <chrono>
 #include <vector>

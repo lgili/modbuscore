@@ -32,8 +32,19 @@ static void sleep_ms(unsigned int milliseconds)
 static void usage(const char *prog)
 {
     fprintf(stderr,
-            "Usage: %s --host <hostname> --port <port> --unit <id> --register <addr> --count <n> [--expect v1,v2,...]\n",
-            prog);
+            "Usage: %s --host <hostname> --port <port> --unit <id> --register <addr> [OPTIONS]\n"
+            "\n"
+            "Read mode:\n"
+            "  --count <n>              Read <n> holding registers (FC03)\n"
+            "  [--expect v1,v2,...]     Expected values for validation\n"
+            "\n"
+            "Write mode:\n"
+            "  --write <value>          Write single register (FC06)\n"
+            "\n"
+            "Examples:\n"
+            "  %s --host 127.0.0.1 --port 502 --unit 1 --register 100 --count 10\n"
+            "  %s --host 127.0.0.1 --port 502 --unit 1 --register 100 --write 1234\n",
+            prog, prog, prog);
 }
 
 typedef struct {
@@ -156,6 +167,7 @@ int main(int argc, char **argv)
     int unit_id = -1;
     int reg_addr = -1;
     int reg_count = -1;
+    int write_value = -1;  // -1 means read mode, >= 0 means write mode
     mb_u16 expected[MB_PDU_MAX / 2] = {0};
     mb_size_t expected_count = 0U;
 
@@ -170,6 +182,8 @@ int main(int argc, char **argv)
             reg_addr = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--count") == 0 && (i + 1) < argc) {
             reg_count = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--write") == 0 && (i + 1) < argc) {
+            write_value = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--expect") == 0 && (i + 1) < argc) {
             if (!parse_expected(argv[++i], expected, &expected_count)) {
                 fprintf(stderr, "Failed to parse expected values.\n");
@@ -181,7 +195,24 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!host || port <= 0 || unit_id < 0 || reg_addr < 0 || reg_count <= 0) {
+    // Validate arguments
+    if (!host || port <= 0 || unit_id < 0 || reg_addr < 0) {
+        usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    // Must specify either --count (read) or --write (write), not both
+    const bool is_write_mode = (write_value >= 0);
+    const bool is_read_mode = (reg_count > 0);
+    
+    if (is_write_mode && is_read_mode) {
+        fprintf(stderr, "Error: Cannot specify both --count and --write\n");
+        usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+    
+    if (!is_write_mode && !is_read_mode) {
+        fprintf(stderr, "Error: Must specify either --count (read) or --write (write)\n");
         usage(argv[0]);
         return EXIT_FAILURE;
     }
@@ -217,20 +248,37 @@ int main(int argc, char **argv)
     mb_client_set_watchdog(&client, 5000U);
     mb_client_set_event_callback(&client, client_event_sink, NULL);
 
-    mb_u8 pdu[5];
-    mb_size_t pdu_len = sizeof(pdu);
-    err = mb_pdu_build_read_holding_request(pdu, pdu_len, (mb_u16)reg_addr, (mb_u16)reg_count);
-    if (!mb_err_is_ok(err)) {
-        fprintf(stderr, "Failed to build request: %s\n", mb_err_str(err));
-        demo_tcp_socket_close(&tcp_sock);
-        return EXIT_FAILURE;
+    mb_u8 pdu[256];
+    mb_size_t pdu_len;
+    mb_u8 function_code;
+
+    if (is_write_mode) {
+        // FC06 - Write Single Register (5 bytes: FC + addr + value)
+        pdu_len = 5U;
+        err = mb_pdu_build_write_single_request(pdu, sizeof(pdu), (mb_u16)reg_addr, (mb_u16)write_value);
+        function_code = MB_PDU_FC_WRITE_SINGLE_REGISTER;
+        if (!mb_err_is_ok(err)) {
+            fprintf(stderr, "Failed to build FC06 write request: %s\n", mb_err_str(err));
+            demo_tcp_socket_close(&tcp_sock);
+            return EXIT_FAILURE;
+        }
+    } else {
+        // FC03 - Read Holding Registers (5 bytes: FC + addr + count)
+        pdu_len = 5U;
+        err = mb_pdu_build_read_holding_request(pdu, sizeof(pdu), (mb_u16)reg_addr, (mb_u16)reg_count);
+        function_code = MB_PDU_FC_READ_HOLDING_REGISTERS;
+        if (!mb_err_is_ok(err)) {
+            fprintf(stderr, "Failed to build FC03 read request: %s\n", mb_err_str(err));
+            demo_tcp_socket_close(&tcp_sock);
+            return EXIT_FAILURE;
+        }
     }
 
     mb_client_request_t request = {
         .flags = 0U,
         .request = {
             .unit_id = (mb_u8)unit_id,
-            .function = MB_PDU_FC_READ_HOLDING_REGISTERS,
+            .function = function_code,
             .payload = &pdu[1],
             .payload_len = pdu_len - 1U,
         },
@@ -277,21 +325,27 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    printf("Read %zu holding registers starting at %d:\n", result.count, reg_addr);
-    for (mb_size_t i = 0; i < result.count; ++i) {
-        printf("  [%zu] = %u\n", i, result.registers[i]);
-    }
-
-    if (expected_count > 0U) {
-        if (expected_count != result.count) {
-            fprintf(stderr, "Expected %zu values but received %zu.\n", expected_count, result.count);
-            return EXIT_FAILURE;
+    if (is_write_mode) {
+        // FC06 - Write Single Register response
+        printf("Successfully wrote value %d to register %d\n", write_value, reg_addr);
+    } else {
+        // FC03 - Read Holding Registers response
+        printf("Read %zu holding registers starting at %d:\n", result.count, reg_addr);
+        for (mb_size_t i = 0; i < result.count; ++i) {
+            printf("  [%zu] = %u\n", i, result.registers[i]);
         }
-        for (mb_size_t i = 0; i < expected_count; ++i) {
-            if (expected[i] != result.registers[i]) {
-                fprintf(stderr, "Mismatch at index %zu: expected %u got %u.\n",
-                        i, expected[i], result.registers[i]);
+
+        if (expected_count > 0U) {
+            if (expected_count != result.count) {
+                fprintf(stderr, "Expected %zu values but received %zu.\n", expected_count, result.count);
                 return EXIT_FAILURE;
+            }
+            for (mb_size_t i = 0; i < expected_count; ++i) {
+                if (expected[i] != result.registers[i]) {
+                    fprintf(stderr, "Mismatch at index %zu: expected %u got %u.\n",
+                            i, expected[i], result.registers[i]);
+                    return EXIT_FAILURE;
+                }
             }
         }
     }

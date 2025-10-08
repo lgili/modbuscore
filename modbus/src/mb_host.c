@@ -14,11 +14,16 @@
 #include <modbus/mb_err.h>
 #include <modbus/mb_log.h>
 #include <modbus/pdu.h>
-#include <unistd.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #if MB_CONF_TRANSPORT_TCP
 #include <modbus/transport/tcp.h>
@@ -65,8 +70,12 @@ static int parse_host_port(const char *host_port, char *host, size_t host_len, u
     const char *colon = strchr(host_port, ':');
     if (colon == NULL) {
         // No port specified, use default 502
-        strncpy(host, host_port, host_len - 1);
-        host[host_len - 1] = '\0';
+        size_t len = strlen(host_port);
+        if (len >= host_len) {
+            return -1; // Host too long
+        }
+        memcpy(host, host_port, len);
+        host[len] = '\0';
         *port = 502;
         return 0;
     }

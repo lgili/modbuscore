@@ -282,6 +282,67 @@ mb_client_reset_diag(&client);
 
 👉 **Learn more:** [docs/diagnostics.md](docs/diagnostics.md)
 
+### 🔗 Interoperability Testing (Gate 26)
+
+**Docker-based test rig with PCAP capture for multi-vendor validation:**
+
+- ✅ **Multi-implementation matrix** – Test against pymodbus, libmodbus, modpoll, diagslave
+- ✅ **Golden PCAPs** – Capture protocol traces for every test scenario
+- ✅ **Protocol compliance** – Validate MBAP headers, TID matching, function codes via tshark
+- ✅ **Compatibility reports** – Generate Markdown/HTML/JSON matrices
+- ✅ **CI integration** – Automated testing on every commit
+
+**Quick Start:**
+```bash
+# Build Docker test environment
+docker build -t modbus-interop -f interop/Dockerfile .
+
+# Run all interop tests (24 scenarios)
+docker run --rm \
+  -v $(pwd)/interop/pcaps:/pcaps \
+  -v $(pwd)/interop/results:/results \
+  -e CAPTURE_PCAP=1 \
+  modbus-interop run-all
+
+# Generate compatibility matrix
+docker run --rm \
+  -v $(pwd)/interop/results:/results \
+  modbus-interop generate-report --format markdown
+cat interop/results/matrix.md
+```
+
+**Test Coverage:**
+- **Function Codes**: FC03 (read holding), FC06 (write single), FC16 (write multiple), error handling
+- **Implementations**: pymodbus 3.5.4, libmodbus 3.1.10, modpoll, diagslave, this library
+- **PCAP Validation**: MBAP headers, transaction ID matching, function code verification
+- **Total Scenarios**: 24 (6 implementations × 4 function codes)
+
+**Example Output:**
+```
+=== Interop Test Summary ===
+Total:  24
+Passed: 24
+Failed: 0
+
+Compatibility Matrix saved to:
+  - interop/results/matrix.md (Markdown)
+  - interop/results/matrix.html (HTML)
+  - interop/results/matrix.json (JSON)
+
+PCAPs captured:
+  - pymodbus_to_pymodbus_fc03.pcapng
+  - libmodbus_to_diagslave_fc06.pcapng
+  - ... (22 more)
+```
+
+**CI Integration:**
+- Automatic execution on GitHub Actions
+- Docker build and test in `interop-matrix` job
+- Artifacts uploaded: PCAPs (24 files) + results (JSON/MD/HTML)
+- 30-day retention for historical analysis
+
+👉 **Learn more:** [interop/README.md](interop/README.md)
+
 ---
 
 ## 🏗️ Project Status
@@ -309,6 +370,7 @@ mb_client_reset_diag(&client);
 | 23 | ISR-safe mode (<100µs turnaround) | ✅ |
 | 24 | QoS & backpressure (priority queues) | ✅ |
 | 25 | Compact on-device diagnostics | ✅ |
+| 26 | Interop rig & golden PCAPs | ✅ |
 | **20.5** | **Developer Experience Polish (NEW!)** | 🚧 |
 
 **Function Code Coverage:** 12 FCs supported across client/server (see table below)

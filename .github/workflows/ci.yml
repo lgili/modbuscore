@@ -323,16 +323,98 @@ jobs:
         shell: bash
 
   interop-matrix:
-    if: ${{ false }} # Stub reserved for the Gate 26/36 interop roll-out
+    name: Gate 26 - Interoperability Matrix
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - name: Produce stub interop report
-        run: python3 scripts/ci/interop_matrix_stub.py --output build/interop/stub.json
-        shell: bash
-      - name: Upload interop matrix stub
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build interop Docker image
+        run: docker build -t modbus-interop -f interop/Dockerfile .
+        timeout-minutes: 15
+      
+      - name: Create output directories
+        run: |
+          mkdir -p interop/pcaps interop/results
+      
+      - name: Run interop tests (baseline)
+        run: |
+          docker run --rm \
+            -v $(pwd)/interop/results:/results \
+            modbus-interop test-simple
+        timeout-minutes: 5
+      
+      - name: Display baseline test results
+        if: always()
+        run: |
+          if [ -f interop/results/interop_results.json ]; then
+            echo "=== Baseline Test Results ==="
+            cat interop/results/interop_results.json | python3 -m json.tool
+          else
+            echo "ERROR: No baseline results file found"
+            exit 1
+          fi
+      
+      - name: Run expanded interop tests (all function codes + implementations)
+        run: |
+          docker run --rm \
+            -v $(pwd)/interop/results:/results \
+            -v $(pwd)/interop/pcaps:/results/pcaps \
+            modbus-interop test-expanded
+        timeout-minutes: 15
+        
+      - name: Display expanded test results
+        if: always()
+        run: |
+          if [ -f interop/results/interop_results.json ]; then
+            echo "=== Expanded Interop Test Results ==="
+            cat interop/results/interop_results.json | python3 -m json.tool
+            
+            # Check pass rate
+            passed=$(cat interop/results/interop_results.json | python3 -c "import sys,json; print(json.load(sys.stdin)['passed'])")
+            total=$(cat interop/results/interop_results.json | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])")
+            echo ""
+            echo "Pass Rate: $passed/$total"
+            
+            # Gate 26 requires 100% pass rate
+            if [ "$passed" != "$total" ]; then
+              echo "ERROR: Gate 26 requires 100% passing tests"
+              exit 1
+            fi
+          else
+            echo "ERROR: No expanded results file found"
+            exit 1
+          fi
+      
+      - name: Upload interop artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: interop-matrix-stub
-          path: build/interop/stub.json
+          name: interop-results
+          path: |
+            interop/results/*.json
+            interop/pcaps/*.pcap
+          retention-days: 30
+      
+      - name: Check for test failures
+        run: |
+          if [ -f interop/results/interop_results.json ]; then
+            python3 <<'EOF'
+          import json, sys
+          with open('interop/results/interop_results.json') as f:
+              data = json.load(f)
+              if data['failed'] > 0:
+                  print(f"ERROR: {data['failed']} interop tests failed!")
+                  sys.exit(1)
+              else:
+                  print(f"SUCCESS: All {data['passed']} tests passed!")
+          EOF
+          else
+            echo "ERROR: No interop results found!"
+            exit 1
+          fi
+
+  # Modbus TCP client/server integration test
