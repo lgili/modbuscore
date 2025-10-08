@@ -54,10 +54,30 @@ typedef enum modbus_error {
  */
 typedef modbus_error_t mb_err_t;
 
+/*
+ * Windows SDK (winuser.h) defines MB_OK for MessageBox return values.
+ * We need to undefine it and redefine for Modbus use.
+ * 
+ * Note: This is safe because:
+ * 1. We only use MB_OK in Modbus context (error codes)
+ * 2. Windows MessageBox APIs use the full Windows types (int, not mb_err_t)
+ * 3. No code should be mixing MessageBox returns with Modbus error codes
+ */
 #ifdef MB_OK
 #undef MB_OK
 #endif
+
+/* Define MB_OK for Modbus - suppress MSVC redefinition warning if it persists */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4005)  /* macro redefinition */
+#endif
+
 #define MB_OK                       MODBUS_ERROR_NONE
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 #define MB_ERR_INVALID_ARGUMENT     MODBUS_ERROR_INVALID_ARGUMENT
 #define MB_ERR_TIMEOUT              MODBUS_ERROR_TIMEOUT
 #define MB_ERR_TRANSPORT            MODBUS_ERROR_TRANSPORT

@@ -1,0 +1,96 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for baseline comparison
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake clang python3
+      
+      - name: Configure CMake
+        run: |
+          cmake -B build/host-release -DCMAKE_BUILD_TYPE=Release -DMODBUS_BUILD_BENCHMARKS=ON -G Ninja
+      
+      - name: Build benchmarks
+        run: |
+          cmake --build build/host-release --target modbus_benchmarks
+      
+      - name: Run benchmarks
+        run: |
+          cd build/host-release
+          ./benchmarks/modbus_benchmarks --json benchmark_results.json
+      
+      - name: Find latest baseline
+        id: baseline
+        run: |
+          # Find most recent baseline file
+          BASELINE=$(ls -t benchmarks/baseline/baseline_*.json 2>/dev/null | head -n1 || echo "")
+          if [ -n "$BASELINE" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "path=$BASELINE" >> $GITHUB_OUTPUT
+            echo "✅ Found baseline: $BASELINE"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "⚠️  No baseline found - skipping regression check"
+          fi
+      
+      - name: Check for performance regression
+        if: steps.baseline.outputs.found == 'true'
+        run: |
+          python3 scripts/ci/check_performance_regression.py \
+            build/host-release/benchmark_results.json \
+            ${{ steps.baseline.outputs.path }} \
+            --threshold 20
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: build/host-release/benchmark_results.json
+      
+      - name: Comment PR with results (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('build/host-release/benchmark_results.json', 'utf8'));
+            
+            let comment = '## 📊 Benchmark Results\n\n';
+            comment += `Total benchmarks: ${results.benchmarks.length}\n`;
+            const passed = results.benchmarks.filter(b => b.passed).length;
+            comment += `Passed: ${passed}/${results.benchmarks.length}\n\n`;
+            
+            comment += '### Top 5 Slowest Operations\n\n';
+            const sorted = [...results.benchmarks].sort((a, b) => b.avg_ns - a.avg_ns).slice(0, 5);
+            
+            comment += '| Benchmark | Average Time |\n';
+            comment += '|-----------|-------------|\n';
+            
+            for (const bench of sorted) {
+              const time = bench.avg_ns < 1000 ? `${bench.avg_ns} ns` :
+                           bench.avg_ns < 1000000 ? `${(bench.avg_ns/1000).toFixed(2)} µs` :
+                           `${(bench.avg_ns/1000000).toFixed(2)} ms`;
+              comment += `| ${bench.name} | ${time} |\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+

@@ -8,6 +8,7 @@
  * translation automatically.
  */
 
+/* Include Modbus headers FIRST to ensure MB_OK is defined correctly before Windows headers */
 #include <modbus/mb_host.h>
 #include <modbus/client.h>
 #include <modbus/transport.h>
