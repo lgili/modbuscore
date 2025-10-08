@@ -52,6 +52,11 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
 )
 
+# Add concurrency tests when ThreadSanitizer is enabled
+if(MODBUS_ENABLE_TSAN)
+  list(APPEND TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_ringbuf_concurrent.cpp)
+endif()
+
 if(MODBUS_ENABLE_TRANSPORT_RTU)
   list(APPEND TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_core.cpp
@@ -82,6 +87,7 @@ if(MODBUS_ENABLE_INTEGRATION_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_server.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_transport.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_client_server_integration.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_client_convenience.cpp
   )
 endif()
 

@@ -66,6 +66,31 @@ You supply minimal callbacks:
 The adapter offers compile-time configuration to keep everything in `.bss`
 when ``MB_TRANSPORT_IF_STATIC`` is defined.
 
+STM32 LL DMA + IDLE reference
+-----------------------------
+
+Gate 20 introduces a ready-to-use reference that glues the Modbus RTU client to
+STM32 UART peripherals configured with circular DMA reception and IDLE-line
+interrupts.  The drop-in implementation lives under
+``embedded/quickstarts/ports/stm32-ll-dma-idle`` with a dedicated header
+(``modbus_stm32_idle.h``) and is accompanied by detailed hardware notes in
+``embedded/ports/stm32-ll-dma-idle/README.md``.
+
+Highlights:
+
+* Zero-copy consumption of the DMA buffer by tracking producer/consumer
+   indices.
+* ISR hooks that reconcile the UART IDLE flag and DMA transfer-complete events
+   to mark frame boundaries reliably.
+* Microsecond timing callbacks so the helper can enforce T1.5/T3.5 guard times
+   without busy-waiting longer than necessary.
+* Configuration fields covering baud rate, framing (data/parity/stop bits) and
+  optional guard overrides so deployments can derive compliant silence periods
+  directly from firmware settings.
+
+Pair the reference with the :doc:`rtu_timing` tables when adjusting silence
+timeouts for alternative baud/parity combinations.
+
 Troubleshooting tips
 --------------------
 

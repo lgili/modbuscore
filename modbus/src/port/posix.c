@@ -238,3 +238,130 @@ mb_err_t mb_port_posix_tcp_client(mb_port_posix_socket_t *sock,
     return result;
 }
 // NOLINTEND(bugprone-easily-swappable-parameters)
+
+#if !defined(_WIN32)
+#include <termios.h>
+
+/**
+ * @brief Convert baudrate to termios speed constant.
+ */
+static speed_t baudrate_to_speed(uint32_t baudrate)
+{
+    switch (baudrate) {
+        case 9600:   return B9600;
+        case 19200:  return B19200;
+        case 38400:  return B38400;
+        case 57600:  return B57600;
+        case 115200: return B115200;
+#ifdef B230400
+        case 230400: return B230400;
+#endif
+#ifdef B460800
+        case 460800: return B460800;
+#endif
+#ifdef B500000
+        case 500000: return B500000;
+#endif
+#ifdef B576000
+        case 576000: return B576000;
+#endif
+#ifdef B921600
+        case 921600: return B921600;
+#endif
+        default:     return B9600; // fallback
+    }
+}
+
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+mb_err_t mb_port_posix_serial_open(mb_port_posix_socket_t *sock,
+                                   const char *device,
+                                   uint32_t baudrate,
+                                   mb_parity_t parity,
+                                   uint8_t data_bits,
+                                   uint8_t stop_bits)
+{
+    if (sock == NULL || device == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    // Open serial device
+    int fd = open(device, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (fd < 0) {
+        return MB_ERR_TRANSPORT;
+    }
+
+    // Configure serial port
+    struct termios tty;
+    if (tcgetattr(fd, &tty) != 0) {
+        close(fd);
+        return MB_ERR_TRANSPORT;
+    }
+
+    // Set baudrate
+    speed_t speed = baudrate_to_speed(baudrate);
+    cfsetispeed(&tty, speed);
+    cfsetospeed(&tty, speed);
+
+    // Set data bits (CS5/CS6/CS7/CS8)
+    tty.c_cflag &= ~CSIZE;
+    switch (data_bits) {
+        case 5: tty.c_cflag |= CS5; break;
+        case 6: tty.c_cflag |= CS6; break;
+        case 7: tty.c_cflag |= CS7; break;
+        case 8: // fallthrough
+        default: tty.c_cflag |= CS8; break;
+    }
+
+    // Set parity
+    switch (parity) {
+        case MB_PARITY_NONE:
+            tty.c_cflag &= ~PARENB;
+            break;
+        case MB_PARITY_EVEN:
+            tty.c_cflag |= PARENB;
+            tty.c_cflag &= ~PARODD;
+            break;
+        case MB_PARITY_ODD:
+            tty.c_cflag |= PARENB;
+            tty.c_cflag |= PARODD;
+            break;
+    }
+
+    // Set stop bits
+    if (stop_bits == 2) {
+        tty.c_cflag |= CSTOPB;
+    } else {
+        tty.c_cflag &= ~CSTOPB;
+    }
+
+    // Enable receiver, ignore modem control lines
+    tty.c_cflag |= CREAD | CLOCAL;
+
+    // Raw mode (no input processing)
+    tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+
+    // No output processing
+    tty.c_oflag &= ~OPOST;
+
+    // No input processing (disable software flow control)
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+
+    // Non-blocking reads with timeout
+    tty.c_cc[VMIN] = 0;
+    tty.c_cc[VTIME] = 1; // 0.1 second timeout
+
+    // Apply configuration
+    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
+        close(fd);
+        return MB_ERR_TRANSPORT;
+    }
+
+    // Flush any pending data
+    tcflush(fd, TCIOFLUSH);
+
+    // Initialize socket wrapper
+    return mb_port_posix_socket_init(sock, fd, true);
+}
+// NOLINTEND(bugprone-easily-swappable-parameters)
+#endif // !_WIN32

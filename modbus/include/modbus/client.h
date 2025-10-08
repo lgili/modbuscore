@@ -391,6 +391,186 @@ void mb_client_set_event_callback(mb_client_t *client, mb_event_callback_t callb
  */
 void mb_client_set_trace_hex(mb_client_t *client, bool enable);
 
+/* -------------------------------------------------------------------------- */
+/* Convenience Functions - High-level API for common operations              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Read holding registers (FC03).
+ *
+ * Builds a Read Holding Registers request and submits it to the client FSM.
+ * This is a convenience wrapper around mb_client_submit() that handles PDU
+ * building automatically.
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting register address.
+ * @param quantity   Number of registers to read (1-125).
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC03
+mb_err_t mb_client_read_holding_registers(mb_client_t *client,
+                                          uint8_t unit_id,
+                                          uint16_t start_addr,
+                                          uint16_t quantity,
+                                          mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Read input registers (FC04).
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting register address.
+ * @param quantity   Number of registers to read (1-125).
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC04
+mb_err_t mb_client_read_input_registers(mb_client_t *client,
+                                        uint8_t unit_id,
+                                        uint16_t start_addr,
+                                        uint16_t quantity,
+                                        mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Read coils (FC01).
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting coil address.
+ * @param quantity   Number of coils to read (1-2000).
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC01
+mb_err_t mb_client_read_coils(mb_client_t *client,
+                              uint8_t unit_id,
+                              uint16_t start_addr,
+                              uint16_t quantity,
+                              mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Read discrete inputs (FC02).
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting input address.
+ * @param quantity   Number of inputs to read (1-2000).
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC02
+mb_err_t mb_client_read_discrete_inputs(mb_client_t *client,
+                                        uint8_t unit_id,
+                                        uint16_t start_addr,
+                                        uint16_t quantity,
+                                        mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Write single register (FC06).
+ *
+ * @param client   Client instance.
+ * @param unit_id  Modbus unit/slave address.
+ * @param address  Register address.
+ * @param value    Value to write.
+ * @param out_txn  Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC06
+mb_err_t mb_client_write_single_register(mb_client_t *client,
+                                         uint8_t unit_id,
+                                         uint16_t address,
+                                         uint16_t value,
+                                         mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Write single coil (FC05).
+ *
+ * @param client   Client instance.
+ * @param unit_id  Modbus unit/slave address.
+ * @param address  Coil address.
+ * @param value    Coil state (true = ON, false = OFF).
+ * @param out_txn  Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC05
+mb_err_t mb_client_write_single_coil(mb_client_t *client,
+                                     uint8_t unit_id,
+                                     uint16_t address,
+                                     bool value,
+                                     mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Write multiple registers (FC16).
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting register address.
+ * @param quantity   Number of registers to write (1-123).
+ * @param values     Array of register values.
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC10
+mb_err_t mb_client_write_multiple_registers(mb_client_t *client,
+                                            uint8_t unit_id,
+                                            uint16_t start_addr,
+                                            uint16_t quantity,
+                                            const uint16_t *values,
+                                            mb_client_txn_t **out_txn);
+#endif
+
+/**
+ * @brief Write multiple coils (FC15).
+ *
+ * @param client     Client instance.
+ * @param unit_id    Modbus unit/slave address.
+ * @param start_addr Starting coil address.
+ * @param quantity   Number of coils to write (1-1968).
+ * @param values     Packed coil values (bit array).
+ * @param out_txn    Receives the transaction descriptor.
+ *
+ * @retval MB_OK                   Request submitted successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameters.
+ * @retval MB_ERR_NO_RESOURCES     No transaction slots available.
+ */
+#if MB_CONF_ENABLE_FC0F
+mb_err_t mb_client_write_multiple_coils(mb_client_t *client,
+                                        uint8_t unit_id,
+                                        uint16_t start_addr,
+                                        uint16_t quantity,
+                                        const uint8_t *values,
+                                        mb_client_txn_t **out_txn);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

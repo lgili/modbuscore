@@ -37,10 +37,16 @@ if(MODBUS_ENABLE_SERVER)
     src/server.c
     src/mapping.c
   )
+  # Add convenience API for simplified server setup
+  list(APPEND SOURCES src/mb_server_convenience.c)
 endif()
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
+  # Add high-level convenience functions for common operations
+  list(APPEND SOURCES src/mb_client_convenience.c)
+  # Add blocking host API for desktop/Linux/macOS/Windows
+  list(APPEND SOURCES src/mb_host.c)
 endif()
 
 if(MODBUS_ENABLE_PORT_MUTEX)
@@ -99,10 +105,14 @@ endif()
 
 if(MODBUS_ENABLE_SERVER)
   list(APPEND HEADERS_PUBLIC include/modbus/server.h)
+  # Add convenience API header
+  list(APPEND HEADERS_PUBLIC include/modbus/mb_server_convenience.h)
 endif()
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND HEADERS_PUBLIC include/modbus/client.h)
+  # Add blocking host API header for desktop/Linux/macOS/Windows
+  list(APPEND HEADERS_PUBLIC include/modbus/mb_host.h)
 endif()
 
 if(MODBUS_ENABLE_PORT_MUTEX)

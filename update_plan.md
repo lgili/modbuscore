@@ -50,6 +50,7 @@ Vision & principles
 		• Zero-copy consumption of the DMA buffer via indices (no memcpy).
 		• “RTU Timing Pitfalls” guide with T1.5/T3.5 tables per baud/parity.
 		• Gate: HIL at 19 200/38 400/115 200 8E1 with bursts: zero overruns, correct framing in >99.9% even with injected noise.
+		• Progress 2025-10-07: Guard-time enforcement added to the STM32 helper (auto T1.5/T3.5 derivation + overrides), documentation refreshed, and a HIL validation playbook published to drive the acceptance matrix.
 
 	⸻
 

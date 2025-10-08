@@ -4,7 +4,7 @@
 // Hardware-specific glue (timer, DE/RE GPIO, precise delays) is provided via
 // the configuration struct so this file stays drop-in friendly.
 
-#include "modbus_amalgamated.h"
+#include "modbus_stm32_idle.h"
 
 #include <modbus/mb_embed.h>
 
@@ -15,25 +15,6 @@
 #include "stm32xx_ll_usart.h"
 
 #include <string.h>
-
-#ifndef MODBUS_STM32_IDLE_RX_SIZE
-#define MODBUS_STM32_IDLE_RX_SIZE 256U
-#endif
-
-typedef uint32_t (*modbus_stm32_idle_now_fn_t)(void *user_ctx);
-typedef void (*modbus_stm32_idle_delay_fn_t)(uint32_t usec, void *user_ctx);
-typedef void (*modbus_stm32_idle_direction_fn_t)(bool is_tx, void *user_ctx);
-
-typedef struct {
-    USART_TypeDef *uart;
-    DMA_TypeDef *dma;
-    uint32_t dma_channel;
-    uint32_t silence_timeout_ms;
-    modbus_stm32_idle_now_fn_t now_us;
-    modbus_stm32_idle_delay_fn_t delay_us;
-    modbus_stm32_idle_direction_fn_t set_direction;
-    void *user_ctx;
-} modbus_stm32_idle_config_t;
 
 typedef struct {
     mb_client_t client;
@@ -47,6 +28,12 @@ typedef struct {
 
     bool dma_pending;
     bool idle_flag;
+
+    uint32_t last_activity_us;
+    uint32_t idle_timestamp_us;
+    uint32_t char_time_us;
+    uint32_t t15_guard_us;
+    uint32_t t35_guard_us;
 
     modbus_stm32_idle_now_fn_t now_us;
     modbus_stm32_idle_delay_fn_t delay_us;
@@ -64,6 +51,25 @@ static uint32_t modbus_ticks_now_us(void)
     return g_ctx.now_us(g_ctx.user_ctx);
 }
 
+static void modbus_stm32_idle_wait_until_elapsed(modbus_stm32_idle_ctx_t *ctx,
+                                                 uint32_t reference_us,
+                                                 uint32_t guard_us)
+{
+    if (guard_us == 0U || ctx->now_us == NULL) {
+        return;
+    }
+
+    uint32_t now = ctx->now_us(ctx->user_ctx);
+    while ((uint32_t)(now - reference_us) < guard_us) {
+        const uint32_t remaining = guard_us - (uint32_t)(now - reference_us);
+        if (ctx->delay_us != NULL) {
+            const uint32_t slice = (remaining > 64U) ? 64U : remaining;
+            ctx->delay_us(slice, ctx->user_ctx);
+        }
+        now = ctx->now_us(ctx->user_ctx);
+    }
+}
+
 static void modbus_stm32_idle_set_direction(bool is_tx)
 {
     if (g_ctx.set_direction != NULL) {
@@ -76,6 +82,7 @@ static void modbus_stm32_idle_uart_start_rx(modbus_stm32_idle_ctx_t *ctx)
     ctx->rx_head = 0U;
     ctx->idle_flag = false;
     ctx->dma_pending = false;
+    ctx->idle_timestamp_us = modbus_ticks_now_us();
 
     LL_DMA_DisableChannel(ctx->dma, ctx->dma_channel);
     LL_DMA_SetMemoryAddress(ctx->dma, ctx->dma_channel, (uint32_t)ctx->rx_buf);
@@ -97,6 +104,8 @@ static mb_err_t modbus_stm32_idle_uart_send(void *ctx,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
+    modbus_stm32_idle_wait_until_elapsed(state, state->last_activity_us, state->t35_guard_us);
+
     modbus_stm32_idle_set_direction(true);
 
     for (mb_size_t i = 0; i < len; ++i) {
@@ -108,7 +117,12 @@ static mb_err_t modbus_stm32_idle_uart_send(void *ctx,
     while (!LL_USART_IsActiveFlag_TC(state->uart)) {
     }
 
+    const uint32_t frame_complete_us = modbus_ticks_now_us();
+
+    modbus_stm32_idle_wait_until_elapsed(state, frame_complete_us, state->t35_guard_us);
+
     modbus_stm32_idle_set_direction(false);
+    state->last_activity_us = modbus_ticks_now_us();
     state->dma_pending = true;
 
     if (out != NULL) {
@@ -135,9 +149,25 @@ static mb_err_t modbus_stm32_idle_uart_recv(void *ctx,
         return MB_ERR_TIMEOUT;
     }
 
-    size_t remaining = LL_DMA_GetDataLength(state->dma, state->dma_channel);
-    size_t dma_head = sizeof(state->rx_buf) - remaining;
-    size_t available = (dma_head >= state->rx_head)
+    if (state->idle_flag && state->t15_guard_us != 0U) {
+        modbus_stm32_idle_wait_until_elapsed(state, state->idle_timestamp_us, state->t15_guard_us);
+    }
+
+    // CRITICAL FIX: Atomic snapshot of DMA position to prevent race condition
+    // Disable DMA momentarily to ensure consistent read of remaining count
+    const bool was_enabled = LL_DMA_IsEnabledChannel(state->dma, state->dma_channel);
+    if (was_enabled) {
+        LL_DMA_DisableChannel(state->dma, state->dma_channel);
+    }
+    
+    const size_t remaining = LL_DMA_GetDataLength(state->dma, state->dma_channel);
+    const size_t dma_head = sizeof(state->rx_buf) - remaining;
+    
+    if (was_enabled) {
+        LL_DMA_EnableChannel(state->dma, state->dma_channel);
+    }
+    
+    const size_t available = (dma_head >= state->rx_head)
                            ? (dma_head - state->rx_head)
                            : ((sizeof(state->rx_buf) - state->rx_head) + dma_head);
 
@@ -174,6 +204,8 @@ static mb_err_t modbus_stm32_idle_uart_recv(void *ctx,
         state->idle_flag = false;
         state->dma_pending = false;
     }
+
+    state->last_activity_us = modbus_ticks_now_us();
 
     if (out != NULL) {
         out->processed = copied;
@@ -225,12 +257,42 @@ mb_err_t modbus_stm32_idle_init(const modbus_stm32_idle_config_t *cfg,
     g_ctx.set_direction = cfg->set_direction;
     g_ctx.user_ctx = cfg->user_ctx;
 
+    const uint32_t data_bits = (cfg->data_bits == 0U) ? MODBUS_STM32_IDLE_DEFAULT_DATA_BITS : cfg->data_bits;
+    const uint32_t stop_bits = (cfg->stop_bits == 0U) ? MODBUS_STM32_IDLE_DEFAULT_STOP_BITS : cfg->stop_bits;
+    const uint32_t parity_bits = cfg->parity_enabled ? 1U : 0U;
+
+    if (cfg->baudrate != 0U) {
+        const uint32_t symbol_bits = 1U + data_bits + parity_bits + stop_bits;
+        const uint64_t numerator = (uint64_t)symbol_bits * 1000000ULL;
+        g_ctx.char_time_us = (uint32_t)((numerator + cfg->baudrate - 1U) / cfg->baudrate);
+    } else {
+        g_ctx.char_time_us = 0U;
+    }
+
+    if (cfg->t35_guard_us != 0U) {
+        g_ctx.t35_guard_us = cfg->t35_guard_us;
+    } else if (g_ctx.char_time_us != 0U) {
+        g_ctx.t35_guard_us = (g_ctx.char_time_us * 7U) / 2U;
+    } else {
+        g_ctx.t35_guard_us = 0U;
+    }
+
+    if (cfg->t15_guard_us != 0U) {
+        g_ctx.t15_guard_us = cfg->t15_guard_us;
+    } else if (g_ctx.char_time_us != 0U) {
+        g_ctx.t15_guard_us = (g_ctx.char_time_us * 3U) / 2U;
+    } else {
+        g_ctx.t15_guard_us = 0U;
+    }
+
     modbus_stm32_idle_uart_start_rx(&g_ctx);
 
     mb_err_t err = mb_client_init(&g_ctx.client, &modbus_stm32_idle_if, txn_pool, txn_pool_len);
     if (!mb_err_is_ok(err)) {
         return err;
     }
+
+    g_ctx.last_activity_us = modbus_ticks_now_us();
 
 #if MB_CONF_TRANSPORT_RTU
     if (cfg->silence_timeout_ms != 0U) {
@@ -274,10 +336,12 @@ void modbus_stm32_idle_usart_isr(void)
     if (LL_USART_IsActiveFlag_IDLE(g_ctx.uart)) {
         LL_USART_ClearFlag_IDLE(g_ctx.uart);
         g_ctx.idle_flag = true;
+        g_ctx.idle_timestamp_us = modbus_ticks_now_us();
     }
 }
 
 void modbus_stm32_idle_dma_isr(void)
 {
     g_ctx.dma_pending = true;
+    g_ctx.idle_timestamp_us = modbus_ticks_now_us();
 }

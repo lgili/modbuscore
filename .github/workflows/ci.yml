@@ -47,6 +47,10 @@ jobs:
             os: ubuntu-latest
             preset: host-asan
             cmake_args: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++"
+          - name: linux-clang-tsan
+            os: ubuntu-latest
+            preset: host-tsan
+            cmake_args: "-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++"
           - name: windows-msvc
             os: windows-latest
             preset: host-debug

@@ -66,3 +66,6 @@ endif()
 
 install(TARGETS ${INSTALLABLE_TARGETS}
   RUNTIME DESTINATION bin)
+
+# Level 1 Hello World examples (mb_host_* API)
+add_subdirectory(level1_hello)

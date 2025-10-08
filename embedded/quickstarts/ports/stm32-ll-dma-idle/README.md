@@ -12,6 +12,9 @@ configured with circular DMA reception and the IDLE-line interrupt. Copy
   on the main loop thread.
 - Transmit operations reuse the same UART handle and rely on half-duplex DE/RE
   toggling when required.
+- The helper derives and enforces T1.5/T3.5 guard times from your baud-rate
+   settings, with optional microsecond overrides when you need bespoke silence
+   windows.
 
 ## Integration steps
 
@@ -26,14 +29,24 @@ configured with circular DMA reception and the IDLE-line interrupt. Copy
    - `embedded/quickstarts/drop_in/modbus_amalgamated.c`
    - `embedded/quickstarts/drop_in/modbus_amalgamated.h`
    - `embedded/quickstarts/ports/stm32-ll-dma-idle/modbus_stm32_idle.c`
+   - `embedded/quickstarts/ports/stm32-ll-dma-idle/modbus_stm32_idle.h`
 
-3. Call `modbus_stm32_idle_init()` once during boot, supplying:
-   - `uart`, `dma` and `dma_channel` already configured for circular RX.
-   - `silence_timeout_ms` (optional, defaults to the library value of 5 ms).
-   - Callback trio (`now_us`, `delay_us`, `set_direction`) that hook into your
-     timer and RS-485 transceiver control. You can pass `NULL` for
-     `set_direction` on full-duplex links.
-   - A transaction pool (`mb_client_txn_t pool[MB_EMBED_CLIENT_POOL_MIN]`).
+3. `#include "modbus_stm32_idle.h"` in the module that performs the
+    initialization and call `modbus_stm32_idle_init()` once during boot,
+    supplying:
+    - `uart`, `dma` and `dma_channel` already configured for circular RX.
+    - `silence_timeout_ms` (optional, defaults to the library value of 5 ms).
+    - UART framing info (`baudrate`, `data_bits`, `parity_enabled`,
+       `stop_bits`). Zero/`false` values fall back to 8 data bits, no parity and a
+       single stop bit; you must set `baudrate` if you want the helper to derive
+       T1.5/T3.5 automatically.
+    - Guard overrides `t15_guard_us` / `t35_guard_us` when you want to force
+       specific microsecond values. If left at zero they’re derived from the
+       baud-rate settings using the Modbus formulae.
+    - Callback trio (`now_us`, `delay_us`, `set_direction`) that hook into your
+       timer and RS-485 transceiver control. You can pass `NULL` for
+       `set_direction` on full-duplex links.
+    - A transaction pool (`mb_client_txn_t pool[MB_EMBED_CLIENT_POOL_MIN]`).
 
 4. From the main loop (or a cooperative scheduler task) call
    `modbus_stm32_idle_poll()` which in turn drives `mb_client_poll()`.

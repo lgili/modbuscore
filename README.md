@@ -4,6 +4,150 @@
 [![Docs](https://img.shields.io/website?label=docs&url=https%3A%2F%2Flgili.github.io%2Fmodbus%2Fdocs%2F)](https://lgili.github.io/modbus/docs/)
 [![Latest release](https://img.shields.io/github/v/release/lgili/modbus?display_name=tag)](https://github.com/lgili/modbus/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Embedded-blue)](embedded/quickstarts)
+
+> **Modern Modbus for C** – Production-ready client/server with RTU, TCP, and ASCII support. From bare-metal MCUs to desktop apps.
+
+---
+
+## 🚀 Quick Start (30 seconds)
+
+**Read a Modbus register in 10 lines:**
+
+```c
+#include <modbus/mb_host.h>
+#include <stdio.h>
+
+int main(void) {
+    mb_host_client_t *client = mb_host_tcp_connect("192.168.1.10:502");
+    if (!client) { return 1; }
+
+    uint16_t value;
+    mb_err_t err = mb_host_read_holding(client, 1, 0, 1, &value);
+    printf("Register 0: %u (%s)\n", value, mb_host_error_string(err));
+
+    mb_host_disconnect(client);
+    return (err == MB_OK) ? 0 : 1;
+}
+```
+
+**Build & Run:**
+```bash
+gcc your_code.c -lmodbus -o modbus_app
+./modbus_app
+```
+
+👉 **More examples:** [examples/level1_hello](examples/level1_hello) | **Platform-specific setup:** [embedded/quickstarts](embedded/quickstarts)
+
+---
+
+## ⚙️ Why This Library?
+
+**Modern Modbus Implementation with Zero-Hassle Setup:**
+- ✅ **Non-blocking client and server FSMs** – queue-based transaction manager with retry/backoff, watchdog and cancellation
+- ✅ **Extensible server registry** – contiguous register regions backed by user callbacks or static storage
+- ✅ **RTU, TCP, and ASCII transports** – shared MBAP encoder/decoder with optional multi-connection helpers
+- ✅ **Extended PDU codec** – supports 12 function codes (FC 01/02/03/04/05/06/07/0F/10/11/16/17)
+- ✅ **Portable HAL** – POSIX sockets, bare-metal tick adapters, FreeRTOS bridges, and Windows support
+- ✅ **Heap-free design** – ring buffers, memory pools, CRC helpers ready for embedded targets
+- ✅ **Comprehensive tests** – unit, integration, fuzzing, ASan, UBSan, TSan, and CI on GCC/Clang/MSVC
+
+---
+
+## 🏗️ Project Status
+
+| Gate | Summary | Status |
+|------|---------|--------|
+| 0 | CMake presets, CI, docs skeleton | ✅ |
+| 1 | Core types, errors, utilities | ✅ |
+| 2 | PDU codec for FC 03/06/16 | ✅ |
+| 3 | Transport abstraction & RTU framing | ✅ |
+| 4 | Minimal RTU parser/transmitter | ✅ |
+| 5 | Client FSM (Idle→Done/Timeout/Retry/Abort) | ✅ |
+| 6 | Server register mapping & exceptions | ✅ |
+| 7 | Modbus TCP/MBAP + multi-slot helper | ✅ |
+| 8 | Robustness: backpressure, priorities, poison, metrics | ✅ |
+| 9 | Port/HAL scaffolding (POSIX, FreeRTOS, bare) | ✅ |
+| 10 | Extra FCs (01/02/04/05/0F/17) + ASCII transport | ✅ |
+| 11 | Observability & debug (events, tracing, diagnostics) | ✅ |
+| 14 | Protocol parity & data helpers | ✅ |
+| 15 | Compatibility & port conveniences | ✅ |
+| 19 | Cooperative micro-step polling | ✅ |
+| 20 | STM32 DMA+IDLE reference port | ✅ |
+| **20.5** | **Developer Experience Polish (NEW!)** | 🚧 |
+
+**Function Code Coverage:** 12 FCs supported across client/server (see table below)
+
+---
+
+## 📦 Supported Function Codes
+
+| FC  | Name                      | Scope               | Status |
+|-----|---------------------------|---------------------|--------|
+|0x01 | Read Coils                | Client/Server       | ✅ |
+|0x02 | Read Discrete Inputs      | Client/Server       | ✅ |
+|0x03 | Read Holding Registers    | Client/Server       | ✅ |
+|0x04 | Read Input Registers      | Client/Server       | ✅ |
+|0x05 | Write Single Coil         | Client/Server       | ✅ |
+|0x06 | Write Single Register     | Client/Server       | ✅ |
+|0x07 | Read Exception Status     | Client              | ✅ |
+|0x0F | Write Multiple Coils      | Client/Server       | ✅ |
+|0x10 | Write Multiple Registers  | Client/Server       | ✅ |
+|0x11 | Report Server ID          | Server              | ✅ |
+|0x16 | Mask Write Register       | Client/Server       | ✅ |
+|0x17 | Read/Write Multiple Regs  | Client/Server       | ✅ |
+
+---
+
+## 🔧 Installation & Setup
+
+### Requirements
+
+- **CMake** ≥ 3.20, Ninja (recommended)
+- **C11-capable toolchain:** GCC, Clang, MSVC, or MinGW
+- **Python 3** for documentation (Sphinx, Breathe)
+- **Doxygen + Graphviz** (optional, for API docs)
+
+### Configure & Build
+
+```bash
+cmake --preset host-debug
+cmake --build --preset host-debug
+```
+
+### Run All Tests
+
+```bash
+ctest --output-on-failure --test-dir build/host-debug
+```
+
+**Integration tests** (requires `MODBUS_ENABLE_INTEGRATION_TESTS=ON`):
+```bash
+cmake -S . -B build/host-debug-integ -G Ninja \
+  -DMODBUS_ENABLE_TESTS=ON \
+  -DMODBUS_ENABLE_INTEGRATION_TESTS=ON
+cmake --build build/host-debug-integ
+ctest --output-on-failure --test-dir build/host-debug-integ
+```
+
+**Release build:**
+```bash
+cmake --preset host-release
+cmake --build --preset host-release
+
+---
+
+## ⚙️ Why This Library?
+
+A modern, embedded-friendly implementation of Modbus RTU and Modbus TCP written
+in ISO C. The library focuses on deterministic behaviour, no dynamic memory by
+default, and a clean separation between protocol layers so that transports and
+HALs can evolve independently.Library
+
+[![CI](https://github.com/lgili/modbus/actions/workflows/ci.yml/badge.svg)](https://github.com/lgili/modbus/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/website?label=docs&url=https%3A%2F%2Flgili.github.io%2Fmodbus%2Fdocs%2F)](https://lgili.github.io/modbus/docs/)
+[![Latest release](https://img.shields.io/github/v/release/lgili/modbus?display_name=tag)](https://github.com/lgili/modbus/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A modern, embedded-friendly implementation of Modbus RTU and Modbus TCP written
 in ISO C.  The library focuses on deterministic behaviour, no dynamic memory by
@@ -395,9 +539,25 @@ into:
 - **CI pipeline** – dedicated `lint`, `coverage` and `fuzz` jobs keep the
   security profile, instrumentation, and libFuzzer harnesses green alongside
   the existing multi-platform builds.
+- **ThreadSanitizer** – `-fsanitize=thread` preset (`host-tsan`) detects data
+  races in concurrent test scenarios; CI job `linux-clang-tsan` validates
+  lock-free utilities and multi-threaded examples.
 - **MISRA checklist** – the documentation set includes
   [a living MISRA-C compliance checklist](doc/build/html/misra.html) that tracks
   enforcement hooks and justified deviations.
+
+### Thread Safety Notes
+
+**Ring buffer utilities** (`mb_ringbuf_t`) are **NOT thread-safe** without external
+synchronization. The implementation prioritizes embedded portability (no C11 atomics
+requirement) and low overhead. When using ring buffers in multi-threaded contexts:
+
+- **Wrap with mutex** – protect all `mb_ringbuf_*()` calls with a pthread_mutex or OS semaphore.
+- **Use flag pattern** – defer ring buffer operations from ISR to main loop via volatile flags.
+- **See full examples** – `modbus/include/modbus/ringbuf.h` § Thread Safety documents safe usage patterns.
+
+Future **Gate 22** will introduce `mb_ringbuf_atomic_t` with C11 atomics for true lock-free SPSC.
+For details on ThreadSanitizer reports, see `TSAN_REPORT.md`.
 
 ## Contributing
 

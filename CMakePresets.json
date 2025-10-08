@@ -106,6 +106,15 @@
             }
         },
         {
+            "name": "host-tsan",
+            "displayName": "Host ThreadSanitizer",
+            "description": "Debug build with ThreadSanitizer for concurrency testing",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_TSAN": "ON"
+            }
+        },
+        {
             "name": "host-coverage",
             "displayName": "Host Coverage",
             "description": "Debug build with gcov/lcov instrumentation",
@@ -209,6 +218,11 @@
             "name": "host-asan",
             "displayName": "Build Host Sanitizers",
             "configurePreset": "host-asan"
+        },
+        {
+            "name": "host-tsan",
+            "displayName": "Build Host ThreadSanitizer",
+            "configurePreset": "host-tsan"
         },
         {
             "name": "host-coverage",

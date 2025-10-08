@@ -15,6 +15,15 @@ extern "C" {
 #endif
 
 /**
+ * @brief Serial port parity modes for RTU configuration.
+ */
+typedef enum {
+    MB_PARITY_NONE = 0,  /**< No parity bit */
+    MB_PARITY_EVEN = 1,  /**< Even parity */
+    MB_PARITY_ODD = 2    /**< Odd parity */
+} mb_parity_t;
+
+/**
  * @brief POSIX socket wrapper that exposes an ``mb_transport_if_t``.
  */
 typedef struct mb_port_posix_socket {
@@ -80,6 +89,33 @@ mb_err_t mb_port_posix_tcp_client(mb_port_posix_socket_t *sock,
                                   uint16_t port,
                                   mb_time_ms_t timeout_ms);
 // NOLINTEND(bugprone-easily-swappable-parameters)
+
+/**
+ * @brief Opens a serial port for Modbus RTU communication.
+ *
+ * Creates a new serial connection with the specified parameters and populates
+ * @p sock on success (owning the file descriptor). The port is configured for
+ * raw, non-blocking I/O suitable for RTU framing.
+ *
+ * @param sock        Wrapper that receives the opened serial port.
+ * @param device      Serial device path (e.g., "/dev/ttyUSB0", "/dev/ttyS1").
+ * @param baudrate    Baud rate (9600, 19200, 38400, 57600, 115200, etc.).
+ * @param parity      Parity mode (MB_PARITY_NONE, MB_PARITY_EVEN, MB_PARITY_ODD).
+ * @param data_bits   Number of data bits (5, 6, 7, or 8).
+ * @param stop_bits   Number of stop bits (1 or 2).
+ *
+ * @retval MB_OK                 Serial port opened successfully.
+ * @retval MB_ERR_INVALID_ARGUMENT Invalid parameter.
+ * @retval MB_ERR_TRANSPORT       Failed to open or configure device.
+ *
+ * @note Not available on Windows. Use Windows-specific serial APIs instead.
+ */
+mb_err_t mb_port_posix_serial_open(mb_port_posix_socket_t *sock,
+                                   const char *device,
+                                   uint32_t baudrate,
+                                   mb_parity_t parity,
+                                   uint8_t data_bits,
+                                   uint8_t stop_bits);
 
 #ifdef __cplusplus
 }

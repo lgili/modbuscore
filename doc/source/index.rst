@@ -10,6 +10,7 @@ Modbus C Library
    installation
    usage
    ports
+   rtu_timing
    embedded
    distribution
    cookbook
