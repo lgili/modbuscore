@@ -24,6 +24,8 @@ const char *mb_err_str(mb_err_t err)
         return "Cancelled";
     case MB_ERR_NO_RESOURCES:
         return "No resources";
+    case MB_ERR_BUSY:
+        return "Busy";
     case MB_EX_ILLEGAL_FUNCTION:
         return "Illegal function";
     case MB_EX_ILLEGAL_DATA_ADDRESS:

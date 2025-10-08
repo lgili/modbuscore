@@ -26,6 +26,8 @@ mb_diag_err_slot_t mb_diag_slot_from_error(mb_err_t err)
         return MB_DIAG_ERR_SLOT_CANCELLED;
     case MB_ERR_NO_RESOURCES:
         return MB_DIAG_ERR_SLOT_NO_RESOURCES;
+    case MB_ERR_BUSY:
+        return MB_DIAG_ERR_SLOT_OTHER; /* Map to OTHER as BUSY is a transient state */
     case MB_EX_ILLEGAL_FUNCTION:
         return MB_DIAG_ERR_SLOT_EXCEPTION_ILLEGAL_FUNCTION;
     case MB_EX_ILLEGAL_DATA_ADDRESS:

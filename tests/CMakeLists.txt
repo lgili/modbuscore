@@ -54,6 +54,7 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_iovec_integration.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_queue.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_txpool.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_isr.cpp  # Gate 23: ISR-safe mode
 )
 
 # Add concurrency tests when ThreadSanitizer is enabled

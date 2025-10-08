@@ -48,6 +48,9 @@ list(APPEND SOURCES src/mb_iovec.c)
 list(APPEND SOURCES src/mb_queue.c)
 list(APPEND SOURCES src/mb_txpool.c)
 
+# ISR-safe mode (Gate 23)
+list(APPEND SOURCES src/mb_isr.c)
+
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
   # Add high-level convenience functions for common operations
@@ -87,6 +90,7 @@ set(HEADERS_PUBLIC
   include/modbus/mb_iovec.h
   include/modbus/mb_queue.h
   include/modbus/mb_txpool.h
+  include/modbus/mb_isr.h
   include/modbus/base.h
   include/modbus/mb_embed.h
   include/modbus/features.h

@@ -227,4 +227,37 @@ typedef enum mb_conf_server_poll_phase {
 #define MB_CONF_SERVER_POLL_HOOK(server_ptr, phase) do { (void)(server_ptr); (void)(phase); } while (0)
 #endif
 
+/* ========================================================================== */
+/* ISR-Safe Mode Configuration (Gate 23)                                     */
+/* ========================================================================== */
+
+/**
+ * @brief Enable ISR-safe mode for fast half-duplex turnaround.
+ *
+ * When enabled, provides mb_on_rx_chunk_from_isr() and mb_try_tx_from_isr()
+ * for minimal latency RX→TX transitions (<100µs target).
+ */
+#ifndef MB_CONF_ENABLE_ISR_MODE
+#define MB_CONF_ENABLE_ISR_MODE 0
+#endif
+
+/**
+ * @brief Suppress heavy logging in ISR context.
+ *
+ * When enabled, MB_ISR_SAFE_LOG() becomes a no-op in ISR context to minimize
+ * interrupt latency. Critical errors may still be logged.
+ */
+#ifndef MB_CONF_ISR_SUPPRESS_LOGGING
+#define MB_CONF_ISR_SUPPRESS_LOGGING 1
+#endif
+
+/**
+ * @brief Enable runtime assertions (including MB_ASSERT_NOT_ISR).
+ *
+ * Disable in production for minimal overhead.
+ */
+#ifndef MB_CONF_ENABLE_ASSERTIONS
+#define MB_CONF_ENABLE_ASSERTIONS 0
+#endif
+
 #endif /* MODBUS_CONF_H */
