@@ -15,6 +15,7 @@ Welcome to the Modbus C Library documentation. This library provides a modern, p
 - **[Lock-Free Queues & Transaction Pool (Gate 22)](queue_and_pool.md)** - Deterministic memory management without malloc
 - **[ISR-Safe Mode (Gate 23)](isr_safe_mode.md)** - Ultra-low latency for interrupt-driven embedded systems
 - **[QoS & Backpressure (Gate 24)](qos_backpressure.md)** - Priority-aware queue management to prevent head-of-line blocking
+- **[Compact Diagnostics (Gate 25)](diagnostics.md)** - Lightweight on-device debugging with minimal overhead
 
 ### Additional Documentation
 

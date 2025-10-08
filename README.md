@@ -212,6 +212,76 @@ printf("High priority avg latency: %u ms\n", stats.high.avg_latency_ms);
 - **High Priority** (never dropped): FC 05 (Write Single Coil), FC 06 (Write Single Register), FC 08 (Diagnostics)
 - **Normal Priority** (best-effort): FC 01-04 (Reads), FC 15, 16, 23 (Bulk operations)
 
+👉 **Learn more:** [docs/qos_backpressure.md](docs/qos_backpressure.md)
+
+### 📊 Compact Diagnostics (Gate 25)
+
+**Lightweight on-device debugging with <0.5% CPU overhead:**
+
+- ✅ **Function code counters** – Track every Modbus FC execution (256 buckets)
+- ✅ **Error slot histograms** – Categorized error tracking (timeouts, CRC, exceptions)
+- ✅ **Circular trace buffer** – Last N events with timestamps (optional)
+- ✅ **Zero malloc** – Static allocation, deterministic memory usage
+- ✅ **Shell-friendly API** – `mb_diag_snapshot()` for runtime inspection
+
+**Example:**
+```c
+#include <modbus/observe.h>
+
+// Sample diagnostic counters
+mb_diag_counters_t diag;
+mb_client_get_diag(&client, &diag);
+
+printf("Function Code Statistics:\n");
+printf("  FC 0x03 (Read Holding): %llu\n", diag.function[0x03]);
+printf("  FC 0x10 (Write Multiple): %llu\n", diag.function[0x10]);
+
+printf("\nError Statistics:\n");
+printf("  Success: %llu\n", diag.error[MB_DIAG_ERR_SLOT_OK]);
+printf("  Timeouts: %llu\n", diag.error[MB_DIAG_ERR_SLOT_TIMEOUT]);
+printf("  CRC Errors: %llu\n", diag.error[MB_DIAG_ERR_SLOT_CRC]);
+
+// Calculate error rate
+uint64_t total = 0, errors = 0;
+for (int i = 0; i < MB_DIAG_ERR_SLOT_MAX; i++) {
+    total += diag.error[i];
+    if (i != MB_DIAG_ERR_SLOT_OK) errors += diag.error[i];
+}
+printf("Error rate: %.2f%%\n", (double)errors / total * 100.0);
+
+// Full snapshot with trace buffer (if enabled)
+#if MB_CONF_DIAG_ENABLE_TRACE
+mb_diag_snapshot_t snapshot;
+mb_client_get_diag_snapshot(&client, &snapshot);
+
+printf("\nRecent Events (last %u):\n", snapshot.trace_len);
+for (uint16_t i = 0; i < snapshot.trace_len; i++) {
+    printf("  [%u ms] FC=0x%02X %s\n",
+           snapshot.trace[i].timestamp,
+           snapshot.trace[i].function,
+           mb_diag_err_slot_str(mb_diag_slot_from_error(snapshot.trace[i].status)));
+}
+#endif
+
+// Reset counters for next measurement period
+mb_client_reset_diag(&client);
+```
+
+**Configuration Options:**
+```c
+// In conf.h
+#define MB_CONF_DIAG_ENABLE_COUNTERS 1  // Enable counters (2.2 KB)
+#define MB_CONF_DIAG_ENABLE_TRACE 1     // Enable trace buffer (optional)
+#define MB_CONF_DIAG_TRACE_DEPTH 64     // Circular buffer size (1 KB @ 64)
+```
+
+**Performance:**
+- **CPU Overhead**: ~3.5 cycles @ 72 MHz per operation (<0.1% typical usage)
+- **Memory Footprint**: 2.2 KB (counters only) or 3.2 KB (counters + trace)
+- **Validated**: Gate 25 test confirms <0.5% overhead requirement
+
+👉 **Learn more:** [docs/diagnostics.md](docs/diagnostics.md)
+
 ---
 
 ## 🏗️ Project Status
@@ -238,6 +308,7 @@ printf("High priority avg latency: %u ms\n", stats.high.avg_latency_ms);
 | 22 | Lock-free queues & transaction pool | ✅ |
 | 23 | ISR-safe mode (<100µs turnaround) | ✅ |
 | 24 | QoS & backpressure (priority queues) | ✅ |
+| 25 | Compact on-device diagnostics | ✅ |
 | **20.5** | **Developer Experience Polish (NEW!)** | 🚧 |
 
 **Function Code Coverage:** 12 FCs supported across client/server (see table below)
