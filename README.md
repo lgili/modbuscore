@@ -162,6 +162,56 @@ void DMA1_Channel4_IRQHandler(void) {
 
 👉 **Learn more:** [docs/isr_safe_mode.md](docs/isr_safe_mode.md)
 
+### 🎯 QoS and Backpressure (Gate 24)
+
+**Priority-aware queue management to prevent head-of-line blocking:**
+
+- ✅ **Two-tier priority system** – High (critical) and Normal (best-effort)
+- ✅ **Backpressure handling** – Non-critical requests rejected when queue is full
+- ✅ **Policy-based prioritization** – By function code, deadline, or application tag
+- ✅ **Performance monitoring** – Per-priority latency tracking and queue pressure metrics
+
+**Example:**
+```c
+#include <modbus/mb_qos.h>
+
+// Initialize QoS context
+mb_qos_ctx_t qos;
+mb_qos_config_t config = {
+    .high_capacity = 8,      // 8 slots for critical
+    .normal_capacity = 32,   // 32 slots for best-effort
+    .policy = MB_QOS_POLICY_FC_BASED,
+    .enable_monitoring = true
+};
+mb_qos_ctx_init(&qos, &config);
+
+// Enqueue transaction (priority determined by policy)
+mb_transaction_t tx;
+tx.function_code = 0x06;  // Write Single Register (high priority)
+tx.deadline_ms = now_ms() + 100;
+
+mb_err_t err = mb_qos_enqueue(&qos, &tx);
+if (err == MB_ERR_BUSY) {
+    // Queue full, non-critical rejected (backpressure)
+}
+
+// Process highest priority transaction
+mb_transaction_t *next = mb_qos_dequeue(&qos);
+if (next) {
+    // Handle transaction
+    mb_qos_complete(&qos, next);
+}
+
+// Monitor QoS metrics
+mb_qos_stats_t stats;
+mb_qos_get_stats(&qos, &stats);
+printf("High priority avg latency: %u ms\n", stats.high.avg_latency_ms);
+```
+
+**Priority Classes**:
+- **High Priority** (never dropped): FC 05 (Write Single Coil), FC 06 (Write Single Register), FC 08 (Diagnostics)
+- **Normal Priority** (best-effort): FC 01-04 (Reads), FC 15, 16, 23 (Bulk operations)
+
 ---
 
 ## 🏗️ Project Status
@@ -187,6 +237,7 @@ void DMA1_Channel4_IRQHandler(void) {
 | 21 | Zero-copy IO (scatter-gather iovec) | ✅ |
 | 22 | Lock-free queues & transaction pool | ✅ |
 | 23 | ISR-safe mode (<100µs turnaround) | ✅ |
+| 24 | QoS & backpressure (priority queues) | ✅ |
 | **20.5** | **Developer Experience Polish (NEW!)** | 🚧 |
 
 **Function Code Coverage:** 12 FCs supported across client/server (see table below)

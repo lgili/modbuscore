@@ -260,4 +260,36 @@ typedef enum mb_conf_server_poll_phase {
 #define MB_CONF_ENABLE_ASSERTIONS 0
 #endif
 
+/* ========================================================================== */
+/* QoS and Backpressure Configuration (Gate 24)                              */
+/* ========================================================================== */
+
+/**
+ * @brief Enable Quality of Service (QoS) and backpressure management.
+ *
+ * When enabled, provides priority-aware queue management to prevent
+ * head-of-line blocking and ensure critical transactions meet latency targets.
+ */
+#ifndef MB_CONF_ENABLE_QOS
+#define MB_CONF_ENABLE_QOS 0
+#endif
+
+/**
+ * @brief Default high priority queue capacity.
+ *
+ * Size of the high priority (critical) transaction queue.
+ */
+#ifndef MB_CONF_QOS_HIGH_QUEUE_CAPACITY
+#define MB_CONF_QOS_HIGH_QUEUE_CAPACITY 8
+#endif
+
+/**
+ * @brief Default normal priority queue capacity.
+ *
+ * Size of the normal priority (best-effort) transaction queue.
+ */
+#ifndef MB_CONF_QOS_NORMAL_QUEUE_CAPACITY
+#define MB_CONF_QOS_NORMAL_QUEUE_CAPACITY 24
+#endif
+
 #endif /* MODBUS_CONF_H */
