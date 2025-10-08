@@ -52,6 +52,8 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_port_freertos.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_iovec.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_iovec_integration.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_queue.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_txpool.cpp
 )
 
 # Add concurrency tests when ThreadSanitizer is enabled

@@ -44,6 +44,10 @@ endif()
 # Zero-copy IO (always enabled)
 list(APPEND SOURCES src/mb_iovec.c)
 
+# Lock-free queues and transaction pool (Gate 22)
+list(APPEND SOURCES src/mb_queue.c)
+list(APPEND SOURCES src/mb_txpool.c)
+
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
   # Add high-level convenience functions for common operations
@@ -81,6 +85,8 @@ set(HEADERS_PUBLIC
   include/modbus/transport.h
   include/modbus/transport_if.h
   include/modbus/mb_iovec.h
+  include/modbus/mb_queue.h
+  include/modbus/mb_txpool.h
   include/modbus/base.h
   include/modbus/mb_embed.h
   include/modbus/features.h
