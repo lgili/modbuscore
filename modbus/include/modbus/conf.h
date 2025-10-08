@@ -150,6 +150,16 @@
 #endif
 
 /**
+ * @brief Enable zero-copy IO statistics tracking.
+ * 
+ * When enabled, tracks memcpy vs zero-copy operations for performance analysis.
+ * Useful for testing and optimization, but adds small overhead.
+ */
+#ifndef MB_CONF_ENABLE_IOVEC_STATS
+#define MB_CONF_ENABLE_IOVEC_STATS 0
+#endif
+
+/**
  * @brief Size of receive and transmit buffers.
  */
 #ifndef MODBUS_RECEIVE_BUFFER_SIZE

@@ -11,6 +11,7 @@ Modbus C Library
    usage
    ports
    rtu_timing
+   zero_copy_io
    embedded
    distribution
    cookbook
