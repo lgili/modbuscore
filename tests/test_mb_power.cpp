@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <array>
 
 extern "C" {
 #include <modbus/client.h>
@@ -53,7 +54,7 @@ protected:
         modbus_transport_init_mock(&legacy_transport_);
         iface_ = mock_transport_get_iface();
         ASSERT_NE(nullptr, iface_);
-        ASSERT_EQ(MODBUS_ERROR_NONE,
+        ASSERT_EQ(MB_OK,
                   mb_client_init(&client_, iface_, txn_pool_.data(), txn_pool_.size()));
 
         // Initialize server  

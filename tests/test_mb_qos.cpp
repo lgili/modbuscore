@@ -183,10 +183,10 @@ TEST_F(QoSContextTest, NormalQueueFullAppliesBackpressure) {
     std::vector<TestTransaction> transactions(35);  // More than capacity (32)
     
     // Fill normal priority queue
-    int enqueued = 0;
+    size_t enqueued = 0;
     for (size_t i = 0; i < transactions.size(); i++) {
         transactions[i].function_code = 0x03;  // Normal priority
-        transactions[i].id = i;
+        transactions[i].id = static_cast<int>(i);
         
         mb_err_t err = mb_qos_enqueue(&ctx, &transactions[i]);
         if (err == MB_OK) {
@@ -198,7 +198,7 @@ TEST_F(QoSContextTest, NormalQueueFullAppliesBackpressure) {
     }
     
     // Should have enqueued up to capacity (32 - 1 for ring buffer)
-    EXPECT_LE(enqueued, 32);
+    EXPECT_LE(enqueued, static_cast<size_t>(32));
     
     mb_qos_stats_t stats;
     mb_qos_get_stats(&ctx, &stats);
@@ -212,7 +212,7 @@ TEST_F(QoSContextTest, HighPriorityBypassesBackpressure) {
     std::vector<TestTransaction> normal_txs(32);
     for (size_t i = 0; i < normal_txs.size(); i++) {
         normal_txs[i].function_code = 0x03;
-        normal_txs[i].id = i;
+        normal_txs[i].id = static_cast<int>(i);
         mb_qos_enqueue(&ctx, &normal_txs[i]);
     }
     

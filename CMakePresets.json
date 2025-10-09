@@ -171,6 +171,120 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "MODBUS_ENABLE_TESTS": "OFF"
             }
+        },
+        {
+            "name": "stm32g0-tiny",
+            "displayName": "STM32G0 TINY Profile",
+            "description": "Minimal footprint for STM32G0 (Cortex-M0+)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/stm32g0-tiny",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/stm32g0.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "MODBUS_PROFILE": "TINY",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "OFF",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "OFF",
+                "MODBUS_TRANSPORT_ASCII": "OFF",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
+            "name": "stm32g0-lean",
+            "displayName": "STM32G0 LEAN Profile",
+            "description": "Balanced configuration for STM32G0",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/stm32g0-lean",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/stm32g0.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "MODBUS_PROFILE": "LEAN",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "ON",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "OFF",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
+            "name": "esp32c3-lean",
+            "displayName": "ESP32-C3 LEAN Profile",
+            "description": "Balanced configuration for ESP32-C3 (RISC-V)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/esp32c3-lean",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/esp32c3.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_PROFILE": "LEAN",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "ON",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "ON",
+                "MODBUS_TRANSPORT_ASCII": "OFF",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
+            "name": "esp32c3-full",
+            "displayName": "ESP32-C3 FULL Profile",
+            "description": "Full-featured configuration for ESP32-C3",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/esp32c3-full",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/esp32c3.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_PROFILE": "FULL",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "ON",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "ON",
+                "MODBUS_TRANSPORT_ASCII": "ON",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
+            "name": "nrf52-full",
+            "displayName": "nRF52 FULL Profile",
+            "description": "Full-featured configuration for nRF52 (Cortex-M4F)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/nrf52-full",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/nrf52.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_PROFILE": "FULL",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "ON",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "ON",
+                "MODBUS_TRANSPORT_ASCII": "OFF",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF",
+                "MB_CONF_DIAG_ENABLE_COUNTERS": "ON",
+                "MB_CONF_DIAG_ENABLE_TRACE": "ON"
+            }
+        },
+        {
+            "name": "nrf52-lean",
+            "displayName": "nRF52 LEAN Profile",
+            "description": "Balanced configuration for nRF52",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/nrf52-lean",
+            "toolchainFile": "${sourceDir}/cmake/toolchains/nrf52.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "MODBUS_PROFILE": "LEAN",
+                "MODBUS_ENABLE_CLIENT": "ON",
+                "MODBUS_ENABLE_SERVER": "ON",
+                "MODBUS_TRANSPORT_RTU": "ON",
+                "MODBUS_TRANSPORT_TCP": "OFF",
+                "MODBUS_ENABLE_TESTS": "OFF",
+                "MODBUS_BUILD_EXAMPLES": "OFF"
+            }
         }
     ],
     "buildPresets": [
