@@ -12,7 +12,7 @@ CLANG_TIDY_JOBS ?=
 CLANG_TIDY_SDKROOT ?= $(shell xcrun --show-sdk-path 2>/dev/null)
 CLANG_TIDY_ENV ?= $(if $(strip $(CLANG_TIDY_SDKROOT)),SDKROOT=$(CLANG_TIDY_SDKROOT))
 
-.PHONY: help configure build test examples lint tidy-config footprint docs clean
+.PHONY: help configure build test examples lint tidy-config footprint footprint-check docs clean
 
 help:
 	@echo "Available targets:"
@@ -21,6 +21,7 @@ help:
 	@echo "  make examples     - Build every example via the $(EXAMPLES_PRESET) preset"
 	@echo "  make lint         - Run clang-tidy analysis using build/clang-tidy"
 	@echo "  make footprint    - Rebuild ROM/RAM footprint snapshots for host/stm32g0/esp32c3"
+	@echo "  make footprint-check - Check footprint against baseline (CI mode)"
 	@echo "  make docs         - Generate HTML documentation via the docs preset"
 	@echo "  make clean        - Remove build trees (host/clang-tidy/examples/docs) and footprint artifacts"
 
@@ -64,6 +65,16 @@ footprint:
 		--generator Ninja \
 		--output build/footprint/metrics.json \
 		--update-readme README.md
+
+# Gate 30: Check footprint against baseline (CI mode)
+footprint-check:
+	@echo "📊 Checking footprint against baseline..."
+	python3 scripts/ci/report_footprint.py \
+		--profiles TINY LEAN FULL \
+		--targets host \
+		--baseline scripts/ci/footprint_baseline.json \
+		--threshold 0.05 \
+		--output build/footprint/metrics.json
 
 docs:
 	cmake --build --preset docs

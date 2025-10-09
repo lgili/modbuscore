@@ -4,8 +4,15 @@
  */
 
 #include <modbus/mb_power.h>
+
+#if MB_CONF_BUILD_CLIENT
 #include <modbus/client.h>
+#endif
+
+#if MB_CONF_BUILD_SERVER
 #include <modbus/server.h>
+#endif
+
 #include <modbus/mb_err.h>
 #include <string.h>
 #include <stdint.h>
@@ -13,6 +20,8 @@
 /* ========================================================================== */
 /*                          Client Power Management                           */
 /* ========================================================================== */
+
+#if MB_CONF_BUILD_CLIENT
 
 mb_err_t mb_client_set_idle_callback(void *client_ptr,
                                       mb_idle_callback_t callback,
@@ -98,9 +107,13 @@ mb_u32 mb_client_invoke_idle_callback_internal(void *client_ptr)
 #endif
 }
 
+#endif /* MB_CONF_BUILD_CLIENT */
+
 /* ========================================================================== */
 /*                          Server Power Management                           */
 /* ========================================================================== */
+
+#if MB_CONF_BUILD_SERVER
 
 mb_err_t mb_server_set_idle_callback(void *server_ptr,
                                       mb_idle_callback_t callback,
@@ -185,3 +198,5 @@ mb_u32 mb_server_invoke_idle_callback_internal(void *server_ptr)
     return 0;
 #endif
 }
+
+#endif /* MB_CONF_BUILD_SERVER */

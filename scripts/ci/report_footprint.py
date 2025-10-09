@@ -3,7 +3,13 @@
 
 The script configures and builds the library for the requested profiles and
 collects ROM/RAM estimates from the resulting binary using the local toolchain's
-`size` utility (llvm-size preferred).
+`size` utility (llvm-size preferred) or by parsing GCC map files for more
+detailed analysis.
+
+Enhanced in Gate 30 with:
+- Map file parsing for detailed ROM breakdown (.text, .rodata, .data, .bss)
+- Baseline comparison for regression detection
+- Configurable thresholds for CI integration
 """
 
 from __future__ import annotations
@@ -11,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -139,6 +146,181 @@ def collect_size(tool: str, artifact: Path) -> Dict[str, int]:
     }
 
 
+def parse_map_file(map_path: Path) -> Dict[str, int]:
+    """
+    Parse GCC linker map file to extract detailed memory section sizes.
+    
+    This provides more accurate ROM breakdown than the size tool:
+    - .text: code
+    - .rodata: constants
+    - .data: initialized data
+    - .bss: zero-initialized data
+    
+    Returns same format as collect_size() for compatibility.
+    """
+    text = rodata = data = bss = 0
+
+    try:
+        with open(map_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except FileNotFoundError:
+        return {"rom_bytes": 0, "ram_bytes": 0, "text": 0, "data": 0, "bss": 0, "rodata": 0}
+
+    # Pattern: .text           0x08000000     0x4a20
+    patterns = [
+        (r'\.text\s+0x[0-9a-f]+\s+0x([0-9a-f]+)', 'text'),
+        (r'\.rodata\s+0x[0-9a-f]+\s+0x([0-9a-f]+)', 'rodata'),
+        (r'\.data\s+0x[0-9a-f]+\s+0x([0-9a-f]+)', 'data'),
+        (r'\.bss\s+0x[0-9a-f]+\s+0x([0-9a-f]+)', 'bss'),
+    ]
+
+    for pattern, section in patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            size = int(match.group(1), 16)
+            if section == 'text':
+                text = size
+            elif section == 'rodata':
+                rodata = size
+            elif section == 'data':
+                data = size
+            elif section == 'bss':
+                bss = size
+
+    return {
+        "rom_bytes": text + rodata + data,
+        "ram_bytes": data + bss,
+        "text": text,
+        "rodata": rodata,
+        "data": data,
+        "bss": bss,
+    }
+
+
+def find_map_file(build_dir: Path, profile: str) -> Optional[Path]:
+    """
+    Try to locate a GCC map file for more detailed analysis.
+    
+    Common locations:
+    - build_dir/modbus/libmodbus.a.map
+    - build_dir/libmodbus.map
+    - build_dir/*.map
+    """
+    candidates = [
+        build_dir / "modbus" / "libmodbus.a.map",
+        build_dir / "libmodbus.map",
+        build_dir / f"{profile.lower()}.map",
+    ]
+    
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    
+    # Fallback: search for any .map file
+    map_files = list(build_dir.glob("**/*.map"))
+    if map_files:
+        return map_files[0]
+    
+    return None
+
+
+def format_bytes(num_bytes: int) -> str:
+    """Format bytes as human-readable string (KB, MB)."""
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    elif num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    else:
+        return f"{num_bytes / (1024 * 1024):.1f} MB"
+
+
+def compare_with_baseline(
+    current_results: List[Dict],
+    baseline_path: Path,
+    threshold: float = 0.05
+) -> Tuple[bool, str]:
+    """
+    Compare current footprint with baseline.
+    
+    Args:
+        current_results: List of footprint entries
+        baseline_path: Path to baseline JSON file
+        threshold: Acceptable increase (5% = 0.05)
+    
+    Returns:
+        (passed, report_text) tuple
+    """
+    if not baseline_path.exists():
+        return True, f"⚠️ Baseline file not found: {baseline_path}\n"
+
+    with open(baseline_path, 'r') as f:
+        baseline_data = json.load(f)
+
+    lines = []
+    lines.append("## Footprint Comparison vs Baseline")
+    lines.append("")
+    lines.append("| Target | Profile | Metric | Baseline | Current | Change | Status |")
+    lines.append("|--------|---------|--------|----------|---------|--------|--------|")
+
+    all_passed = True
+
+    for entry in current_results:
+        key = f"{entry['target']}_{entry['profile']}"
+        
+        if key not in baseline_data:
+            lines.append(f"| {entry['target']} | {entry['profile']} | - | - | NEW | - | ⚠️ |")
+            continue
+
+        baseline = baseline_data[key]
+        
+        # Check ROM
+        baseline_rom = baseline.get('archive_rom_bytes', 0)
+        current_rom = entry.get('archive_rom_bytes', 0)
+        
+        if baseline_rom > 0:
+            rom_change = (current_rom - baseline_rom) / baseline_rom
+            rom_status = "✅" if rom_change <= threshold else "❌"
+            if rom_change > threshold:
+                all_passed = False
+
+            lines.append(
+                f"| {entry['target']} | {entry['profile']} | ROM | "
+                f"{format_bytes(baseline_rom)} | {format_bytes(current_rom)} | "
+                f"{rom_change:+.1%} | {rom_status} |"
+            )
+
+        # Check RAM
+        baseline_ram = baseline.get('object_ram_bytes', 0)
+        current_ram = entry.get('object_ram_bytes', 0)
+        
+        if baseline_ram > 0:
+            ram_change = (current_ram - baseline_ram) / baseline_ram
+            ram_status = "✅" if ram_change <= threshold else "❌"
+            if ram_change > threshold:
+                all_passed = False
+
+            lines.append(
+                f"| {entry['target']} | {entry['profile']} | RAM | "
+                f"{format_bytes(baseline_ram)} | {format_bytes(current_ram)} | "
+                f"{ram_change:+.1%} | {ram_status} |"
+            )
+
+    return all_passed, "\n".join(lines)
+
+
+def save_as_baseline(results: List[Dict], output_path: Path) -> None:
+    """Save current footprint as new baseline."""
+    data = {}
+    for entry in results:
+        key = f"{entry['target']}_{entry['profile']}"
+        data[key] = entry
+
+    with open(output_path, 'w') as f:
+        json.dump(data, f, indent=2)
+
+    print(f"✅ Saved baseline to {output_path}")
+
+
 def collect_object_totals(tool: str, build_dir: Path) -> Tuple[int, int, int]:
     objects = sorted(build_dir.glob("modbus/CMakeFiles/modbus.dir/**/*.o"))
     if not objects:
@@ -212,6 +394,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--targets", nargs="*", default=list(DEFAULT_TARGETS), help=f"Targets to evaluate (choices: {', '.join(TARGET_CONFIGS)})")
     parser.add_argument("--output", default=None, help="Optional path to write JSON results")
     parser.add_argument("--update-readme", default=None, help="Path to README.md to update table")
+    
+    # Gate 30 enhancements: baseline comparison and regression detection
+    parser.add_argument("--baseline", type=Path, help="Path to baseline JSON file for regression detection")
+    parser.add_argument("--save-baseline", type=Path, help="Save current measurements as new baseline")
+    parser.add_argument("--threshold", type=float, default=0.05, help="Acceptable footprint increase threshold (default: 0.05 = 5%%)")
+    parser.add_argument("--use-map-files", action="store_true", help="Prefer map file parsing over size tool (more detailed)")
+    
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     source_dir = find_repo_root()
@@ -251,13 +440,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             configure_build(source_dir, build_dir, profile_name, generator, extra_args)
             build_target(build_dir, "modbus")
             artifact = find_artifact(build_dir)
-            archive_footprint = collect_size(size_tool, artifact)
+            
+            # Try to use map file if requested or available
+            map_file = find_map_file(build_dir, profile_name) if args.use_map_files else None
+            
+            if map_file:
+                # Use detailed map file parsing
+                archive_footprint = parse_map_file(map_file)
+                print(f"  📊 Using map file: {map_file.name}")
+            else:
+                # Fallback to size tool
+                archive_footprint = collect_size(size_tool, artifact)
+            
             text, data, bss = collect_object_totals(size_tool, build_dir)
             artifact_path = artifact.resolve()
             try:
                 artifact_display = str(artifact_path.relative_to(source_dir))
             except ValueError:
                 artifact_display = str(artifact)
+            
             footprint = {
                 "target": target_key,
                 "profile": profile_name,
@@ -270,6 +471,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 "data": data,
                 "bss": bss,
             }
+            
+            # Include rodata if available from map file
+            if "rodata" in archive_footprint:
+                footprint["rodata"] = archive_footprint["rodata"]
+            
             results.append(footprint)
 
     target_order = {t: idx for idx, t in enumerate(targets)}
@@ -297,6 +503,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     if args.update_readme:
         table_md = format_markdown_table(results)
         update_readme_table(Path(args.update_readme), table_md)
+
+    # Gate 30: Baseline comparison and regression detection
+    if args.baseline:
+        passed, comparison = compare_with_baseline(results, args.baseline, args.threshold)
+        print("\n" + comparison)
+        
+        if not passed:
+            print("\n❌ Footprint regression detected!", file=sys.stderr)
+            return 1  # Fail CI
+        else:
+            print("\n✅ All footprint checks passed!")
+
+    # Gate 30: Save new baseline if requested
+    if args.save_baseline:
+        save_as_baseline(results, args.save_baseline)
 
     return 0
 

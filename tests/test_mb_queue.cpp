@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <chrono>
 
 /* ========================================================================== */
 /* SPSC Queue Tests                                                           */

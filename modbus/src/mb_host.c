@@ -61,6 +61,7 @@ struct mb_host_client {
 /*                              Helper Functions                              */
 /* -------------------------------------------------------------------------- */
 
+#if MB_CONF_TRANSPORT_TCP
 /**
  * @brief Parse "host:port" string into separate host and port.
  */
@@ -101,6 +102,7 @@ static int parse_host_port(const char *host_port, char *host, size_t host_len, u
 
     return 0;
 }
+#endif /* MB_CONF_TRANSPORT_TCP */
 
 /**
  * @brief Wait for a transaction to complete with timeout.
@@ -370,6 +372,7 @@ mb_err_t mb_host_read_input(mb_host_client_t *client,
     return txn->rx_status;
 }
 
+#if MB_CONF_ENABLE_FC01
 mb_err_t mb_host_read_coils(mb_host_client_t *client,
                              uint8_t unit_id,
                              uint16_t address,
@@ -412,7 +415,9 @@ mb_err_t mb_host_read_coils(mb_host_client_t *client,
 
     return txn->rx_status;
 }
+#endif /* MB_CONF_ENABLE_FC01 */
 
+#if MB_CONF_ENABLE_FC02
 mb_err_t mb_host_read_discrete(mb_host_client_t *client,
                                uint8_t unit_id,
                                uint16_t address,
@@ -455,6 +460,7 @@ mb_err_t mb_host_read_discrete(mb_host_client_t *client,
 
     return txn->rx_status;
 }
+#endif /* MB_CONF_ENABLE_FC02 */
 
 /* -------------------------------------------------------------------------- */
 /*                          Synchronous Write Operations                      */
@@ -489,6 +495,7 @@ mb_err_t mb_host_write_single_register(mb_host_client_t *client,
     return txn->rx_status;
 }
 
+#if MB_CONF_ENABLE_FC05
 mb_err_t mb_host_write_single_coil(mb_host_client_t *client,
                                    uint8_t unit_id,
                                    uint16_t address,
@@ -517,6 +524,7 @@ mb_err_t mb_host_write_single_coil(mb_host_client_t *client,
 
     return txn->rx_status;
 }
+#endif /* MB_CONF_ENABLE_FC05 */
 
 mb_err_t mb_host_write_multiple_registers(mb_host_client_t *client,
                                           uint8_t unit_id,
@@ -548,6 +556,7 @@ mb_err_t mb_host_write_multiple_registers(mb_host_client_t *client,
     return txn->rx_status;
 }
 
+#if MB_CONF_ENABLE_FC0F
 mb_err_t mb_host_write_multiple_coils(mb_host_client_t *client,
                                       uint8_t unit_id,
                                       uint16_t address,
@@ -577,6 +586,7 @@ mb_err_t mb_host_write_multiple_coils(mb_host_client_t *client,
 
     return txn->rx_status;
 }
+#endif /* MB_CONF_ENABLE_FC0F */
 
 /* -------------------------------------------------------------------------- */
 /*                              Configuration                                 */
