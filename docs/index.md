@@ -1,11 +1,13 @@
 ---
 layout: default
-title: Modbus Library Documentation
+title: ModbusCore Documentation
 ---
 
-# Modbus Library Documentation
+# ModbusCore Documentation
 
-Welcome to the Modbus C Library documentation. This library provides a modern, production-ready Modbus implementation for embedded systems and desktop applications.
+> **The Core of Modern Modbus Communication**
+
+Welcome to the ModbusCore documentation. This library provides a modern, production-ready Modbus implementation for embedded systems and desktop applications, with configurable profiles from 8KB to unlimited.
 
 ## 📚 User Guides
 

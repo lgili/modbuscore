@@ -121,3 +121,4 @@ Practical implementation checklist
   for transceiver turn-off characteristics.
 * Enable UART overrun detection and clear the flag inside the DMA/IDLE ISR –
   entering the ISR late is a strong indicator that T3.5 was not respected.
+:orphan:

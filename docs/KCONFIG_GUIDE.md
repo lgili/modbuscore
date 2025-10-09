@@ -1,6 +1,6 @@
 # Kconfig Configuration Guide
 
-This guide explains how to configure the Modbus library using Kconfig configuration systems for Zephyr and ESP-IDF.
+This guide explains how to configure ModbusCore using Kconfig configuration systems for Zephyr and ESP-IDF.
 
 ## Overview
 

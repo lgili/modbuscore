@@ -1,4 +1,6 @@
-# Modbus C Library
+# ModbusCore
+
+> The Core of Modern Modbus Communication
 
 [![CI](https://github.com/lgili/modbus/actions/workflows/ci.yml/badge.svg)](https://github.com/lgili/modbus/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/website?label=docs&url=https%3A%2F%2Flgili.github.io%2Fmodbus%2Fdocs%2F)](https://lgili.github.io/modbus/docs/)
@@ -6,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Embedded-blue)](embedded/quickstarts)
 
-> **Production-ready Modbus** – Modern C library for RTU, TCP, and ASCII. From bare-metal MCUs to desktop applications.
+**ModbusCore** is a production-ready Modbus protocol stack designed for embedded systems. From tiny 8KB microcontrollers to powerful gateways, ModbusCore adapts to your needs with configurable profiles.
 
 ---
 
@@ -45,13 +47,15 @@ See platform-specific quickstarts: [embedded/quickstarts](embedded/quickstarts)
 
 ---
 
-## Why This Library?
+## Why ModbusCore?
 
 ✅ **Production-Ready** – Extensively tested, used in industrial applications  
+✅ **Configurable Profiles** – TINY (~26KB), LEAN (~45KB), FULL (~85KB)  
 ✅ **Zero Dependencies** – Pure C11, no external libs, runs on any platform  
 ✅ **Heap-Free** – Perfect for embedded systems with strict memory constraints  
 ✅ **High Performance** – Zero-copy I/O, lock-free queues, <100µs turnaround  
 ✅ **Battery-Optimized** – Power management for IoT and portable devices  
+✅ **Easy Configuration** – Kconfig/menuconfig support for Zephyr and ESP-IDF  
 ✅ **Well-Documented** – Comprehensive API docs, examples, and guides  
 
 ---
@@ -177,56 +181,46 @@ More examples in [examples/](examples/) directory.
 
 ## Documentation
 
-### User Guides
-- [Power Management](docs/power_management.md) – Low-power modes and idle callbacks
-- [ISR-Safe Mode](docs/isr_safe_mode.md) – Ultra-low latency for embedded
-- [Zero-Copy I/O](docs/zero_copy_io.md) – Efficient memory usage
-- [QoS & Backpressure](docs/qos_backpressure.md) – Priority-based flow control
-- [Diagnostics](docs/diagnostics.md) – On-device debugging
-- [Troubleshooting](docs/TROUBLESHOOTING.md) – Common issues and solutions
+The full manual is published at https://lgili.github.io/modbus/docs/ and is organised
+into the following sections:
 
-### API Reference
-- [Client API](modbus/include/modbus/client.h) – Non-blocking client
-- [Server API](modbus/include/modbus/server.h) – Server implementation
-- [Host API](modbus/include/modbus/mb_host.h) – Blocking convenience functions
-- [Power API](modbus/include/modbus/mb_power.h) – Power management
+- **Getting Started** – installation, presets and a minimal client example.
+- **Configuration** – all ``MB_CONF_*`` options, profiles and gate mapping.
+- **Transports & Ports** – POSIX, FreeRTOS, bare-metal and custom adapters.
+- **Diagnostics & Observability** – metrics, events, tracing and queue insight.
+- **Power Management** – idle detection and low-power integration hooks.
+- **Advanced Topics** – RTU timing, zero-copy I/O, concurrency notes.
 
-### Integration Guides
-- [Embedded Quickstarts](embedded/quickstarts/) – Platform-specific setup
-- [Porting Guide](embedded/porting-wizard.md) – New platform integration
-- [Platform Checklist](embedded/checklists/) – Validation checklists
-
----
+For API-level details browse the generated Doxygen pages or open the public
+headers under `modbus/include/modbus/`.
 
 ## Configuration
 
-All configuration is done via `modbus/include/modbus/conf.h`. Key options:
+Configuration is compile-time only.  Set the macros in
+`modbus/include/modbus/conf.h` or pass them to your build system.  The most
+commonly tuned options are:
 
 ```c
-// Transport Selection
-#define MB_CONF_TRANSPORT_RTU 1    // Enable RTU
-#define MB_CONF_TRANSPORT_TCP 1    // Enable TCP
-#define MB_CONF_TRANSPORT_ASCII 0  // Disable ASCII (rarely used)
-
-// Client/Server Selection
-#define MB_CONF_BUILD_CLIENT 1     // Enable client
-#define MB_CONF_BUILD_SERVER 1     // Enable server
-
-// Memory Pools
-#define MB_CONF_CLIENT_MAX_TXN 8   // Max concurrent transactions
-#define MB_CONF_PDU_MAX_SIZE 253   // Max PDU size (spec = 253)
-
-// Features (optional, can be disabled to save memory)
-#define MB_CONF_ENABLE_POWER_MANAGEMENT 1  // Power management (~64 bytes)
-#define MB_CONF_DIAG_ENABLE_COUNTERS 1     // Diagnostics (~2.2 KB)
-#define MB_CONF_DIAG_ENABLE_TRACE 1        // Trace buffer (~1 KB)
-
-// Performance Tuning
-#define MB_CONF_CLIENT_POLL_BUDGET_STEPS 8   // FSM steps per poll()
-#define MB_CONF_SERVER_POLL_BUDGET_STEPS 16  // Server FSM budget
+#define MB_CONF_PROFILE              MB_CONF_PROFILE_LEAN  // Tiny / Lean / Full
+#define MB_CONF_BUILD_CLIENT         1                     // Enable client FSM
+#define MB_CONF_BUILD_SERVER         1                     // Enable server FSM
+#define MB_CONF_TRANSPORT_RTU        1                     // Include RTU framing
+#define MB_CONF_TRANSPORT_ASCII      0                     // Optional ASCII mode
+#define MB_CONF_TRANSPORT_TCP        1                     // Include TCP/MBAP
+#define MB_CONF_DIAG_ENABLE_COUNTERS 1                     // Diagnostics counters
+#define MB_CONF_DIAG_ENABLE_TRACE    0                     // Hex trace buffers
+#define MB_CONF_ENABLE_POWER_MANAGEMENT 1                  // Idle detection
 ```
 
-Override these in your project by defining them **before** including modbus headers.
+Use CMake definitions to override per build:
+
+```bash
+cmake --preset host-debug -DMB_CONF_PROFILE=MB_CONF_PROFILE_TINY \
+      -DMB_CONF_TRANSPORT_TCP=0 -DMB_CONF_DIAG_ENABLE_COUNTERS=0
+```
+
+Refer to the [Configuration Reference](https://lgili.github.io/modbus/configuration.html)
+for the full list of options and their memory impact.
 
 ---
 

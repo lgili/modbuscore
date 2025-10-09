@@ -1,6 +1,6 @@
 # CMake Presets Guide
 
-This guide explains how to use CMake presets for easy configuration and cross-compilation of the Modbus library.
+This guide explains how to use CMake presets for easy configuration and cross-compilation of ModbusCore.
 
 ## Overview
 

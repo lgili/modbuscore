@@ -292,3 +292,4 @@ Refer to :doc:`api` for exhaustive definitions.
 
 For more complete end-to-end walkthroughs visit the :doc:`cookbook`, and when
 upgrading existing deployments consult the :doc:`migration` guide.
+:orphan:

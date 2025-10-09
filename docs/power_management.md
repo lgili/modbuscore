@@ -4,7 +4,7 @@ This guide explains how to use the power management features to reduce energy co
 
 ## Overview
 
-The Modbus library provides idle callbacks that allow your application to enter low-power modes when the protocol stack is idle. This is essential for:
+ModbusCore provides idle callbacks that allow your application to enter low-power modes when the protocol stack is idle. This is essential for:
 
 - **Battery-powered devices** - Extend battery life significantly
 - **Tickless RTOS** - Integrate with FreeRTOS, Zephyr, ThreadX tickless modes

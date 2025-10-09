@@ -1,0 +1,23 @@
+@PACKAGE_INIT@
+
+# Modbus library configuration
+set(MODBUS_VERSION "@PROJECT_VERSION@")
+set(MODBUS_VERSION_MAJOR "@PROJECT_VERSION_MAJOR@")
+set(MODBUS_VERSION_MINOR "@PROJECT_VERSION_MINOR@")
+set(MODBUS_VERSION_PATCH "@PROJECT_VERSION_PATCH@")
+
+# Find dependencies (if any)
+include(CMakeFindDependencyMacro)
+# find_dependency(SomeDependency REQUIRED)
+
+# Include targets
+if(NOT TARGET modbus::modbus)
+    include("${CMAKE_CURRENT_LIST_DIR}/modbusTargets.cmake")
+endif()
+
+# Set variables for compatibility
+set(MODBUS_LIBRARIES modbus::modbus)
+set(MODBUS_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+set(MODBUS_LIBRARY_DIRS "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
+
+check_required_components(modbus)

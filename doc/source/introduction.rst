@@ -23,3 +23,4 @@ focus on the supported surface.
 
 See :doc:`usage` for a practical walk-through and :doc:`api` for complete API
 reference.
+:orphan:

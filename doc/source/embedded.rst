@@ -22,3 +22,4 @@ next milestones.
 	 * ``ports/nxp-lpuart-idle/`` – low-power friendly LPUART integration.
 
 	 Each guide will link back to :doc:`install_use` once the assets are ready.
+:orphan:

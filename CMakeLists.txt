@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(Modbus VERSION 1.0.0 LANGUAGES C CXX)
+project(ModbusCore 
+    VERSION 1.0.0 
+    DESCRIPTION "The Core of Modern Modbus Communication"
+    HOMEPAGE_URL "https://github.com/lgili/modbus"
+    LANGUAGES C CXX
+)
 
 # ---------------------------------------------------------------------------
 # High-level configuration profiles (pre-Gate 17 scaffolding)
@@ -369,5 +374,104 @@ if(MODBUS_BUILD_DOCS)
     add_custom_target(doc
         DEPENDS doc_sphinx
         COMMENT "Generating full project documentation"
+    )
+endif()
+
+# ============================================================================
+#  Installation Configuration
+# ============================================================================
+
+include(GNUInstallDirs)
+
+# Install library
+install(TARGETS modbus
+    EXPORT modbusTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# Install headers
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/modbus/include/modbus
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.h"
+)
+
+# Install generated version.h
+install(FILES ${CMAKE_BINARY_DIR}/modbus/version.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/modbus
+)
+
+# Install CMake package configuration
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+    ${CMAKE_SOURCE_DIR}/cmake/modbusConfig.cmake.in
+    ${CMAKE_BINARY_DIR}/modbusConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modbus
+    PATH_VARS CMAKE_INSTALL_INCLUDEDIR CMAKE_INSTALL_LIBDIR
+)
+
+write_basic_package_version_file(
+    ${CMAKE_BINARY_DIR}/modbusConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_BINARY_DIR}/modbusConfig.cmake
+    ${CMAKE_BINARY_DIR}/modbusConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modbus
+)
+
+install(EXPORT modbusTargets
+    FILE modbusTargets.cmake
+    NAMESPACE modbus::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modbus
+)
+
+# Install pkg-config file
+configure_file(
+    ${CMAKE_SOURCE_DIR}/cmake/modbus.pc.in
+    ${CMAKE_BINARY_DIR}/modbus.pc
+    @ONLY
+)
+
+install(FILES ${CMAKE_BINARY_DIR}/modbus.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
+
+# Install documentation (if built)
+if(MODBUS_BUILD_DOCS)
+    install(DIRECTORY ${SPHINX_OUTPUT_DIR}/
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        OPTIONAL
+    )
+endif()
+
+# Install examples (optional)
+if(MODBUS_BUILD_EXAMPLES)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples/
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples
+        FILES_MATCHING
+        PATTERN "*.c"
+        PATTERN "*.h"
+        PATTERN "*.md"
+        PATTERN "CMakeLists.txt"
+    )
+endif()
+
+# Uninstall target
+if(NOT TARGET uninstall)
+    configure_file(
+        ${CMAKE_SOURCE_DIR}/cmake/Uninstall.cmake.in
+        ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+        IMMEDIATE @ONLY
+    )
+
+    add_custom_target(uninstall
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+        COMMENT "Uninstalling modbus library"
     )
 endif()

@@ -102,3 +102,4 @@ Troubleshooting tips
 
 See also :doc:`usage` for code snippets that exercise each adapter and
 :doc:`cookbook` for end-to-end recipes.
+:orphan:

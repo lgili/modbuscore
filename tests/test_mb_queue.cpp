@@ -116,7 +116,7 @@ TEST_F(SPSCQueueTest, HighWaterMarkTracking) {
 }
 
 TEST_F(SPSCQueueTest, WrapAround) {
-    std::vector<int> data(CAPACITY * 2);
+    std::vector<int> data(CAPACITY * 3); // Need space for 3 cycles
     
     // Fill and drain multiple times
     for (int cycle = 0; cycle < 3; cycle++) {

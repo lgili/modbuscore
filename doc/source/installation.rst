@@ -65,3 +65,4 @@ The install step exports both CMake and pkg-config metadata:
 
 Generated files live under ``${prefix}/lib/cmake/Modbus`` and
 ``${prefix}/lib/pkgconfig``. Custom install prefixes are honoured.
+:orphan:

@@ -1,4 +1,4 @@
-Let's architect this C Modbus library as a production-grade product: modular, portable, deadlock-free, fully tested, and well documented. Below is an incremental plan split into objective gates—move forward only when the gate is green.
+Let's architect ModbusCore (The Core of Modern Modbus Communication) as a production-grade product: modular, portable, deadlock-free, fully tested, and well documented. Below is an incremental plan split into objective gates—move forward only when the gate is green.
 
 Vision & principles
 	•	Portable: “pure” C11 (C99 fallback), no malloc by default (optional pool), zero hard dependencies.

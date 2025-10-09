@@ -3,8 +3,9 @@ exec_prefix=${prefix}
 libdir=@CMAKE_INSTALL_FULL_LIBDIR@
 includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
 
-Name: @PROJECT_NAME@
-Description: Embedded-friendly Modbus RTU/TCP library
+Name: ModbusCore
+Description: The Core of Modern Modbus Communication - Production-ready stack for embedded systems
+URL: https://github.com/lgili/modbus
 Version: @Modbus_VERSION@
 Libs: -L${libdir} -l@LIBRARY_NAME@
 Cflags: -I${includedir}/@LIBRARY_FOLDER@
