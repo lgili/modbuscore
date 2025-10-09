@@ -1,0 +1,173 @@
+# ESP32 Modbus RTU Client Configuration
+# This file is processed by idf.py menuconfig
+
+menu "Modbus RTU Configuration"
+
+    config MODBUS_UART_PORT
+        int "UART Port Number"
+        default 1
+        range 0 2
+        help
+            UART port number for Modbus communication.
+            - UART0: Usually used for console (avoid for Modbus)
+            - UART1: Recommended for Modbus
+            - UART2: Alternative (ESP32 only, not on ESP32-C3)
+
+    config MODBUS_UART_TX_PIN
+        int "UART TX Pin"
+        default 17
+        help
+            GPIO pin for UART TX (transmit).
+            Default: GPIO17 (UART1 on ESP32)
+            ESP32-C3: Adjust to available pins (e.g., GPIO7)
+
+    config MODBUS_UART_RX_PIN
+        int "UART RX Pin"
+        default 16
+        help
+            GPIO pin for UART RX (receive).
+            Default: GPIO16 (UART1 on ESP32)
+            ESP32-C3: Adjust to available pins (e.g., GPIO6)
+
+    config MODBUS_UART_BAUD_RATE
+        int "UART Baud Rate"
+        default 9600
+        help
+            Modbus RTU baud rate.
+            Common values: 9600, 19200, 38400, 57600, 115200
+
+    config MODBUS_SLAVE_ADDRESS
+        int "Modbus Slave Address"
+        default 1
+        range 1 247
+        help
+            Modbus slave device address to communicate with.
+            Valid range: 1-247
+
+    config MODBUS_START_REGISTER
+        hex "Starting Register Address"
+        default 0x0000
+        help
+            First register address to read (hexadecimal).
+            Example: 0x0000 for register 0
+
+    config MODBUS_REGISTER_COUNT
+        int "Number of Registers to Read"
+        default 10
+        range 1 125
+        help
+            Number of consecutive registers to read.
+            Maximum: 125 (Modbus RTU limitation)
+
+    config MODBUS_REQUEST_INTERVAL_MS
+        int "Request Interval (ms)"
+        default 1000
+        range 100 60000
+        help
+            Time interval between Modbus requests in milliseconds.
+            Minimum: 100ms (avoid flooding the bus)
+            Default: 1000ms (1 second)
+
+    config MODBUS_LED_GPIO
+        int "Status LED GPIO"
+        default 2
+        help
+            GPIO pin for status LED.
+            - ESP32: GPIO2 (onboard LED)
+            - ESP32-C3: GPIO8 (onboard LED)
+            LED ON = successful read, OFF = error
+
+    config MODBUS_ENABLE_DEBUG_LOGS
+        bool "Enable Debug Logs"
+        default n
+        help
+            Enable verbose Modbus debug logging.
+            Shows hexdump of TX/RX frames.
+            Disable in production to reduce log spam.
+
+endmenu
+
+menu "Modbus Function Code Support"
+
+    config MODBUS_FC03_ENABLED
+        bool "FC03: Read Holding Registers"
+        default y
+        help
+            Enable Modbus function code 03 (Read Holding Registers).
+            Required for this example.
+
+    config MODBUS_FC04_ENABLED
+        bool "FC04: Read Input Registers"
+        default y
+        help
+            Enable Modbus function code 04 (Read Input Registers).
+
+    config MODBUS_FC06_ENABLED
+        bool "FC06: Write Single Register"
+        default y
+        help
+            Enable Modbus function code 06 (Write Single Register).
+
+    config MODBUS_FC16_ENABLED
+        bool "FC16: Write Multiple Registers"
+        default y
+        help
+            Enable Modbus function code 16 (Write Multiple Registers).
+
+    config MODBUS_FC01_ENABLED
+        bool "FC01: Read Coils"
+        default n
+        help
+            Enable Modbus function code 01 (Read Coils).
+            Disable to save flash space.
+
+    config MODBUS_FC02_ENABLED
+        bool "FC02: Read Discrete Inputs"
+        default n
+        help
+            Enable Modbus function code 02 (Read Discrete Inputs).
+
+    config MODBUS_FC05_ENABLED
+        bool "FC05: Write Single Coil"
+        default n
+        help
+            Enable Modbus function code 05 (Write Single Coil).
+
+    config MODBUS_FC15_ENABLED
+        bool "FC15: Write Multiple Coils"
+        default n
+        help
+            Enable Modbus function code 15 (Write Multiple Coils).
+
+endmenu
+
+menu "Advanced Modbus Settings"
+
+    config MODBUS_POLL_BUDGET
+        int "Poll Budget (steps per iteration)"
+        default 8
+        range 1 256
+        help
+            Maximum number of state machine steps per poll iteration.
+            Higher = lower latency but higher CPU usage.
+            Lower = more CPU time for other tasks.
+            Recommended: 8 for 9600 baud, 16 for 19200+
+
+    config MODBUS_RESPONSE_TIMEOUT_MS
+        int "Response Timeout (ms)"
+        default 500
+        range 50 5000
+        help
+            Maximum time to wait for Modbus response.
+            Should be > (frame_size / baud_rate) * 1000
+            Example: 256 bytes @ 9600 baud ≈ 267ms
+
+    config MODBUS_RETRY_COUNT
+        int "Retry Count on Error"
+        default 2
+        range 0 10
+        help
+            Number of retries on timeout/error.
+            0 = no retry (fail immediately)
+
+endmenu

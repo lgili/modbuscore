@@ -67,17 +67,12 @@ typedef modbus_error_t mb_err_t;
 #undef MB_OK
 #endif
 
-/* Define MB_OK for Modbus - suppress MSVC redefinition warning if it persists */
+/* Define MB_OK for Modbus and keep MSVC quiet when Windows headers redefine it. */
 #if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable: 4005)  /* macro redefinition */
+#pragma warning(disable: 4005) /* macro redefinition */
 #endif
 
 #define MB_OK                       MODBUS_ERROR_NONE
-
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
 #define MB_ERR_INVALID_ARGUMENT     MODBUS_ERROR_INVALID_ARGUMENT
 #define MB_ERR_TIMEOUT              MODBUS_ERROR_TIMEOUT
 #define MB_ERR_TRANSPORT            MODBUS_ERROR_TRANSPORT

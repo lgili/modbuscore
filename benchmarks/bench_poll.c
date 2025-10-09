@@ -102,7 +102,7 @@ static void bench_coil_pack_run(void *user_data)
 {
     (void)user_data;
     
-    mb_u8 packed[8];  // 64 coils = 8 bytes
+    mb_u8 packed[8] = {0};  // 64 coils = 8 bytes (initialize to zero)
     for (unsigned i = 0; i < 64; ++i) {
         if (coil_array[i]) {
             packed[i / 8] |= (1u << (i % 8));
