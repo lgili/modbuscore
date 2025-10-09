@@ -1,6 +1,7 @@
 #include <array>
 #include <cstring>
 #include <deque>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -106,6 +107,48 @@ static void client_callback(mb_client_t *client,
     }
 }
 
+static void prepare_request(mb_client_request_t &request,
+                            uint8_t unit_id,
+                            const mb_u8 *pdu,
+                            mb_size_t payload_len,
+                            CallbackCapture &capture)
+{
+    std::memset(&request, 0, sizeof(request));
+    request.request.unit_id = unit_id;
+    request.request.function = pdu[0];
+    request.request.payload = (payload_len > 0U) ? &pdu[1] : nullptr;
+    request.request.payload_len = payload_len;
+    request.timeout_ms = 100U;
+    request.retry_backoff_ms = 20U;
+    request.max_retries = 0U;
+    request.callback = client_callback;
+    request.user_ctx = &capture;
+}
+
+struct PriorityCapture {
+    std::vector<int> order;
+    std::vector<mb_err_t> statuses;
+};
+
+struct PriorityCallbackCtx {
+    PriorityCapture *capture;
+    int id;
+};
+
+static void priority_callback(mb_client_t *,
+                              const mb_client_txn_t *,
+                              mb_err_t status,
+                              const mb_adu_view_t *,
+                              void *user_ctx)
+{
+    auto *ctx = static_cast<PriorityCallbackCtx *>(user_ctx);
+    if (ctx == nullptr || ctx->capture == nullptr) {
+        return;
+    }
+    ctx->capture->order.push_back(ctx->id);
+    ctx->capture->statuses.push_back(status);
+}
+
 class ClientServerIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override
@@ -175,15 +218,7 @@ TEST_F(ClientServerIntegrationTest, ReadHoldingRegistersEndToEnd)
 
     CallbackCapture capture{};
     mb_client_request_t request{};
-    request.request.unit_id = kUnitId;
-    request.request.function = pdu[0];
-    request.request.payload = &pdu[1];
-    request.request.payload_len = 4U;
-    request.timeout_ms = 100U;
-    request.retry_backoff_ms = 20U;
-    request.max_retries = 0U;
-    request.callback = client_callback;
-    request.user_ctx = &capture;
+    prepare_request(request, kUnitId, pdu, 4U, capture);
 
     ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, nullptr));
 
@@ -218,15 +253,7 @@ TEST_F(ClientServerIntegrationTest, WriteSingleRegisterEndToEnd)
 
     CallbackCapture capture{};
     mb_client_request_t request{};
-    request.request.unit_id = kUnitId;
-    request.request.function = pdu[0];
-    request.request.payload = &pdu[1];
-    request.request.payload_len = 4U;
-    request.timeout_ms = 100U;
-    request.retry_backoff_ms = 20U;
-    request.max_retries = 0U;
-    request.callback = client_callback;
-    request.user_ctx = &capture;
+    prepare_request(request, kUnitId, pdu, 4U, capture);
 
     ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, nullptr));
 
@@ -250,15 +277,7 @@ TEST_F(ClientServerIntegrationTest, WriteMultipleRegistersEndToEnd)
 
     CallbackCapture capture{};
     mb_client_request_t request{};
-    request.request.unit_id = kUnitId;
-    request.request.function = pdu[0];
-    request.request.payload = &pdu[1];
-    request.request.payload_len = payload_len - 1U;
-    request.timeout_ms = 100U;
-    request.retry_backoff_ms = 20U;
-    request.max_retries = 0U;
-    request.callback = client_callback;
-    request.user_ctx = &capture;
+    prepare_request(request, kUnitId, pdu, payload_len - 1U, capture);
 
     ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, nullptr));
 
@@ -282,15 +301,7 @@ TEST_F(ClientServerIntegrationTest, OutOfRangeReadReturnsException)
 
     CallbackCapture capture{};
     mb_client_request_t request{};
-    request.request.unit_id = kUnitId;
-    request.request.function = pdu[0];
-    request.request.payload = &pdu[1];
-    request.request.payload_len = 4U;
-    request.timeout_ms = 100U;
-    request.retry_backoff_ms = 20U;
-    request.max_retries = 0U;
-    request.callback = client_callback;
-    request.user_ctx = &capture;
+    prepare_request(request, kUnitId, pdu, 4U, capture);
 
     ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, nullptr));
 
@@ -303,6 +314,83 @@ TEST_F(ClientServerIntegrationTest, OutOfRangeReadReturnsException)
     EXPECT_EQ(static_cast<mb_u8>(MB_PDU_FC_READ_HOLDING_REGISTERS | MB_PDU_EXCEPTION_BIT), capture.response.function);
     ASSERT_EQ(static_cast<mb_size_t>(1U), capture.response.payload_len);
     EXPECT_EQ(MB_EX_ILLEGAL_DATA_ADDRESS, capture.response.payload[0]);
+}
+
+TEST_F(ClientServerIntegrationTest, ReadInputRegistersEndToEnd)
+{
+    mb_u8 pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_input_request(pdu, sizeof pdu, 0x0100U, 0x0002U));
+
+    CallbackCapture capture{};
+    mb_client_request_t request{};
+    prepare_request(request, kUnitId, pdu, 4U, capture);
+
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &request, nullptr));
+
+    for (int i = 0; i < 50 && !capture.invoked; ++i) {
+        pump(1);
+    }
+
+    ASSERT_TRUE(capture.invoked);
+    EXPECT_EQ(MB_OK, capture.status);
+    EXPECT_EQ(MB_PDU_FC_READ_INPUT_REGISTERS, capture.response.function);
+    ASSERT_EQ(static_cast<mb_size_t>(5U), capture.response.payload_len);
+    EXPECT_EQ(4U, capture.response.payload[0]);
+
+    std::array<mb_u8, MB_PDU_MAX> full{};
+    full[0] = capture.response.function;
+    std::memcpy(&full[1], capture.response.payload, capture.response.payload_len);
+
+    const mb_u8 *data = nullptr;
+    mb_u16 reg_count = 0U;
+    ASSERT_EQ(MB_OK, mb_pdu_parse_read_input_response(full.data(),
+                                                      capture.response.payload_len + 1U,
+                                                      &data,
+                                                      &reg_count));
+    ASSERT_EQ(2U, reg_count);
+    EXPECT_EQ(ro_storage_[0], static_cast<mb_u16>((data[0] << 8) | data[1]));
+    EXPECT_EQ(ro_storage_[1], static_cast<mb_u16>((data[2] << 8) | data[3]));
+}
+
+TEST_F(ClientServerIntegrationTest, HighPriorityRequestServedFirst)
+{
+    mb_u8 slow_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(slow_pdu, sizeof slow_pdu, 0x0000U, 0x0001U));
+    mb_u8 fast_pdu[5];
+    ASSERT_EQ(MB_OK, mb_pdu_build_read_holding_request(fast_pdu, sizeof fast_pdu, 0x0004U, 0x0001U));
+
+    CallbackCapture placeholder_slow{};
+    CallbackCapture placeholder_fast{};
+
+    mb_client_request_t slow{};
+    prepare_request(slow, kUnitId, slow_pdu, 4U, placeholder_slow);
+    mb_client_request_t fast{};
+    prepare_request(fast, kUnitId, fast_pdu, 4U, placeholder_fast);
+
+    PriorityCapture capture{};
+    PriorityCallbackCtx slow_ctx{&capture, 1};
+    PriorityCallbackCtx fast_ctx{&capture, 2};
+
+    slow.callback = priority_callback;
+    slow.user_ctx = &slow_ctx;
+
+    fast.callback = priority_callback;
+    fast.user_ctx = &fast_ctx;
+    fast.flags = MB_CLIENT_REQUEST_HIGH_PRIORITY;
+
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &slow, nullptr));
+    ASSERT_EQ(MB_OK, mb_client_submit(&client_, &fast, nullptr));
+
+    for (int i = 0; i < 100 && capture.order.size() < 2; ++i) {
+        pump(1);
+    }
+
+    ASSERT_EQ(2U, capture.order.size());
+    EXPECT_EQ(2, capture.order[0]) << "High priority request should complete first";
+    EXPECT_EQ(1, capture.order[1]);
+    ASSERT_EQ(2U, capture.statuses.size());
+    EXPECT_EQ(MB_OK, capture.statuses[0]);
+    EXPECT_EQ(MB_OK, capture.statuses[1]);
 }
 
 } // namespace

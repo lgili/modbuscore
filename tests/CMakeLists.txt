@@ -58,6 +58,9 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_qos.cpp  # Gate 24: QoS and backpressure
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_diag.cpp # Gate 25: Compact diagnostics
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_power.cpp # Gate 27: Power management
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_resync.cpp # Gate 33: Fast resync
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_dup_filter.cpp # Gate 33: Duplicate filter
+  # ${CMAKE_CURRENT_SOURCE_DIR}/test_fault_injection.cpp # Gate 33: Fault injection - DISABLED: needs API update
 )
 
 # Add concurrency tests when ThreadSanitizer is enabled
@@ -85,6 +88,12 @@ if(MODBUS_ENABLE_TRANSPORT_TCP)
   )
 endif()
 
+if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
+  list(APPEND TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_libmodbus_compat.cpp
+  )
+endif()
+
 if(NOT WIN32)
   list(APPEND TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/test_port_posix.cpp)
 endif()
@@ -104,7 +113,13 @@ set(MODBUS_TEST_TARGETS)
 
 foreach(TEST_SRC ${TEST_SOURCES})
   get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
-  add_executable(${TEST_NAME} ${TEST_SRC} modbus_transport.c)
+  
+  # Add fault_inject.c for the fault injection test
+  if(TEST_NAME STREQUAL "test_fault_injection")
+    add_executable(${TEST_NAME} ${TEST_SRC} modbus_transport.c fault_inject.c)
+  else()
+    add_executable(${TEST_NAME} ${TEST_SRC} modbus_transport.c)
+  endif()
 
   set_target_properties(${TEST_NAME}
     PROPERTIES

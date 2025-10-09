@@ -78,6 +78,16 @@ Compatibility helpers (Gate 15)
 * The `modbus_unit_test_loop_demo` example mirrors libmodbus' unit-test client
   and server flows, easing parity testing when porting applications.
 
+libmodbus compatibility (Gate 34)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Enable ``-DMODBUS_ENABLE_COMPAT_LIBMODBUS=ON`` to expose the shim under
+  ``<modbus/compat/libmodbus.h>``.
+* The wrapper keeps libmodbus entry points for FC 03/06/16, driving the modern
+  synchronous helpers in :doc:`transports`.
+* See ``docs/PORTING_LIBMODBUS.md`` for the full equivalence table and known
+  limitations.
+
 Adoption checklist
 ^^^^^^^^^^^^^^^^^^
 

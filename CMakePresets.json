@@ -285,6 +285,15 @@
                 "MODBUS_ENABLE_TESTS": "OFF",
                 "MODBUS_BUILD_EXAMPLES": "OFF"
             }
+        },
+        {
+            "name": "host-compat",
+            "displayName": "Host Debug (compat)",
+            "description": "Debug build with libmodbus compatibility layer enabled",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MODBUS_ENABLE_COMPAT_LIBMODBUS": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -366,6 +375,11 @@
             "targets": [
                 "doc"
             ]
+        },
+        {
+            "name": "host-compat",
+            "displayName": "Build Host Debug (compat)",
+            "configurePreset": "host-compat"
         }
     ],
     "testPresets": [
@@ -393,6 +407,11 @@
             "name": "tcp-only",
             "displayName": "Run tests (TCP only)",
             "configurePreset": "host-tcp-only"
+        },
+        {
+            "name": "compat",
+            "displayName": "Run tests (compat)",
+            "configurePreset": "host-compat"
         }
     ]
 }

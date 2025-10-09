@@ -153,6 +153,75 @@ static mb_err_t wait_for_transaction(mb_host_client_t *ctx, mb_client_txn_t *txn
     }
 }
 
+static mb_err_t submit_and_wait(mb_host_client_t *ctx,
+                                mb_client_txn_t **txn_slot,
+                                mb_err_t submit_status)
+{
+    if (!mb_err_is_ok(submit_status)) {
+        return submit_status;
+    }
+    if (ctx == NULL || txn_slot == NULL || *txn_slot == NULL) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    mb_client_txn_t *txn = *txn_slot;
+    ctx->last_exception = 0;
+
+    mb_err_t err = wait_for_transaction(ctx, txn, ctx->timeout_ms);
+    if (!mb_err_is_ok(err)) {
+        return err;
+    }
+
+    mb_err_t status = txn->rx_status;
+    if (mb_err_is_exception(status)) {
+        ctx->last_exception = status;
+    }
+    return status;
+}
+
+static mb_err_t copy_register_payload(const mb_client_txn_t *txn,
+                                      uint16_t expected_count,
+                                      uint16_t *out_registers)
+{
+    if (txn == NULL || out_registers == NULL || expected_count == 0U) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    const mb_size_t expected_bytes = (mb_size_t)expected_count * 2U;
+    const uint8_t *payload = txn->rx_view.payload;
+    const mb_size_t byte_count = txn->rx_view.payload_len;
+
+    if (payload == NULL || byte_count < expected_bytes) {
+        return MB_ERR_INVALID_REQUEST;
+    }
+
+    for (uint16_t i = 0; i < expected_count; ++i) {
+        out_registers[i] = ((uint16_t)payload[(mb_size_t)i * 2U] << 8) |
+                           payload[(mb_size_t)i * 2U + 1U];
+    }
+    return MB_OK;
+}
+
+static mb_err_t copy_bit_payload(const mb_client_txn_t *txn,
+                                 uint16_t expected_count,
+                                 uint8_t *out_bits)
+{
+    if (txn == NULL || out_bits == NULL || expected_count == 0U) {
+        return MB_ERR_INVALID_ARGUMENT;
+    }
+
+    const mb_size_t expected_bytes = (expected_count + 7U) / 8U;
+    const uint8_t *payload = txn->rx_view.payload;
+    const mb_size_t byte_count = txn->rx_view.payload_len;
+
+    if (payload == NULL || byte_count < expected_bytes) {
+        return MB_ERR_INVALID_REQUEST;
+    }
+
+    memcpy(out_bits, payload, expected_bytes);
+    return MB_OK;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                            Connection Management                           */
 /* -------------------------------------------------------------------------- */
@@ -294,38 +363,19 @@ mb_err_t mb_host_read_holding(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_read_holding_registers(&client->client, unit_id, address, count, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
+    mb_err_t status = submit_and_wait(client,
+                                      &txn,
+                                      mb_client_read_holding_registers(&client->client,
+                                                                       unit_id,
+                                                                       address,
+                                                                       count,
+                                                                       &txn));
+    if (!mb_err_is_ok(status)) {
+        return status;
     }
 
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Extract data from response
-    if (txn->rx_status == MB_OK) {
-        const uint8_t *payload = txn->rx_view.payload;
-        const size_t byte_count = txn->rx_view.payload_len;
-        
-        if (byte_count < (size_t)(count * 2)) {  // NOLINT(bugprone-implicit-widening-of-multiplication-result)
-            return MB_ERR_INVALID_REQUEST;
-        }
-
-        for (uint16_t i = 0; i < count; i++) {
-            out_registers[i] = ((uint16_t)payload[(size_t)i * 2] << 8) | payload[(size_t)i * 2 + 1];  // NOLINT(bugprone-implicit-widening-of-multiplication-result)
-        }
-        return MB_OK;
-    } else if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-        return txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return copy_register_payload(txn, count, out_registers);
 }
 
 mb_err_t mb_host_read_input(mb_host_client_t *client,
@@ -338,38 +388,19 @@ mb_err_t mb_host_read_input(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_read_input_registers(&client->client, unit_id, address, count, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
+    mb_err_t status = submit_and_wait(client,
+                                      &txn,
+                                      mb_client_read_input_registers(&client->client,
+                                                                     unit_id,
+                                                                     address,
+                                                                     count,
+                                                                     &txn));
+    if (!mb_err_is_ok(status)) {
+        return status;
     }
 
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Extract data from response
-    if (txn->rx_status == MB_OK) {
-        const uint8_t *payload = txn->rx_view.payload;
-        const size_t byte_count = txn->rx_view.payload_len;
-        
-        if (byte_count < (size_t)(count * 2)) {  // NOLINT(bugprone-implicit-widening-of-multiplication-result)
-            return MB_ERR_INVALID_REQUEST;
-        }
-
-        for (uint16_t i = 0; i < count; i++) {
-            out_registers[i] = ((uint16_t)payload[(size_t)i * 2] << 8) | payload[(size_t)i * 2 + 1];  // NOLINT(bugprone-implicit-widening-of-multiplication-result)
-        }
-        return MB_OK;
-    } else if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-        return txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return copy_register_payload(txn, count, out_registers);
 }
 
 #if MB_CONF_ENABLE_FC01
@@ -383,37 +414,19 @@ mb_err_t mb_host_read_coils(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_read_coils(&client->client, unit_id, address, count, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
+    mb_err_t status = submit_and_wait(client,
+                                      &txn,
+                                      mb_client_read_coils(&client->client,
+                                                           unit_id,
+                                                           address,
+                                                           count,
+                                                           &txn));
+    if (!mb_err_is_ok(status)) {
+        return status;
     }
 
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Extract data from response
-    if (txn->rx_status == MB_OK) {
-        const uint8_t *payload = txn->rx_view.payload;
-        const size_t byte_count = txn->rx_view.payload_len;
-        const size_t expected_bytes = (count + 7) / 8;
-        
-        if (byte_count < expected_bytes) {
-            return MB_ERR_INVALID_REQUEST;
-        }
-
-        memcpy(out_coils, payload, expected_bytes);
-        return MB_OK;
-    } else if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-        return txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return copy_bit_payload(txn, count, out_coils);
 }
 #endif /* MB_CONF_ENABLE_FC01 */
 
@@ -428,37 +441,19 @@ mb_err_t mb_host_read_discrete(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_read_discrete_inputs(&client->client, unit_id, address, count, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
+    mb_err_t status = submit_and_wait(client,
+                                      &txn,
+                                      mb_client_read_discrete_inputs(&client->client,
+                                                                     unit_id,
+                                                                     address,
+                                                                     count,
+                                                                     &txn));
+    if (!mb_err_is_ok(status)) {
+        return status;
     }
 
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Extract data from response
-    if (txn->rx_status == MB_OK) {
-        const uint8_t *payload = txn->rx_view.payload;
-        const size_t byte_count = txn->rx_view.payload_len;
-        const size_t expected_bytes = (count + 7) / 8;
-        
-        if (byte_count < expected_bytes) {
-            return MB_ERR_INVALID_REQUEST;
-        }
-
-        memcpy(out_inputs, payload, expected_bytes);
-        return MB_OK;
-    } else if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-        return txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return copy_bit_payload(txn, count, out_inputs);
 }
 #endif /* MB_CONF_ENABLE_FC02 */
 
@@ -475,24 +470,14 @@ mb_err_t mb_host_write_single_register(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_write_single_register(&client->client, unit_id, address, value, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return submit_and_wait(client,
+                           &txn,
+                           mb_client_write_single_register(&client->client,
+                                                            unit_id,
+                                                            address,
+                                                            value,
+                                                            &txn));
 }
 
 #if MB_CONF_ENABLE_FC05
@@ -505,24 +490,14 @@ mb_err_t mb_host_write_single_coil(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_write_single_coil(&client->client, unit_id, address, value, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return submit_and_wait(client,
+                           &txn,
+                           mb_client_write_single_coil(&client->client,
+                                                       unit_id,
+                                                       address,
+                                                       value,
+                                                       &txn));
 }
 #endif /* MB_CONF_ENABLE_FC05 */
 
@@ -536,24 +511,15 @@ mb_err_t mb_host_write_multiple_registers(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_write_multiple_registers(&client->client, unit_id, address, count, registers, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return submit_and_wait(client,
+                           &txn,
+                           mb_client_write_multiple_registers(&client->client,
+                                                              unit_id,
+                                                              address,
+                                                              count,
+                                                              registers,
+                                                              &txn));
 }
 
 #if MB_CONF_ENABLE_FC0F
@@ -567,24 +533,15 @@ mb_err_t mb_host_write_multiple_coils(mb_host_client_t *client,
         return MB_ERR_INVALID_ARGUMENT;
     }
 
-    // Submit request using convenience API
     mb_client_txn_t *txn = NULL;
-    mb_err_t err = mb_client_write_multiple_coils(&client->client, unit_id, address, count, coils, &txn);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    // Wait for completion
-    err = wait_for_transaction(client, txn, client->timeout_ms);
-    if (!mb_err_is_ok(err)) {
-        return err;
-    }
-
-    if (mb_err_is_exception(txn->rx_status)) {
-        client->last_exception = txn->rx_status;
-    }
-
-    return txn->rx_status;
+    return submit_and_wait(client,
+                           &txn,
+                           mb_client_write_multiple_coils(&client->client,
+                                                          unit_id,
+                                                          address,
+                                                          count,
+                                                          coils,
+                                                          &txn));
 }
 #endif /* MB_CONF_ENABLE_FC0F */
 

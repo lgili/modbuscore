@@ -35,7 +35,7 @@ target_compile_definitions(${LIBRARY_NAME} PUBLIC
 target_include_directories(
   ${LIBRARY_NAME} PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    # "$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>"
+    "$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>"
     "$<INSTALL_INTERFACE:include>"
 )
 
@@ -63,7 +63,7 @@ if(MODBUS_INSTALL)
   # Headers:
   #   - generated_headers/foo/version.h -> <prefix>/include/foo/version.h
   install(
-      FILES       "${GENERATED_HEADERS_DIR}/${LIBRARY_FOLDER}/version.h"
+      FILES       "${GENERATED_HEADERS_DIR}/${LIBRARY_FOLDER}/version_config.h"
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${LIBRARY_FOLDER}"
   )
 

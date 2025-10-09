@@ -7,6 +7,10 @@ project(ModbusCore
     LANGUAGES C CXX
 )
 
+# The library folder is 'modbus', not 'modbuscore'
+set(LIBRARY_FOLDER "modbus")
+set(LIBRARY_NAME "modbus")
+
 # ---------------------------------------------------------------------------
 # High-level configuration profiles (pre-Gate 17 scaffolding)
 # ---------------------------------------------------------------------------
@@ -112,6 +116,7 @@ option(MODBUS_ENABLE_SERVER "Build Modbus server components." ${_MODBUS_DEFAULT_
 option(MODBUS_ENABLE_TRANSPORT_RTU "Build Modbus RTU transport components." ${_MODBUS_DEFAULT_TRANSPORT_RTU})
 option(MODBUS_ENABLE_TRANSPORT_ASCII "Build Modbus ASCII transport components." ${_MODBUS_DEFAULT_TRANSPORT_ASCII})
 option(MODBUS_ENABLE_TRANSPORT_TCP "Build Modbus TCP transport components." ${_MODBUS_DEFAULT_TRANSPORT_TCP})
+option(MODBUS_ENABLE_COMPAT_LIBMODBUS "Enable libmodbus-style compatibility wrappers on top of the host API." OFF)
 option(MODBUS_PEDANTIC_WARNINGS "Add -Wconversion/-Wsign-conversion diagnostics." OFF)
 option(MODBUS_USE_SYSTEM_GTEST "Use an existing GTest installation instead of downloading it." OFF)
 option(MODBUS_INSTALL "Generate install rules and package configuration artifacts." ON)
@@ -150,6 +155,15 @@ if(MODBUS_DIAG_ENABLE_TRACE)
     set(MB_CONF_DIAG_ENABLE_TRACE 1)
 else()
     set(MB_CONF_DIAG_ENABLE_TRACE 0)
+endif()
+
+if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
+    if(NOT MODBUS_ENABLE_CLIENT)
+        message(FATAL_ERROR "MODBUS_ENABLE_COMPAT_LIBMODBUS requires MODBUS_ENABLE_CLIENT=ON.")
+    endif()
+    set(MB_CONF_ENABLE_COMPAT_LIBMODBUS 1)
+else()
+    set(MB_CONF_ENABLE_COMPAT_LIBMODBUS 0)
 endif()
 
 set(MB_CONF_DIAG_TRACE_DEPTH ${MODBUS_DIAG_TRACE_DEPTH})

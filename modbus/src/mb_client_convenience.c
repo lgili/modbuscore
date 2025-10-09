@@ -19,6 +19,20 @@
 #include <modbus/mb_err.h>
 #include <string.h>
 
+static void mb_client_prepare_standard_request(mb_client_request_t *req,
+                                               uint8_t unit_id,
+                                               const uint8_t *pdu,
+                                               mb_size_t payload_len)
+{
+    memset(req, 0, sizeof(*req));
+    req->request.unit_id = unit_id;
+    req->request.function = pdu[0];
+    req->request.payload = (payload_len > 0U) ? &pdu[1] : NULL;
+    req->request.payload_len = payload_len;
+    req->timeout_ms = MB_CLIENT_DEFAULT_TIMEOUT_MS;
+    req->max_retries = 0;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              Read Operations                               */
 /* -------------------------------------------------------------------------- */
@@ -43,13 +57,7 @@ mb_err_t mb_client_read_holding_registers(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = (pdu[1] || pdu[2] || pdu[3] || pdu[4]) ? &pdu[1] : NULL;
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -75,13 +83,7 @@ mb_err_t mb_client_read_input_registers(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -107,13 +109,7 @@ mb_err_t mb_client_read_coils(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -139,13 +135,7 @@ mb_err_t mb_client_read_discrete_inputs(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -175,13 +165,7 @@ mb_err_t mb_client_write_single_register(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -207,13 +191,7 @@ mb_err_t mb_client_write_single_coil(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = 4;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, 4U);
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -243,13 +221,7 @@ mb_err_t mb_client_write_multiple_registers(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = pdu_len - 1;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, (mb_size_t)(pdu_len - 1U));
 
     return mb_client_submit(client, &req, out_txn);
 }
@@ -283,13 +255,7 @@ mb_err_t mb_client_write_multiple_coils(mb_client_t *client,
 
     // Build request
     mb_client_request_t req;
-    memset(&req, 0, sizeof(req));
-    req.request.unit_id = unit_id;
-    req.request.function = pdu[0];
-    req.request.payload = &pdu[1];
-    req.request.payload_len = pdu_len - 1;
-    req.timeout_ms = 1000;
-    req.max_retries = 0;
+    mb_client_prepare_standard_request(&req, unit_id, pdu, (mb_size_t)(pdu_len - 1U));
 
     return mb_client_submit(client, &req, out_txn);
 }

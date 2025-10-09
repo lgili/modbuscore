@@ -22,6 +22,9 @@ Welcome to the ModbusCore documentation. This library provides a modern, product
 ### Additional Documentation
 
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[Porting from libmodbus](PORTING_LIBMODBUS.md)** - Migrate existing applications with the compatibility shim
+- **[Try It Now](TRY_IT_NOW.md)** - Build and run packaged demos in minutes
+- **[Release Checklist](RELEASE_CHECKLIST.md)** - Step-by-step playbook for publishing new versions
 
 ## 🔧 API Documentation
 

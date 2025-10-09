@@ -120,6 +120,10 @@
 #define MB_CONF_ENABLE_POWER_MANAGEMENT 1
 #endif
 
+#ifndef MB_CONF_ENABLE_COMPAT_LIBMODBUS
+#define MB_CONF_ENABLE_COMPAT_LIBMODBUS 0
+#endif
+
 #define LOG_ENABLED
 /**
  * @brief Maximum size of holding registers array in the server.

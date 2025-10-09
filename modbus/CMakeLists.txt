@@ -48,6 +48,10 @@ list(APPEND SOURCES src/mb_iovec.c)
 list(APPEND SOURCES src/mb_queue.c)
 list(APPEND SOURCES src/mb_txpool.c)
 
+# Noise resilience features (Gate 33)
+list(APPEND SOURCES src/rtu_resync.c)
+list(APPEND SOURCES src/dup_filter.c)
+
 # ISR-safe mode (Gate 23)
 list(APPEND SOURCES src/mb_isr.c)
 
@@ -63,6 +67,10 @@ if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/mb_client_convenience.c)
   # Add blocking host API for desktop/Linux/macOS/Windows
   list(APPEND SOURCES src/mb_host.c)
+endif()
+
+if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
+  list(APPEND SOURCES src/compat/libmodbus.c)
 endif()
 
 if(MODBUS_ENABLE_PORT_MUTEX)
@@ -103,6 +111,7 @@ set(HEADERS_PUBLIC
   include/modbus/features.h
   include/modbus/utils.h
   include/modbus/fsm.h
+  include/modbus/version.h
   include/modbus/core.h
   include/modbus/port/freertos.h
   include/modbus/port/bare.h
@@ -134,6 +143,13 @@ if(MODBUS_ENABLE_CLIENT)
   list(APPEND HEADERS_PUBLIC include/modbus/client.h)
   # Add blocking host API header for desktop/Linux/macOS/Windows
   list(APPEND HEADERS_PUBLIC include/modbus/mb_host.h)
+endif()
+
+if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
+  list(APPEND HEADERS_PUBLIC
+    include/modbus/compat/libmodbus.h
+    include/modbus/compat/modbus-errno.h
+  )
 endif()
 
 if(MODBUS_ENABLE_PORT_MUTEX)
@@ -222,6 +238,7 @@ target_compile_definitions(${LIBRARY_NAME} PUBLIC
   MB_CONF_DIAG_ENABLE_COUNTERS=${MB_CONF_DIAG_ENABLE_COUNTERS}
   MB_CONF_DIAG_ENABLE_TRACE=${MB_CONF_DIAG_ENABLE_TRACE}
   MB_CONF_DIAG_TRACE_DEPTH=${MB_CONF_DIAG_TRACE_DEPTH}
+  MB_CONF_ENABLE_COMPAT_LIBMODBUS=${MB_CONF_ENABLE_COMPAT_LIBMODBUS}
 )
 
 # Optional SEGGER RTT transport for logging

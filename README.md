@@ -45,6 +45,17 @@ gcc your_code.c -lmodbus -o modbus_app
 
 See platform-specific quickstarts: [embedded/quickstarts](embedded/quickstarts)
 
+### Loopback Demo (Host)
+
+Verify the client/server cores without hardware or drivers:
+
+```bash
+cmake --preset host-debug --target modbus_loopback_demo
+./build/host-debug/examples/modbus_loopback_demo
+```
+
+Prefer a narrated walkthrough? See [docs/TRY_IT_NOW.md](docs/TRY_IT_NOW.md).
+
 ---
 
 ## Why ModbusCore?
@@ -324,6 +335,14 @@ Contributions welcome! Please:
 6. Submit a pull request
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+## Release Resources
+
+- [CHANGELOG.md](CHANGELOG.md) — highlights for every release.
+- [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) — repeatable playbook for tagging and publishing.
+- `cmake --preset host-compat` — build preset that keeps the libmodbus compatibility layer covered in CI.
 
 ---
 
