@@ -120,7 +120,8 @@
             "description": "Debug build with gcov/lcov instrumentation",
             "inherits": "host-base",
             "cacheVariables": {
-                "MODBUS_ENABLE_COVERAGE": "ON"
+                "MODBUS_ENABLE_COVERAGE": "ON",
+                "MODBUS_BUILD_EXAMPLES": "ON"
             }
         },
         {

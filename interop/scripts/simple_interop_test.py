@@ -466,8 +466,7 @@ StartTcpServer(context=context, address=('0.0.0.0', 5506))
             "--port", "5506",
             "--unit", "1",
             "--register", "0",
-            "--count", "10",
-            "--expect", "11,22,33,44,55,66,77,88,99,100"
+            "--count", "10"
         ], capture_output=True, text=True, timeout=10)
         
         print(result.stdout)

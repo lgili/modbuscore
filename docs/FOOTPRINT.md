@@ -311,7 +311,7 @@ arm-none-eabi-gcc --version
 cmake --preset host-footprint -DMODBUS_PROFILE=TINY
 
 # Build and generate map file
-cmake --build build/host-footprint -- -v
+cmake --build --preset host-footprint -- -v
 
 # Map file location
 # build/host-footprint/modbus/libmodbus.a.map
@@ -340,7 +340,7 @@ python3 scripts/ci/measure_footprint.py \
 cmake --preset host-footprint \
   -DCMAKE_C_FLAGS="-fstack-usage"
 
-cmake --build build/host-footprint
+cmake --build --preset host-footprint
 
 # Analyze .su files
 python3 scripts/ci/analyze_stack.py \

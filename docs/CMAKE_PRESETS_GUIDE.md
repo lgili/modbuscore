@@ -6,6 +6,7 @@ This guide explains how to use CMake presets for easy configuration and cross-co
 
 CMake presets provide named configurations that eliminate the need to remember complex command-line arguments. This library includes presets for:
 - **Host development** (native builds for testing)
+- **Compatibility validation** (host build with the libmodbus shim enabled)
 - **Embedded targets** (STM32G0, ESP32-C3, nRF52)
 - **Special builds** (sanitizers, coverage, fuzzing)
 
@@ -46,12 +47,12 @@ cmake --preset stm32g0-tiny
 ### Build
 
 ```bash
-cmake --build build/<preset-name>
+cmake --build --preset <preset-name>
 ```
 
 Example:
 ```bash
-cmake --build build/stm32g0-tiny
+cmake --build --preset stm32g0-tiny
 ```
 
 ---
@@ -65,7 +66,7 @@ For native development and testing on your workstation.
 
 ```bash
 cmake --preset host-debug
-cmake --build build/host-debug
+cmake --build --preset host-debug
 ```
 
 **Configuration:**
@@ -82,12 +83,30 @@ cmake --build build/host-debug
 - Unit testing
 - Integration testing
 
+### host-compat
+**Purpose:** Validate the libmodbus compatibility shim in CI-equivalent settings
+
+```bash
+cmake --preset host-compat
+cmake --build --preset host-compat
+ctest --preset compat --output-on-failure
+```
+
+**Configuration:**
+- Inherits `host-base` (Debug, all transports/function codes)
+- Enables `MODBUS_ENABLE_COMPAT_LIBMODBUS`
+- Builds the libmodbus compatibility tests and demo
+
+**Use cases:**
+- Keeping Gate 34 wrappers buildable
+- Running compatibility regression tests alongside native ones
+
 ### host-release
 **Purpose:** Production release build
 
 ```bash
 cmake --preset host-release
-cmake --build build/host-release
+cmake --build --preset host-release
 ```
 
 **Configuration:**
@@ -107,7 +126,7 @@ cmake --build build/host-release
 
 ```bash
 cmake --preset host-client-only
-cmake --build build/host-client-only
+cmake --build --preset host-client-only
 ```
 
 **Configuration:**
@@ -120,7 +139,7 @@ cmake --build build/host-client-only
 
 ```bash
 cmake --preset host-server-only
-cmake --build build/host-server-only
+cmake --build --preset host-server-only
 ```
 
 **Configuration:**
@@ -133,7 +152,7 @@ cmake --build build/host-server-only
 
 ```bash
 cmake --preset host-rtu-only
-cmake --build build/host-rtu-only
+cmake --build --preset host-rtu-only
 ```
 
 **Configuration:**
@@ -145,7 +164,7 @@ cmake --build build/host-rtu-only
 
 ```bash
 cmake --preset host-tcp-only
-cmake --build build/host-tcp-only
+cmake --build --preset host-tcp-only
 ```
 
 **Configuration:**
@@ -157,7 +176,7 @@ cmake --build build/host-tcp-only
 
 ```bash
 cmake --preset host-footprint
-cmake --build build/host-footprint
+cmake --build --preset host-footprint
 ```
 
 **Configuration:**
@@ -177,8 +196,8 @@ cmake --build build/host-footprint
 
 ```bash
 cmake --preset host-asan
-cmake --build build/host-asan
-./build/host-asan/tests/modbus_tests
+cmake --build --preset host-asan
+ctest --test-dir build/host-asan --output-on-failure
 ```
 
 **Configuration:**
@@ -196,8 +215,8 @@ cmake --build build/host-asan
 
 ```bash
 cmake --preset host-tsan
-cmake --build build/host-tsan
-./build/host-tsan/tests/modbus_tests
+cmake --build --preset host-tsan
+ctest --test-dir build/host-tsan --output-on-failure
 ```
 
 **Configuration:**
@@ -215,11 +234,10 @@ cmake --build build/host-tsan
 
 ```bash
 cmake --preset host-coverage
-cmake --build build/host-coverage
+cmake --build --preset host-coverage
 ctest --test-dir build/host-coverage
 # Generate coverage report
-cd build/host-coverage
-make coverage  # or ninja coverage
+cmake --build --preset host-coverage --target coverage
 ```
 
 **Configuration:**
@@ -237,7 +255,7 @@ make coverage  # or ninja coverage
 
 ```bash
 cmake --preset host-fuzz
-cmake --build build/host-fuzz
+cmake --build --preset host-fuzz
 # Run fuzzers (see build/host-fuzz/fuzz/)
 ```
 
@@ -303,7 +321,7 @@ sudo apt-get install ninja-build
 
 ```bash
 cmake --preset stm32g0-tiny
-cmake --build build/stm32g0-tiny
+cmake --build --preset stm32g0-tiny
 ```
 
 **Configuration:**
@@ -329,7 +347,7 @@ cmake --build build/stm32g0-tiny
 
 ```bash
 cmake --preset stm32g0-lean
-cmake --build build/stm32g0-lean
+cmake --build --preset stm32g0-lean
 ```
 
 **Configuration:**
@@ -354,7 +372,7 @@ cmake --build build/stm32g0-lean
 
 ```bash
 cmake --preset esp32c3-lean
-cmake --build build/esp32c3-lean
+cmake --build --preset esp32c3-lean
 ```
 
 **Configuration:**
@@ -381,7 +399,7 @@ cmake --build build/esp32c3-lean
 
 ```bash
 cmake --preset esp32c3-full
-cmake --build build/esp32c3-full
+cmake --build --preset esp32c3-full
 ```
 
 **Configuration:**
@@ -406,7 +424,7 @@ cmake --build build/esp32c3-full
 
 ```bash
 cmake --preset nrf52-full
-cmake --build build/nrf52-full
+cmake --build --preset nrf52-full
 ```
 
 **Configuration:**
@@ -432,7 +450,7 @@ cmake --build build/nrf52-full
 
 ```bash
 cmake --preset nrf52-lean
-cmake --build build/nrf52-lean
+cmake --build --preset nrf52-lean
 ```
 
 **Configuration:**
@@ -456,7 +474,7 @@ cmake --build build/nrf52-lean
 
 ```bash
 cmake --preset docs
-cmake --build build/docs
+cmake --build --preset docs
 ```
 
 **Configuration:**
@@ -578,7 +596,7 @@ CLion automatically detects `CMakePresets.json`. Select preset from:
 cmake --preset host-debug
 
 # Build
-cmake --build build/host-debug
+cmake --build --preset host-debug
 
 # Test
 ctest --test-dir build/host-debug

@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract changelog entry
+        id: changelog
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          NOTES=$(python <<'PY'
+          import os
+          import re
+
+          tag = os.environ["TAG"]
+          with open("CHANGELOG.md", "r", encoding="utf-8") as fh:
+              text = fh.read()
+
+          pattern = rf"## \\[{re.escape(tag)}\\](.*?)(\\n## \\[|\\Z)"
+          match = re.search(pattern, text, re.S)
+          if match:
+              print(match.group(1).strip())
+          else:
+              print(f"Release {tag}")
+          PY
+          )
+          {
+            echo 'notes<<EOF'
+            echo "${NOTES}"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.notes }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

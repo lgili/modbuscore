@@ -288,6 +288,13 @@ if(MODBUS_ENABLE_COVERAGE)
 
     if(CMAKE_C_COMPILER_ID MATCHES "GNU" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
         add_compile_options(-O0 -g --coverage)
+        # Avoid data races when multiple threads update coverage counters.
+        # See lcov/geninfo negative counter errors.
+        if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+            add_compile_options(-fprofile-update=atomic)
+        else()
+            add_compile_options(-fprofile-update=atomic)
+        endif()
         add_link_options(--coverage)
         message(STATUS "Modbus coverage instrumentation enabled")
     else()

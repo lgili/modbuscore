@@ -309,12 +309,12 @@ ctest --test-dir build/host-debug -R "test_mb_queue|test_mb_txpool"
 # With AddressSanitizer (leak detection)
 cmake -S . -B build/host-asan -DMODBUS_ENABLE_ASAN=ON
 cmake --build build/host-asan
-./build/host-asan/tests/test_mb_txpool
+ctest --test-dir build/host-asan --tests-regex test_mb_txpool --output-on-failure
 
 # With ThreadSanitizer (data race detection)
 cmake -S . -B build/host-tsan -DMODBUS_ENABLE_TSAN=ON
 cmake --build build/host-tsan
-./build/host-tsan/tests/test_mb_queue
+ctest --test-dir build/host-tsan --tests-regex test_mb_queue --output-on-failure
 ```
 
 ---

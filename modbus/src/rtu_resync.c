@@ -95,7 +95,15 @@ void mb_rtu_resync_discard(mb_rtu_resync_t *rs, size_t count) {
     }
     
     rs->tail = (rs->tail + count) % MB_RESYNC_BUFFER_SIZE;
-    rs->bytes_discarded += count;
+    if (count > 0U) {
+        uint32_t increment = (count > UINT32_MAX) ? UINT32_MAX : (uint32_t)count;
+        uint32_t remaining = UINT32_MAX - rs->bytes_discarded;
+        if (increment > remaining) {
+            rs->bytes_discarded = UINT32_MAX;
+        } else {
+            rs->bytes_discarded += increment;
+        }
+    }
     
     /* Reset candidate position */
     if (rs->candidate_pos >= count) {

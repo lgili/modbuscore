@@ -105,7 +105,7 @@ jobs:
           sudo apt-get install -y ninja-build gcc g++ lcov
         shell: bash
       - name: Configure coverage preset
-        run: cmake --preset host-coverage -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+        run: cmake --preset host-coverage -DMODBUS_BUILD_EXAMPLES=ON
         shell: bash
       - name: Generate coverage report
         run: cmake --build --preset host-coverage --target coverage

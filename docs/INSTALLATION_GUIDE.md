@@ -23,7 +23,7 @@ Build and install the library system-wide:
 cmake --preset host-release
 
 # Build
-cmake --build build/host-release
+cmake --build --preset host-release
 
 # Install (may require sudo)
 sudo cmake --install build/host-release --prefix /usr/local
@@ -64,7 +64,7 @@ For embedded targets, build with the appropriate preset:
 ```bash
 # STM32G0 TINY profile
 cmake --preset stm32g0-tiny
-cmake --build build/stm32g0-tiny
+cmake --build --preset stm32g0-tiny
 
 # Link the library in your embedded project
 # Library: build/stm32g0-tiny/modbus/libmodbus.a
