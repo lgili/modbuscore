@@ -107,6 +107,8 @@ option(MODBUS_ENABLE_INTEGRATION_TESTS "Build extended integration-style tests."
 option(MODBUS_BUILD_EXAMPLES "Build example applications." OFF)
 option(MODBUS_BUILD_DOCS "Build API/reference documentation targets." OFF)
 option(MODBUS_BUILD_FUZZERS "Build libFuzzer harnesses (requires Clang)." OFF)
+option(MODBUS_BUILD_STATIC "Build libmodbus as a static library." ON)
+option(MODBUS_BUILD_SHARED "Build libmodbus as a shared library." OFF)
 option(MODBUS_ENABLE_COVERAGE "Enable code coverage instrumentation (GCC/Clang)." OFF)
 option(MODBUS_ENABLE_ASAN "Enable AddressSanitizer when supported." OFF)
 option(MODBUS_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer when supported." OFF)
@@ -155,6 +157,19 @@ if(MODBUS_DIAG_ENABLE_TRACE)
     set(MB_CONF_DIAG_ENABLE_TRACE 1)
 else()
     set(MB_CONF_DIAG_ENABLE_TRACE 0)
+endif()
+
+if(MODBUS_BUILD_STATIC AND MODBUS_BUILD_SHARED)
+    message(FATAL_ERROR "Enable either MODBUS_BUILD_STATIC or MODBUS_BUILD_SHARED (but not both) in this build.")
+endif()
+if(NOT MODBUS_BUILD_STATIC AND NOT MODBUS_BUILD_SHARED)
+    message(FATAL_ERROR "At least one of MODBUS_BUILD_STATIC or MODBUS_BUILD_SHARED must be ON.")
+endif()
+
+if(MODBUS_BUILD_SHARED)
+    set(BUILD_SHARED_LIBS ON)
+else()
+    set(BUILD_SHARED_LIBS OFF)
 endif()
 
 if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
@@ -419,11 +434,6 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/modbus/include/modbus
     FILES_MATCHING PATTERN "*.h"
 )
 
-# Install generated version.h
-install(FILES ${CMAKE_BINARY_DIR}/modbus/version.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/modbus
-)
-
 # Install CMake package configuration
 include(CMakePackageConfigHelpers)
 
@@ -455,11 +465,11 @@ install(EXPORT modbusTargets
 # Install pkg-config file
 configure_file(
     ${CMAKE_SOURCE_DIR}/cmake/modbus.pc.in
-    ${CMAKE_BINARY_DIR}/modbus.pc
+    ${CMAKE_BINARY_DIR}/modbuscore.pc
     @ONLY
 )
 
-install(FILES ${CMAKE_BINARY_DIR}/modbus.pc
+install(FILES ${CMAKE_BINARY_DIR}/modbuscore.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 

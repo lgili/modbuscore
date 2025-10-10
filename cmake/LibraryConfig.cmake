@@ -9,6 +9,18 @@ add_library(${LIBRARY_NAME}
 # Alias:
 #   - Foo::foo alias of foo
 add_library(${PROJECT_NAME}::${LIBRARY_NAME} ALIAS ${LIBRARY_NAME})
+if(DEFINED PACKAGE_NAME)
+  set(_package_namespace "${PACKAGE_NAME}")
+else()
+  set(_package_namespace "modbuscore")
+endif()
+if(NOT TARGET ${_package_namespace}::modbuscore)
+  add_library(${_package_namespace}::modbuscore ALIAS ${LIBRARY_NAME})
+endif()
+if(NOT TARGET Modbus::modbus)
+  add_library(Modbus::modbus ALIAS ${LIBRARY_NAME})
+endif()
+unset(_package_namespace)
 
 if(MODBUS_FORCE_C99)
   target_compile_features(${LIBRARY_NAME} PUBLIC c_std_99)
@@ -72,8 +84,23 @@ if(MODBUS_INSTALL)
   #   - <prefix>/lib/cmake/Foo/FooConfigVersion.cmake
   install(
       FILES       "${PROJECT_CONFIG_FILE}"
-                  "${VERSION_CONFIG_FILE}"
       DESTINATION "${CONFIG_INSTALL_DIR}"
+  )
+  if(EXISTS "${COMPAT_PROJECT_CONFIG_FILE}")
+    install(
+        FILES       "${COMPAT_PROJECT_CONFIG_FILE}"
+        DESTINATION "${CONFIG_INSTALL_DIR}"
+        RENAME      "ModbusCoreConfig.cmake"
+    )
+  endif()
+  install(
+      FILES       "${VERSION_CONFIG_FILE}"
+      DESTINATION "${CONFIG_INSTALL_DIR}"
+  )
+  install(
+      FILES       "${VERSION_CONFIG_FILE}"
+      DESTINATION "${CONFIG_INSTALL_DIR}"
+      RENAME      "ModbusCoreConfigVersion.cmake"
   )
 
   if(PKG_CONFIG_FILE)
@@ -87,8 +114,8 @@ if(MODBUS_INSTALL)
   #   - <prefix>/lib/cmake/Foo/FooTargets.cmake
   install(
     EXPORT      "${TARGETS_EXPORT_NAME}"
-    FILE        "${PROJECT_NAME}Targets.cmake"
+    FILE        "${TARGETS_EXPORT_NAME}.cmake"
     DESTINATION "${CONFIG_INSTALL_DIR}"
-    NAMESPACE   "${PROJECT_NAME}::"
+    NAMESPACE   "${PACKAGE_NAME}::"
   )
 endif()

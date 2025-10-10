@@ -12,6 +12,17 @@ This guide explains how to install and use ModbusCore in your projects.
 
 ---
 
+## Library Variants
+
+ModbusCore builds as a static library by default. To build the shared library instead, toggle `MODBUS_BUILD_STATIC`/`MODBUS_BUILD_SHARED` during configuration:
+
+```bash
+cmake -B build -DMODBUS_BUILD_STATIC=OFF -DMODBUS_BUILD_SHARED=ON
+cmake --build build
+```
+
+The installation target can then be consumed via CMake (`find_package(modbuscore)`) or `pkg-config`; see the `examples/cmake-consume/` and `examples/pkgconfig-consume/` directories for minimal clients.
+
 ## Installation Methods
 
 ### Method 1: System Installation (Recommended)
@@ -32,8 +43,8 @@ sudo cmake --install build/host-release --prefix /usr/local
 **Installed files:**
 - Headers: `/usr/local/include/modbus/`
 - Library: `/usr/local/lib/libmodbus.a`
-- CMake config: `/usr/local/lib/cmake/modbus/`
-- pkg-config: `/usr/local/lib/pkgconfig/modbus.pc`
+- CMake config: `/usr/local/lib/cmake/modbuscore/`
+- pkg-config: `/usr/local/lib/pkgconfig/modbuscore.pc`
 - Documentation: `/usr/local/share/doc/modbus/`
 - Examples: `/usr/local/share/doc/modbus/examples/`
 
@@ -115,13 +126,13 @@ cmake_minimum_required(VERSION 3.15)
 project(MyModbusApp)
 
 # Find the modbus library
-find_package(modbus REQUIRED)
+find_package(modbuscore REQUIRED)
 
 # Create your executable
 add_executable(my_app main.c)
 
 # Link with modbus
-target_link_libraries(my_app PRIVATE modbus::modbus)
+target_link_libraries(my_app PRIVATE modbuscore::modbuscore)
 ```
 
 **Build your project:**
@@ -136,7 +147,7 @@ make
 Specify minimum version:
 
 ```cmake
-find_package(modbus 1.0.0 REQUIRED)
+find_package(modbuscore 1.0.0 REQUIRED)
 ```
 
 ### Checking Variables
@@ -144,7 +155,7 @@ find_package(modbus 1.0.0 REQUIRED)
 The package provides these variables:
 
 ```cmake
-find_package(modbus REQUIRED)
+find_package(modbuscore REQUIRED)
 
 message(STATUS "Modbus version: ${MODBUS_VERSION}")
 message(STATUS "Modbus include dirs: ${MODBUS_INCLUDE_DIRS}")
@@ -158,7 +169,7 @@ cmake_minimum_required(VERSION 3.15)
 project(ModbusClientDemo VERSION 1.0.0)
 
 # Find modbus library
-find_package(modbus 1.0.0 REQUIRED)
+find_package(modbuscore 1.0.0 REQUIRED)
 
 # Your application
 add_executable(client_demo
@@ -167,7 +178,7 @@ add_executable(client_demo
 )
 
 target_link_libraries(client_demo PRIVATE
-    modbus::modbus
+    modbuscore::modbuscore
     pthread  # If needed for your platform
 )
 
@@ -184,24 +195,24 @@ For Makefile or other build systems:
 
 ```bash
 # Check if modbus is installed
-pkg-config --exists modbus && echo "Modbus found"
+pkg-config --exists modbuscore && echo "ModbusCore found"
 
 # Get compiler flags
-pkg-config --cflags modbus
+pkg-config --cflags modbuscore
 
 # Get linker flags
-pkg-config --libs modbus
+pkg-config --libs modbuscore
 
 # Get version
-pkg-config --modversion modbus
+pkg-config --modversion modbuscore
 ```
 
 ### Makefile Example
 
 ```makefile
 CC = gcc
-CFLAGS = -std=c11 -Wall -Wextra $(shell pkg-config --cflags modbus)
-LDFLAGS = $(shell pkg-config --libs modbus)
+CFLAGS = -std=c11 -Wall -Wextra $(shell pkg-config --cflags modbuscore)
+LDFLAGS = $(shell pkg-config --libs modbuscore)
 
 SRCS = main.c serial_port.c
 OBJS = $(SRCS:.c=.o)
@@ -231,7 +242,7 @@ make
 ```meson
 project('modbus_client', 'c', version: '1.0.0')
 
-modbus_dep = dependency('modbus', version: '>= 1.0.0')
+modbus_dep = dependency('modbuscore', version: '>= 1.0.0')
 
 executable('client_demo',
     'src/main.c',
@@ -406,10 +417,10 @@ int main(void) {
 cmake_minimum_required(VERSION 3.15)
 project(RTU_Client)
 
-find_package(modbus REQUIRED)
+find_package(modbuscore REQUIRED)
 
 add_executable(rtu_client main.c)
-target_link_libraries(rtu_client PRIVATE modbus::modbus)
+target_link_libraries(rtu_client PRIVATE modbuscore::modbuscore)
 ```
 
 **Build:**
@@ -467,8 +478,8 @@ int main(void) {
 **Makefile:**
 ```makefile
 CC = gcc
-CFLAGS = -std=c11 -Wall $(shell pkg-config --cflags modbus)
-LDFLAGS = $(shell pkg-config --libs modbus)
+CFLAGS = -std=c11 -Wall $(shell pkg-config --cflags modbuscore)
+LDFLAGS = $(shell pkg-config --libs modbuscore)
 
 tcp_server: server.c
 	$(CC) $(CFLAGS) server.c $(LDFLAGS) -o tcp_server
@@ -558,13 +569,13 @@ ls /usr/local/lib/libmodbus.a
 ls /usr/local/include/modbus/
 
 # Check CMake config
-ls /usr/local/lib/cmake/modbus/
+ls /usr/local/lib/cmake/modbuscore/
 
 # Check pkg-config
-pkg-config --exists modbus && echo "OK" || echo "Not found"
+pkg-config --exists modbuscore && echo "OK" || echo "Not found"
 
 # Check version
-pkg-config --modversion modbus
+pkg-config --modversion modbuscore
 ```
 
 ### Test Installation
@@ -586,9 +597,9 @@ EOF
 cat > CMakeLists.txt << 'EOF'
 cmake_minimum_required(VERSION 3.15)
 project(test)
-find_package(modbus REQUIRED)
+find_package(modbuscore REQUIRED)
 add_executable(test test.c)
-target_link_libraries(test PRIVATE modbus::modbus)
+target_link_libraries(test PRIVATE modbuscore::modbuscore)
 EOF
 
 mkdir build && cd build
@@ -607,7 +618,7 @@ Modbus library version: 1.0.0
 
 ### Library Not Found
 
-**Problem:** `find_package(modbus)` fails or pkg-config doesn't find modbus.
+**Problem:** `find_package(modbuscore)` fails or pkg-config doesn't find modbuscore.
 
 **Solutions:**
 1. Check installation path:
@@ -659,7 +670,7 @@ Modbus library version: 1.0.0
 3. Check for missing dependencies (pthread, etc.):
    ```cmake
    find_package(Threads REQUIRED)
-   target_link_libraries(my_app PRIVATE modbus::modbus Threads::Threads)
+   target_link_libraries(my_app PRIVATE modbuscore::modbuscore Threads::Threads)
    ```
 
 ### Amalgamation Script Fails

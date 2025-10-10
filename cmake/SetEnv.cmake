@@ -13,6 +13,12 @@ if(NOT LIBRARY_FOLDER)
   set(LIBRARY_FOLDER ${PROJECT_NAME_LOWERCASE})
 endif()
 
+# CMake package name (lowercase by default)
+if(NOT PACKAGE_NAME)
+  set(PACKAGE_NAME modbuscore)
+endif()
+string(TOUPPER ${PACKAGE_NAME} PACKAGE_NAME_UPPERCASE)
+
 # Make sure different configurations don't collide
 set(CMAKE_DEBUG_POSTFIX "d")
 
@@ -69,7 +75,7 @@ include(GNUInstallDirs)
 #   - <prefix>/lib*/cmake/<PROJECT-NAME>
 #   - <prefix>/lib*/
 #   - <prefix>/include/
-set(CONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}")
+set(CONFIG_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/${PACKAGE_NAME}")
 
 # Configuration
 set(GENERATED_DIR       "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -79,10 +85,10 @@ set(TARGETS_EXPORT_NAME "")
 set(PKG_CONFIG_FILE "")
 
 if(MODBUS_INSTALL)
-  set(VERSION_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}ConfigVersion.cmake")
-  set(PROJECT_CONFIG_FILE "${GENERATED_DIR}/${PROJECT_NAME}Config.cmake")
-  set(TARGETS_EXPORT_NAME "${PROJECT_NAME}Targets")
-  set(PKG_CONFIG_FILE "${GENERATED_DIR}/${LIBRARY_NAME}.pc")
+  set(VERSION_CONFIG_FILE "${GENERATED_DIR}/${PACKAGE_NAME}ConfigVersion.cmake")
+  set(PROJECT_CONFIG_FILE "${GENERATED_DIR}/${PACKAGE_NAME}Config.cmake")
+  set(TARGETS_EXPORT_NAME "${PACKAGE_NAME}Targets")
+  set(PKG_CONFIG_FILE "${GENERATED_DIR}/${PACKAGE_NAME}.pc")
 
   # Include module with functions:
   #   - write_basic_package_version_file(...)
@@ -102,11 +108,19 @@ if(MODBUS_INSTALL)
   # Use variables:
   #   - TARGETS_EXPORT_NAME
   #   - PROJECT_NAME
+  set(PACKAGE_NAMESPACE ${PACKAGE_NAME})
   configure_package_config_file(
       "${PROJECT_SOURCE_DIR}/cmake/Config.cmake.in"
       "${PROJECT_CONFIG_FILE}"
         INSTALL_DESTINATION "${CONFIG_INSTALL_DIR}"
   )
+
+  set(MODBUS_PC_LIBS "-l${LIBRARY_NAME}")
+  if(CMAKE_DL_LIBS)
+    string(JOIN " " MODBUS_PC_LIBS_PRIVATE ${CMAKE_DL_LIBS})
+  else()
+    set(MODBUS_PC_LIBS_PRIVATE "")
+  endif()
 
   configure_file(
     "${PROJECT_SOURCE_DIR}/cmake/modbus.pc.in"

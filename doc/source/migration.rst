@@ -61,7 +61,7 @@ Build-system updates
 ^^^^^^^^^^^^^^^^^^^^
 
 * ``target_link_libraries`` entries should prefer the new interface target
-  ``modbus::modbus`` in lieu of the legacy ``modbus`` alias. This ensures the
+  ``modbuscore::modbuscore`` in lieu of the legacy ``modbus`` alias. This ensures the
   include directories and compile definitions flow correctly.
 * CMake requires 3.20 now. Regenerate your build directories when bumping.
 
@@ -73,7 +73,7 @@ Compatibility helpers (Gate 15)
   helpers accept user-provided storage (heap-free by default) and wire regions
   into the cooperative server in one call.
 * Installation exports now include both ``ModbusConfig.cmake`` (for
-  ``find_package``) and ``modbus.pc`` (for ``pkg-config``). Update build scripts
+  ``find_package``) and ``modbuscore.pc`` (for ``pkg-config``). Update build scripts
   to prefer the upstream packages over hand-rolled include/lib hints.
 * The `modbus_unit_test_loop_demo` example mirrors libmodbus' unit-test client
   and server flows, easing parity testing when porting applications.
@@ -94,6 +94,6 @@ Adoption checklist
 * [ ] Regenerate build files using CMake >= 3.20.
 * [ ] Update transport initialisation to use the Gate 10 helpers if applicable.
 * [ ] Adjust watchdog timeout units to milliseconds.
-* [ ] Link against ``modbus::modbus`` and ``modbus::observe`` where needed.
+* [ ] Link against ``modbuscore::modbuscore`` and ``modbus::observe`` where needed.
 * [ ] Integrate diagnostics sampling or explicitly reset counters at boot.
 * [ ] Enable event callbacks to replace ad-hoc tracing glue.

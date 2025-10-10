@@ -15,6 +15,7 @@ Welcome to the ModbusCore documentation. This library provides a modern, product
 - **[Installation Guide](INSTALLATION_GUIDE.md)** – System installs, custom prefixes, and amalgamated builds.
 - **[CMake Presets Guide](CMAKE_PRESETS_GUIDE.md)** – Configure native, compat, and embedded builds with one command.
 - **[Kconfig & Menuconfig](KCONFIG_GUIDE.md)** – Surface ModbusCore options inside Zephyr and ESP-IDF.
+- **CMake/pkg-config Consumers** – See `examples/cmake-consume/` and `examples/pkgconfig-consume/` after installation.
 
 ## 🎯 Feature Deep Dives
 

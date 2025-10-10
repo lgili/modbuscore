@@ -159,7 +159,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(modbus)
 
-target_link_libraries(your_app PRIVATE modbus)
+target_link_libraries(your_app PRIVATE modbuscore::modbuscore)
 ```
 
 ### Manual Integration
@@ -268,6 +268,11 @@ cmake -B build -DMODBUS_ENABLE_SERVER=OFF -DMODBUS_ENABLE_TRANSPORT_TCP=OFF
 # Debug build with sanitizers
 cmake -B build -DCMAKE_BUILD_TYPE=Debug -DMODBUS_ENABLE_ASAN=ON
 
+# Build shared library (DLL/.so) instead of static archive
+cmake -B build-shared \
+  -DMODBUS_BUILD_STATIC=OFF \
+  -DMODBUS_BUILD_SHARED=ON
+
 # Cross-compile for ARM
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/arm-none-eabi.cmake
 
@@ -275,6 +280,23 @@ cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/arm-none-eabi.cmake
 cmake -B build -DMODBUS_BUILD_DOCS=ON
 cmake --build build --target docs
 ```
+
+### Consuming an Installed Package
+
+After running `cmake --install` you can reuse the exported package directly:
+
+```bash
+# Using CMake's find_package()
+cmake -S examples/cmake-consume -B build/cmake-consume \
+      -Dmodbuscore_DIR=/opt/modbus/lib/cmake/modbuscore
+cmake --build build/cmake-consume
+
+# Using pkg-config (Linux/macOS)
+PKG_CONFIG_PATH="/opt/modbus/lib/pkgconfig:$PKG_CONFIG_PATH" \
+pkg-config --cflags --libs modbuscore
+```
+
+See `examples/cmake-consume/` and `examples/pkgconfig-consume/` for complete samples.
 
 ---
 

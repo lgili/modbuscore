@@ -57,10 +57,10 @@ Using the installed package
 
 The install step exports both CMake and pkg-config metadata:
 
-* ``find_package(Modbus CONFIG REQUIRED)`` yields the ``Modbus::modbus``
+* ``find_package(ModbusCore CONFIG REQUIRED)`` yields the ``Modbus::modbus``
    target. Linking against it automatically propagates include directories and
    compile definitions.
-* ``pkg-config --cflags --libs modbus`` prints the compiler and linker flags
+* ``pkg-config --cflags --libs modbuscore`` prints the compiler and linker flags
    for build systems that rely on pkg-config.
 
 Generated files live under ``${prefix}/lib/cmake/Modbus`` and

@@ -117,6 +117,73 @@ jobs:
           path: build/host-coverage/coverage_html
         if: success()
 
+  package-consume:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pkgconfig: true
+            shell: bash
+          - os: macos-latest
+            pkgconfig: true
+            shell: bash
+          - os: windows-latest
+            pkgconfig: false
+            shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config gcc g++
+        shell: bash
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja pkg-config
+        shell: bash
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure host-release
+        run: cmake --preset host-release
+      - name: Build host-release
+        run: cmake --build --preset host-release
+      - name: Install package
+        run: cmake --install build/host-release --prefix "${{ github.workspace }}/package"
+      - name: Configure CMake consumer
+        run: cmake -S examples/cmake-consume -B build/cmake-consume -Dmodbuscore_DIR="${{ github.workspace }}/package/lib/cmake/modbuscore"
+      - name: Build CMake consumer
+        run: cmake --build build/cmake-consume
+      - name: Run CMake consumer (POSIX)
+        if: runner.os != 'Windows'
+        run: ./build/cmake-consume/modbus_cmake_consume
+        shell: bash
+      - name: Run CMake consumer (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          & "${{ github.workspace }}\build\cmake-consume\modbus_cmake_consume.exe"
+        shell: pwsh
+      - name: Validate pkg-config metadata
+        if: matrix.pkgconfig
+        run: |
+          export PKG_CONFIG_PATH="${GITHUB_WORKSPACE}/package/lib/pkgconfig:${PKG_CONFIG_PATH}"
+          pkg-config --modversion modbuscore
+          mkdir -p build/pkgconfig-consume
+          cc examples/pkgconfig-consume/main.c \
+            $(pkg-config --cflags modbuscore) \
+            $(pkg-config --libs modbuscore) \
+            -o build/pkgconfig-consume/pkgconfig_consume
+          ./build/pkgconfig-consume/pkgconfig_consume
+        shell: bash
+
   footprint:
     if: ${{ false }} # Temporarily disabled; run scripts/ci/report_footprint.py locally and commit the snapshot
     runs-on: ubuntu-latest

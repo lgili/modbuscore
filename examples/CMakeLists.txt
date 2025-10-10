@@ -3,7 +3,7 @@ add_library(modbus_examples_common STATIC
   common/demo_serial_port.c
 )
 target_include_directories(modbus_examples_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common)
-target_link_libraries(modbus_examples_common PUBLIC Modbus::modbus)
+target_link_libraries(modbus_examples_common PUBLIC modbuscore::modbuscore)
 target_compile_options(modbus_examples_common PRIVATE ${MODBUS_WARN_FLAGS})
 
 add_executable(modbus_tcp_client_cli tcp_client_cli.c)
@@ -19,20 +19,20 @@ target_link_libraries(modbus_tcp_multi_client_demo PRIVATE modbus_examples_commo
 target_compile_options(modbus_tcp_multi_client_demo PRIVATE ${MODBUS_WARN_FLAGS})
 
 add_executable(modbus_rtu_loop_demo rtu_loop_demo.c)
-target_link_libraries(modbus_rtu_loop_demo PRIVATE Modbus::modbus)
+target_link_libraries(modbus_rtu_loop_demo PRIVATE modbuscore::modbuscore)
 target_compile_options(modbus_rtu_loop_demo PRIVATE ${MODBUS_WARN_FLAGS})
 
 add_executable(modbus_unit_test_loop_demo unit_test_loop_demo.c)
-target_link_libraries(modbus_unit_test_loop_demo PRIVATE Modbus::modbus)
+target_link_libraries(modbus_unit_test_loop_demo PRIVATE modbuscore::modbuscore)
 target_compile_options(modbus_unit_test_loop_demo PRIVATE ${MODBUS_WARN_FLAGS})
 
 add_executable(modbus_loopback_demo loopback_demo.c)
-target_link_libraries(modbus_loopback_demo PRIVATE Modbus::modbus)
+target_link_libraries(modbus_loopback_demo PRIVATE modbuscore::modbuscore)
 target_compile_options(modbus_loopback_demo PRIVATE ${MODBUS_WARN_FLAGS})
 
 if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
   add_executable(libmodbus_migration_demo libmodbus_migration_demo.c)
-  target_link_libraries(libmodbus_migration_demo PRIVATE Modbus::modbus)
+  target_link_libraries(libmodbus_migration_demo PRIVATE modbuscore::modbuscore)
   target_compile_options(libmodbus_migration_demo PRIVATE ${MODBUS_WARN_FLAGS})
 endif()
 
@@ -45,17 +45,17 @@ target_link_libraries(modbus_rtu_serial_client PRIVATE modbus_examples_common)
 target_compile_options(modbus_rtu_serial_client PRIVATE ${MODBUS_WARN_FLAGS})
 
 add_executable(modbus_freertos_sim freertos_sim.c)
-target_link_libraries(modbus_freertos_sim PRIVATE Modbus::modbus)
+target_link_libraries(modbus_freertos_sim PRIVATE modbuscore::modbuscore)
 target_compile_options(modbus_freertos_sim PRIVATE ${MODBUS_WARN_FLAGS})
 
 if(NOT WIN32)
   add_executable(modbus_posix_sim posix_sim.c)
-  target_link_libraries(modbus_posix_sim PRIVATE Modbus::modbus)
+  target_link_libraries(modbus_posix_sim PRIVATE modbuscore::modbuscore)
   target_compile_options(modbus_posix_sim PRIVATE ${MODBUS_WARN_FLAGS})
 endif()
 
 add_executable(modbus_bare_sim bare_sim.c)
-target_link_libraries(modbus_bare_sim PRIVATE Modbus::modbus)
+target_link_libraries(modbus_bare_sim PRIVATE modbuscore::modbuscore)
 target_compile_options(modbus_bare_sim PRIVATE ${MODBUS_WARN_FLAGS})
 
 set(INSTALLABLE_TARGETS

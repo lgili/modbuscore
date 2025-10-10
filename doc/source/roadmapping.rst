@@ -143,7 +143,7 @@ Gate 15 – Compatibility & Port Conveniences
 * **Objective:** Provide drop-in ergonomics for teams migrating from libmodbus and other legacy stacks.
 * **Deliverables:**
   - ``mb_server_mapping_init`` and ``mb_server_mapping_apply`` helpers bundling transport configuration, register banks and request pools.
-  - Packaging artefacts for both ``find_package(modbus CONFIG REQUIRED)`` and ``pkg-config --cflags --libs modbus`` consumers.
+  - Packaging artefacts for both ``find_package(modbuscore CONFIG REQUIRED)`` and ``pkg-config --cflags --libs modbuscore`` consumers.
   - ``modbus_unit_test_loop_demo`` example mirroring the libmodbus unit-test flow on top of the cooperative FSMs.
 * **Gate:** Packaging examples build on Linux, macOS and Windows while the mapping helper passes the parity suite used by libmodbus.
 
@@ -342,9 +342,9 @@ Gate 35 – CMake Package & pkg-config
 * **Objective:** Offer standard consumption paths for build systems.
 * **Deliverables:**
   - Exported CMake package (``modbusTargets.cmake``, ``modbusConfig.cmake``, ``modbusConfigVersion.cmake``) installed under GNUInstallDirs.
-  - ``modbus.pc`` definition containing Cflags/Libs for shared and static variants.
+  - ``modbuscore.pc`` definition containing Cflags/Libs for shared and static variants.
   - Examples under ``examples/cmake-consume/`` and ``examples/pkgconfig-consume/``.
-* **Gate:** ``cmake -S examples/cmake-consume`` succeeds across GCC/Clang/MSVC using the installed package; ``pkg-config --cflags --libs modbus`` works on Linux and macOS.
+* **Gate:** ``cmake -S examples/cmake-consume`` succeeds across GCC/Clang/MSVC using the installed package; ``pkg-config --cflags --libs modbuscore`` works on Linux and macOS.
 
 Gate 36 – Prebuilt Artifacts per Platform
 -----------------------------------------
@@ -394,7 +394,7 @@ Gate 40 – Windows Installers (Chocolatey/Winget)
   - ``scripts/install.ps1`` fast path that downloads release artifacts, installs under ``%ProgramFiles%\\modbus`` and registers the CMake package location.
   - Optional Chocolatey package (``tools/chocolateyInstall.ps1``) referencing the released artifact.
   - Winget manifest when certificates and distribution policy allow.
-* **Gate:** Running the installer followed by ``cmake -S examples/cmake-consume -Dmodbus_DIR="%ProgramFiles%\\modbus\\cmake"`` builds with MSVC without rebuilding the library.
+* **Gate:** Running the installer followed by ``cmake -S examples/cmake-consume -Dmodbuscore_DIR="%ProgramFiles%\\modbus\\cmake"`` builds with MSVC without rebuilding the library.
 
 Gate 41 – Meson Wrap & pkg-config
 ---------------------------------
@@ -432,6 +432,6 @@ Gate 44 – Documentation: Install & Use in 60 Seconds
 * **Objective:** Deliver painless onboarding across distribution channels.
 * **Deliverables:**
   - ``docs/install.md`` describing prebuilt, vcpkg, Conan and build-from-source flows.
-  - Ready-to-use snippets for ``find_package(modbus)`` plus pkg-config compilation.
+  - Ready-to-use snippets for ``find_package(modbuscore)`` plus pkg-config compilation.
   - Compatibility matrix (MSVC 2019/2022, Clang, GCC) with required flags.
 * **Gate:** External user testing confirms successful installation on each OS using only the documentation.

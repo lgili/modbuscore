@@ -206,7 +206,7 @@ gcc hello.c -I/path/to/modbus/include -L/path/to/modbus/lib -lmodbus
 
 **Option 3: Use CMake (recommended)**
 ```cmake
-find_package(Modbus REQUIRED)
+find_package(ModbusCore REQUIRED)
 target_link_libraries(your_app Modbus::modbus)
 ```
 
