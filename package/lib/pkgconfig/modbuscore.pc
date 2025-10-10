@@ -1,7 +1,7 @@
-prefix=/Users/lgili/Documents/01 - Codes/02 - Empresa/02 - Modbus lib/install/host-release
+prefix=${pcfiledir}/../..
 exec_prefix=${prefix}
-libdir=/Users/lgili/Documents/01 - Codes/02 - Empresa/02 - Modbus lib/install/host-release/lib
-includedir=/Users/lgili/Documents/01 - Codes/02 - Empresa/02 - Modbus lib/install/host-release/include
+libdir=${prefix}/lib
+includedir=${prefix}/include
 
 Name: ModbusCore
 Description: The Core of Modern Modbus Communication - Production-ready stack for embedded systems

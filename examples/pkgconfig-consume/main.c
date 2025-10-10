@@ -3,6 +3,6 @@
 
 int main(void)
 {
-    printf("ModbusCore version: %s\n", MODBUS_VERSION);
+    printf("ModbusCore version: %s\n", MODBUSCORE_VERSION);
     return 0;
 }

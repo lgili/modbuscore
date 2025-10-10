@@ -184,6 +184,7 @@ jobs:
           ./build/pkgconfig-consume/pkgconfig_consume
         shell: bash
 
+
   footprint:
     if: ${{ false }} # Temporarily disabled; run scripts/ci/report_footprint.py locally and commit the snapshot
     runs-on: ubuntu-latest
