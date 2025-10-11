@@ -9,4 +9,4 @@ URL: https://github.com/lgili/modbus
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} @MODBUS_PC_LIBS@
 Libs.private: @MODBUS_PC_LIBS_PRIVATE@
-Cflags: -I${includedir}/@LIBRARY_FOLDER@
+Cflags: -I${includedir}

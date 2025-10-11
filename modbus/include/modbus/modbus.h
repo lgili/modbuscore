@@ -55,6 +55,7 @@
 
 #if MB_CONF_BUILD_CLIENT
 #include <modbus/client.h>
+#include <modbus/client_sync.h>
 #endif
 
 #if defined(_WIN32)

@@ -161,7 +161,7 @@ jobs:
       - name: Configure CMake consumer
         run: cmake -S examples/cmake-consume -B build/cmake-consume -Dmodbuscore_DIR="${{ github.workspace }}/package/lib/cmake/modbuscore"
       - name: Build CMake consumer
-        run: cmake --build build/cmake-consume
+        run: cmake --build build/cmake-consume --config Release
       - name: Run CMake consumer (POSIX)
         if: runner.os != 'Windows'
         run: ./build/cmake-consume/modbus_cmake_consume
@@ -169,7 +169,7 @@ jobs:
       - name: Run CMake consumer (Windows)
         if: runner.os == 'Windows'
         run: |
-          & "${{ github.workspace }}\build\cmake-consume\modbus_cmake_consume.exe"
+          & "${{ github.workspace }}\build\cmake-consume\Release\modbus_cmake_consume.exe"
         shell: pwsh
       - name: Validate pkg-config metadata
         if: matrix.pkgconfig

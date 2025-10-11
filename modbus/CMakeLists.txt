@@ -63,6 +63,7 @@ list(APPEND SOURCES src/mb_power.c)
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
+  list(APPEND SOURCES src/client_sync.c)
   # Add high-level convenience functions for common operations
   list(APPEND SOURCES src/mb_client_convenience.c)
   # Add blocking host API for desktop/Linux/macOS/Windows
@@ -141,6 +142,7 @@ endif()
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND HEADERS_PUBLIC include/modbus/client.h)
+  list(APPEND HEADERS_PUBLIC include/modbus/client_sync.h)
   # Add blocking host API header for desktop/Linux/macOS/Windows
   list(APPEND HEADERS_PUBLIC include/modbus/mb_host.h)
 endif()
