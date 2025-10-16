@@ -50,8 +50,7 @@ extern "C"{
 #include <modbus/mb_types.h>
 #include <modbus/conf.h>
 #include <modbus/mb_err.h>
-#include <modbus/transport.h>  /**< For modbus_transport_t and related definitions */
-#include <modbus/transport_if.h>
+#include <modbus/internal/transport_core.h>
 
 /* -------------------------------------------------------------------------- */
 /*                          Modbus Protocol Constants                         */

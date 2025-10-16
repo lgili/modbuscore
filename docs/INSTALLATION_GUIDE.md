@@ -157,9 +157,9 @@ The package provides these variables:
 ```cmake
 find_package(modbuscore REQUIRED)
 
-message(STATUS "Modbus version: ${MODBUS_VERSION}")
-message(STATUS "Modbus include dirs: ${MODBUS_INCLUDE_DIRS}")
-message(STATUS "Modbus libraries: ${MODBUS_LIBRARIES}")
+message(STATUS "ModbusCore version: ${modbuscore_VERSION}")
+message(STATUS "Include dirs: ${MODBUSCORE_INCLUDE_DIRS}")
+message(STATUS "Libraries: ${MODBUSCORE_LIBRARIES}")
 ```
 
 ### Complete Example
@@ -373,7 +373,8 @@ python scripts/amalgamate.py \
 **File: main.c**
 ```c
 #include <modbus/client.h>
-#include <modbus/rtu.h>
+#include <modbus/client_sync.h>
+#include <modbus/transport/rtu.h>
 #include <stdio.h>
 
 int main(void) {
@@ -382,31 +383,35 @@ int main(void) {
     
     // Client instance
     mb_client_t client;
+    mb_client_txn_t txn_pool[4];
     
     // Initialize RTU transport
-    mb_rtu_init(&rtu, "/dev/ttyUSB0", 9600, MB_PARITY_NONE);
+    if (!mb_err_is_ok(mb_rtu_init(&rtu, "/dev/ttyUSB0", 9600, MB_PARITY_NONE))) {
+        fprintf(stderr, "Failed to init RTU transport\n");
+        return 1;
+    }
     
     // Initialize client
-    mb_client_init(&client, mb_rtu_get_interface(&rtu), NULL, 0);
+    if (!mb_err_is_ok(mb_client_init(&client,
+                                     mb_rtu_get_interface(&rtu),
+                                     txn_pool,
+                                     (mb_size_t)4))) {
+        fprintf(stderr, "Failed to init client\n");
+        return 1;
+    }
     
     // Read holding registers
     uint16_t regs[10];
-    mb_errno_t err = mb_client_read_holding_registers_sync(
-        &client, 1, 0, 10, regs, 1000
-    );
+    mb_err_t err = mb_client_read_holding_sync(&client, 1, 0, 10, regs, NULL);
     
-    if (err == MB_EOK) {
+    if (mb_err_is_ok(err)) {
         printf("Read successful: %u values\n", 10);
         for (int i = 0; i < 10; i++) {
             printf("  Register %d: %u\n", i, regs[i]);
         }
     } else {
-        printf("Read failed: %d\n", err);
+        printf("Read failed: %s\n", mb_err_str(err));
     }
-    
-    // Cleanup
-    mb_client_destroy(&client);
-    mb_rtu_destroy(&rtu);
     
     return 0;
 }
@@ -542,7 +547,7 @@ int main(void) {
     while (1) {
         // Read sensor data via Modbus
         uint16_t sensor_value;
-        if (mb_client_read_holding_registers_sync(
+        if (mb_client_read_holding_sync(
             &client, 1, 0, 1, &sensor_value, 1000
         ) == MB_EOK) {
             // Process sensor value

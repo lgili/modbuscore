@@ -15,6 +15,7 @@
  */
 
 #include <modbus/modbus.h>
+#include <modbus/internal/utils.h>
 #include "gtest/gtest.h"
 
 

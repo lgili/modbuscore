@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "modbus/dup_filter.h"
+#include "modbus/internal/dup_filter.h"
 #include <string.h>
 
 void mb_dup_filter_init(mb_dup_filter_t *df, uint32_t window_ms) {

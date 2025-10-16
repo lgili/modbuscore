@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/pdu.h>
+#include <modbus/internal/pdu.h>
 }
 
 namespace {

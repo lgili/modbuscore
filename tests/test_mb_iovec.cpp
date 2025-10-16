@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <modbus/mb_iovec.h>
+#include <modbus/internal/mb_iovec.h>
 #include <modbus/mb_err.h>
 #include <cstring>
 

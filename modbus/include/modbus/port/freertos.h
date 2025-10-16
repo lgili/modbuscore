@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <modbus/transport_if.h>
+#include <modbus/internal/transport_core.h>
 
 #ifdef __cplusplus
 extern "C" {

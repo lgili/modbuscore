@@ -1,4 +1,4 @@
-#include <modbus/observe.h>
+#include <modbus/internal/observe.h>
 
 #include <string.h>
 

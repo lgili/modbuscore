@@ -1,4 +1,4 @@
-#include <modbus/mb_log.h>
+#include <modbus/internal/mb_log.h>
 
 #include <stdbool.h>
 

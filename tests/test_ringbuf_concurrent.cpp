@@ -6,7 +6,9 @@
  * threads (e.g., ISR producer + main thread consumer).
  */
 
-#include <modbus/ringbuf.h>
+#include <algorithm>
+
+#include <modbus/internal/ringbuf.h>
 #include "gtest/gtest.h"
 
 #include <thread>

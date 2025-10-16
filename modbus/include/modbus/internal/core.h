@@ -71,8 +71,8 @@ extern "C"{
 #endif
 
 #include <modbus/conf.h>
-#include <modbus/base.h>        /**< For modbus_context_t, modbus_error_t, etc. */
-#include <modbus/utils.h>       /**< For safe reads from buffers, etc. */
+#include <modbus/internal/base.h>        /**< For modbus_context_t, modbus_error_t, etc. */
+#include <modbus/internal/utils.h>       /**< For safe reads from buffers, etc. */
 
 /** 
  * @brief Common Modbus function codes (subset).

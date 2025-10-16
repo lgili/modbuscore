@@ -6,10 +6,10 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/client.h>
-#include <modbus/pdu.h>
+#include <modbus/internal/client.h>
+#include <modbus/internal/pdu.h>
 #include <modbus/mb_err.h>
-#include <modbus/transport.h>
+#include <modbus/internal/transport_core.h>
 }
 
 extern "C" {

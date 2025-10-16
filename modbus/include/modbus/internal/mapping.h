@@ -17,8 +17,8 @@
 #include <stdbool.h>
 
 #include <modbus/mb_err.h>
-#include <modbus/server.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/server.h>
+#include <modbus/internal/transport_core.h>
 
 #ifdef __cplusplus
 extern "C" {

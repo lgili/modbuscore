@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/mb_log.h>
+#include <modbus/internal/mb_log.h>
 }
 
 #include <string>

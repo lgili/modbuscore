@@ -5,11 +5,11 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/client.h>
-#include <modbus/core.h>
-#include <modbus/observe.h>
-#include <modbus/pdu.h>
-#include <modbus/transport.h>
+#include <modbus/internal/client.h>
+#include <modbus/internal/core.h>
+#include <modbus/internal/observe.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/transport_core.h>
 #include <modbus/transport/tcp.h>
 }
 

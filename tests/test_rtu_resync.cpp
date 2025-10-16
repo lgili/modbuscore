@@ -7,8 +7,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "modbus/rtu_resync.h"
-#include "modbus/utils.h"
+#include <modbus/internal/rtu_resync.h>
+#include <modbus/internal/utils.h>
 
 class RtuResyncTest : public ::testing::Test {
 protected:

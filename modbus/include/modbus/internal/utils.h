@@ -60,7 +60,7 @@
 extern "C"{
 #endif 
 
-#include <modbus/base.h>
+#include <modbus/internal/base.h>
 
 /**
  * @def MODBUS_CONVERT_CHAR_INTERVAL_TO_MS

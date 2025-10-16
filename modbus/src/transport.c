@@ -1,6 +1,6 @@
 #include <limits.h>
 
-#include <modbus/transport.h>
+#include <modbus/internal/transport_core.h>
 
 static mb_err_t modbus_transport_legacy_send(void *ctx,
                                              const mb_u8 *buf,

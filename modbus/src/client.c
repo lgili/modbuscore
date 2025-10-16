@@ -1,13 +1,13 @@
-#include <modbus/client.h>
+#include <modbus/internal/client.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 
-#include <modbus/mb_log.h>
-#include <modbus/core.h>
-#include <modbus/pdu.h>
+#include <modbus/internal/mb_log.h>
+#include <modbus/internal/core.h>
+#include <modbus/internal/pdu.h>
 
 #if MB_CONF_ENABLE_POWER_MANAGEMENT
 #include <modbus/mb_power.h>

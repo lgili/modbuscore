@@ -19,10 +19,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include <modbus/frame.h>
+#include <modbus/internal/frame.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
-#include <modbus/observe.h>
+#include <modbus/internal/observe.h>
 
 #if MB_CONF_ENABLE_POWER_MANAGEMENT
 #include <modbus/mb_power.h>

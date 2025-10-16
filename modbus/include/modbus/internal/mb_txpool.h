@@ -78,7 +78,7 @@
 #include <stdint.h>
 
 #include <modbus/mb_err.h>
-#include <modbus/mempool.h>
+#include <modbus/internal/mempool.h>
 
 #ifdef __cplusplus
 extern "C" {

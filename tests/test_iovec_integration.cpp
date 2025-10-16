@@ -4,8 +4,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <modbus/mb_iovec.h>
-#include <modbus/ringbuf.h>
+#include <modbus/internal/mb_iovec.h>
+#include <modbus/internal/ringbuf.h>
 #include <cstring>
 
 // Track memcpy calls for validation

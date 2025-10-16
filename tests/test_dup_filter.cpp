@@ -7,7 +7,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "modbus/dup_filter.h"
+#include <modbus/internal/dup_filter.h>
 #include <thread>
 #include <chrono>
 

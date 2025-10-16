@@ -20,6 +20,9 @@
 #include <cstring>
 
 #include <modbus/modbus.h>
+#include <modbus/internal/core.h>
+#include <modbus/internal/transport_core.h>
+#include <modbus/internal/frame.h>
 #include "gtest/gtest.h"
 
 #ifdef __cplusplus

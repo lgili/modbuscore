@@ -2,7 +2,7 @@
  * @file mempool.c
  */
 
-#include <modbus/mempool.h>
+#include <modbus/internal/mempool.h>
 
 #include <modbus/mb_types.h>
 

@@ -3,7 +3,7 @@
 #include <cstring>
 #include <vector>
 
-#include <modbus/transport_if.h>
+#include <modbus/internal/transport_core.h>
 
 namespace modbus::test {
 

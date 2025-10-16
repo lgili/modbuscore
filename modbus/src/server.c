@@ -1,9 +1,9 @@
-#include <modbus/server.h>
+#include <modbus/internal/server.h>
 
 #include <stdio.h>
 #include <string.h>
 
-#include <modbus/mb_log.h>
+#include <modbus/internal/mb_log.h>
 
 #if MB_CONF_ENABLE_POWER_MANAGEMENT
 #include <modbus/mb_power.h>

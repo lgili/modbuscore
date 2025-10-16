@@ -11,9 +11,9 @@
 #include <modbus/conf.h>
 
 #if MB_CONF_TRANSPORT_RTU
-#include <modbus/frame.h>
-#include <modbus/pdu.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/frame.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/transport_core.h>
 
 #ifdef __cplusplus
 extern "C" {

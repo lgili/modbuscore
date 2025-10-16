@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * See ulog.h for sparse documentation.
  */
 
-#include <modbus/log.h>
+#include <modbus/internal/log.h>
 
 #ifdef LOG_ENABLED  // whole file...
 

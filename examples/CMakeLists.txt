@@ -10,6 +10,10 @@ add_executable(modbus_tcp_client_cli tcp_client_cli.c)
 target_link_libraries(modbus_tcp_client_cli PRIVATE modbus_examples_common)
 target_compile_options(modbus_tcp_client_cli PRIVATE ${MODBUS_WARN_FLAGS})
 
+add_executable(modbus_sync_basics sync-basics/main.c)
+target_link_libraries(modbus_sync_basics PRIVATE modbus_examples_common)
+target_compile_options(modbus_sync_basics PRIVATE ${MODBUS_WARN_FLAGS})
+
 add_executable(modbus_tcp_server_demo tcp_server_demo.c)
 target_link_libraries(modbus_tcp_server_demo PRIVATE modbus_examples_common)
 target_compile_options(modbus_tcp_server_demo PRIVATE ${MODBUS_WARN_FLAGS})
@@ -60,6 +64,7 @@ target_compile_options(modbus_bare_sim PRIVATE ${MODBUS_WARN_FLAGS})
 
 set(INSTALLABLE_TARGETS
   modbus_tcp_client_cli
+  modbus_sync_basics
   modbus_tcp_server_demo
   modbus_tcp_multi_client_demo
   modbus_rtu_loop_demo

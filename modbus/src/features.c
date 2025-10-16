@@ -1,7 +1,7 @@
-#include <modbus/features.h>
+#include <modbus/internal/features.h>
 
 #include <modbus/conf.h>
-#include <modbus/pdu.h>
+#include <modbus/internal/pdu.h>
 
 #define MB_BOOL_FROM_FLAG(flag) ((flag) ? true : false)
 

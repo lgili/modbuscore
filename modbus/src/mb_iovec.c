@@ -3,7 +3,7 @@
  * @brief Implementation of zero-copy scatter-gather IO primitives.
  */
 
-#include <modbus/mb_iovec.h>
+#include <modbus/internal/mb_iovec.h>
 #include <modbus/mb_err.h>
 #include <string.h>
 #include <stdint.h>

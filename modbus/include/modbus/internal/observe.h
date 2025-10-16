@@ -10,7 +10,7 @@
 #include <stddef.h>
 
 #include <modbus/conf.h>
-#include <modbus/frame.h>
+#include <modbus/internal/frame.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
 

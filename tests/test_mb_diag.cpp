@@ -10,7 +10,7 @@
  * - CPU overhead validation
  */
 
-#include <modbus/observe.h>
+#include <modbus/internal/observe.h>
 #include <modbus/mb_err.h>
 
 #include <gtest/gtest.h>

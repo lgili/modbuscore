@@ -6,12 +6,12 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/frame.h>
-#include <modbus/observe.h>
-#include <modbus/pdu.h>
-#include <modbus/server.h>
-#include <modbus/mapping.h>
-#include <modbus/transport.h>
+#include <modbus/internal/frame.h>
+#include <modbus/internal/observe.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/server.h>
+#include <modbus/internal/mapping.h>
+#include <modbus/internal/transport_core.h>
 }
 
 extern "C" {

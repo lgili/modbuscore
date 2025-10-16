@@ -13,6 +13,7 @@
  */
 
 #include <modbus/modbus.h>
+#include <modbus/internal/transport_core.h>
 #include <string.h>
 
 /* Mock buffers and state */

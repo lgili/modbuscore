@@ -10,10 +10,10 @@
 #include <string.h>
 
 #include <modbus/conf.h>
-#include <modbus/client.h>
+#include <modbus/internal/client.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
-#include <modbus/pdu.h>
+#include <modbus/internal/pdu.h>
 
 #ifdef __cplusplus
 extern "C" {

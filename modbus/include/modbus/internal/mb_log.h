@@ -10,7 +10,7 @@
 #ifndef MODBUS_MB_LOG_H
 #define MODBUS_MB_LOG_H
 
-#include <modbus/log.h>
+#include <modbus/internal/log.h>
 
 #ifdef __cplusplus
 extern "C" {

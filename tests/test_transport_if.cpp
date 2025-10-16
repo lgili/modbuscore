@@ -5,8 +5,9 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/frame.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/frame.h>
+#include <modbus/internal/transport_core.h>
+#include <modbus/internal/core.h>
 #include <modbus/modbus.h>
 }
 

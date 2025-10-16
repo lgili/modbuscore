@@ -20,7 +20,7 @@
  */
 
 #include <modbus/modbus.h>
-#include <modbus/fsm.h>
+#include <modbus/internal/fsm.h>
 #include "gtest/gtest.h"
 
 extern "C" {

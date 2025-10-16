@@ -3,7 +3,7 @@
  * @brief Implementation of lock-free SPSC and MPSC queues.
  */
 
-#include <modbus/mb_queue.h>
+#include <modbus/internal/mb_queue.h>
 #include <modbus/mb_types.h>
 #include <string.h>
 

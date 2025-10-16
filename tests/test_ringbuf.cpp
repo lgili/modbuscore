@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/ringbuf.h>
+#include <modbus/internal/ringbuf.h>
 }
 
 namespace {

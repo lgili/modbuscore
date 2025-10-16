@@ -14,8 +14,8 @@
 // Parameters follow Modbus standard ordering (unit_id, address, etc.)
 // NOLINTBEGIN(bugprone-easily-swappable-parameters)
 
-#include <modbus/client.h>
-#include <modbus/pdu.h>
+#include <modbus/internal/client.h>
+#include <modbus/internal/pdu.h>
 #include <modbus/mb_err.h>
 #include <string.h>
 

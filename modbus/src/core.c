@@ -64,9 +64,9 @@
 #include <string.h>
 
 #include <modbus/conf.h>
-#include <modbus/core.h>
-#include <modbus/frame.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/core.h>
+#include <modbus/internal/frame.h>
+#include <modbus/internal/transport_core.h>
 
 /* Internal defines for timeouts, if needed */
 #ifndef MODBUS_INTERFRAME_TIMEOUT_MS

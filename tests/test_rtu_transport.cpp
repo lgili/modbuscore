@@ -7,6 +7,8 @@
 extern "C" {
 #include <modbus/modbus.h>
 #include <modbus/transport/rtu.h>
+#include <modbus/internal/transport_core.h>
+#include <modbus/internal/core.h>
 }
 
 extern "C" {

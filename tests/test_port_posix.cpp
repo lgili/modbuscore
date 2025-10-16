@@ -6,7 +6,7 @@
 
 extern "C" {
 #include <modbus/port/posix.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/transport_core.h>
 }
 
 #include <errno.h>

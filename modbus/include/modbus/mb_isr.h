@@ -127,7 +127,7 @@ void mb_set_isr_context(bool in_isr);
 /* ISR-Safe RX Path                                                           */
 /* ========================================================================== */
 
-#include <modbus/mb_queue.h>
+#include <modbus/internal/mb_queue.h>
 
 /**
  * @brief Statistics for ISR-safe operations.

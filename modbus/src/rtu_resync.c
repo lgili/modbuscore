@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "modbus/rtu_resync.h"
-#include "modbus/utils.h"
+#include "modbus/internal/rtu_resync.h"
+#include "modbus/internal/utils.h"
 #include <string.h>
 
 void mb_rtu_resync_init(mb_rtu_resync_t *rs) {

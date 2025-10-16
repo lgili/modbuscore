@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/mempool.h>
+#include <modbus/internal/mempool.h>
 }
 
 namespace {

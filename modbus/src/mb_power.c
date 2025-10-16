@@ -6,11 +6,11 @@
 #include <modbus/mb_power.h>
 
 #if MB_CONF_BUILD_CLIENT
-#include <modbus/client.h>
+#include <modbus/internal/client.h>
 #endif
 
 #if MB_CONF_BUILD_SERVER
-#include <modbus/server.h>
+#include <modbus/internal/server.h>
 #endif
 
 #include <modbus/mb_err.h>

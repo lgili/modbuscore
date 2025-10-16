@@ -1,7 +1,7 @@
 #include <modbus/compat/libmodbus.h>
 #include <modbus/compat/modbus-errno.h>
 
-#include <modbus/mb_host.h>
+#include <modbus/internal/mb_host.h>
 #include <modbus/mb_err.h>
 
 #include <stdbool.h>

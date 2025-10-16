@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include <modbus/frame.h>
-#include <modbus/pdu.h>
-#include <modbus/utils.h>
+#include <modbus/internal/frame.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/utils.h>
 
 mb_err_t mb_frame_rtu_encode(const mb_adu_view_t *adu,
                              mb_u8 *out_adu,

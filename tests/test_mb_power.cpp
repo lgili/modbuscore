@@ -7,11 +7,11 @@
 #include <array>
 
 extern "C" {
-#include <modbus/client.h>
-#include <modbus/server.h>
+#include <modbus/internal/client.h>
+#include <modbus/internal/server.h>
 #include <modbus/mb_power.h>
 #include <modbus/mb_err.h>
-#include <modbus/transport.h>
+#include <modbus/internal/transport_core.h>
 }
 
 extern "C" {

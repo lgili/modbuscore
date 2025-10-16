@@ -82,7 +82,7 @@
 #include <modbus/conf.h>
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
-#include <modbus/mb_queue.h>
+#include <modbus/internal/mb_queue.h>
 
 #ifdef __cplusplus
 extern "C" {

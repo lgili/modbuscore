@@ -1,4 +1,4 @@
-#include <modbus/mapping.h>
+#include <modbus/internal/mapping.h>
 
 #if MB_CONF_BUILD_SERVER
 

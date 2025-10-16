@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <modbus/mb_queue.h>
+#include <modbus/internal/mb_queue.h>
 #include <thread>
 #include <vector>
 #include <atomic>

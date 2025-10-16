@@ -58,6 +58,7 @@ set(TEST_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_qos.cpp  # Gate 24: QoS and backpressure
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_diag.cpp # Gate 25: Compact diagnostics
   ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_power.cpp # Gate 27: Power management
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_mb_simple.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/test_rtu_resync.cpp # Gate 33: Fast resync
   ${CMAKE_CURRENT_SOURCE_DIR}/test_dup_filter.cpp # Gate 33: Duplicate filter
   # ${CMAKE_CURRENT_SOURCE_DIR}/test_fault_injection.cpp # Gate 33: Fault injection - DISABLED: needs API update
@@ -105,6 +106,7 @@ if(MODBUS_ENABLE_INTEGRATION_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR}/test_modbus_transport.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_client_server_integration.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_client_convenience.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_client_sync.cpp
   )
 endif()
 

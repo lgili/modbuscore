@@ -21,9 +21,9 @@
 
 #include <modbus/mb_err.h>
 #include <modbus/mb_types.h>
-#include <modbus/observe.h>
-#include <modbus/pdu.h>
-#include <modbus/transport_if.h>
+#include <modbus/internal/observe.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/transport_core.h>
 #include <modbus/transport/rtu.h>
 
 #if MB_CONF_ENABLE_POWER_MANAGEMENT

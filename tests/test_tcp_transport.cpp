@@ -5,8 +5,8 @@
 #include <gtest/gtest.h>
 
 extern "C" {
-#include <modbus/pdu.h>
-#include <modbus/transport.h>
+#include <modbus/internal/pdu.h>
+#include <modbus/internal/transport_core.h>
 #include <modbus/transport/tcp.h>
 }
 

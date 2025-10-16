@@ -26,6 +26,54 @@
             "inherits": "host-base"
         },
         {
+            "name": "profile-simple",
+            "displayName": "Profile: SIMPLE (Desktop/Testing)",
+            "description": "Maximum simplicity - all features enabled for easy getting started",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MB_PROFILE": "SIMPLE",
+                "CMAKE_C_FLAGS": "-DMB_USE_PROFILE_SIMPLE",
+                "MODBUS_BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
+            "name": "profile-embedded",
+            "displayName": "Profile: EMBEDDED (MCU/IoT)",
+            "description": "Minimal footprint - essential features only (~26KB code, ~1.5KB RAM)",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MB_PROFILE": "EMBEDDED",
+                "CMAKE_C_FLAGS": "-DMB_USE_PROFILE_EMBEDDED",
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "MODBUS_BUILD_EXAMPLES": "ON",
+                "MODBUS_ENABLE_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "profile-gateway",
+            "displayName": "Profile: GATEWAY (Industrial)",
+            "description": "High performance - both client & server, QoS, all transports",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MB_PROFILE": "GATEWAY",
+                "CMAKE_C_FLAGS": "-DMB_USE_PROFILE_GATEWAY",
+                "CMAKE_BUILD_TYPE": "Release",
+                "MODBUS_BUILD_EXAMPLES": "ON"
+            }
+        },
+        {
+            "name": "profile-full",
+            "displayName": "Profile: FULL (Everything)",
+            "description": "Maximum features - development & testing (~100KB code, ~8KB RAM)",
+            "inherits": "host-base",
+            "cacheVariables": {
+                "MB_PROFILE": "FULL",
+                "CMAKE_C_FLAGS": "-DMB_USE_PROFILE_FULL -DMB_PROFILE_PRINT_INFO",
+                "MODBUS_BUILD_EXAMPLES": "ON",
+                "MODBUS_BUILD_DOCS": "ON"
+            }
+        },
+        {
             "name": "host-client-only",
             "displayName": "Host Client Only",
             "description": "Client-only build disabling server components",
@@ -381,6 +429,26 @@
             "name": "host-compat",
             "displayName": "Build Host Debug (compat)",
             "configurePreset": "host-compat"
+        },
+        {
+            "name": "profile-simple",
+            "displayName": "Build Profile SIMPLE",
+            "configurePreset": "profile-simple"
+        },
+        {
+            "name": "profile-embedded",
+            "displayName": "Build Profile EMBEDDED",
+            "configurePreset": "profile-embedded"
+        },
+        {
+            "name": "profile-gateway",
+            "displayName": "Build Profile GATEWAY",
+            "configurePreset": "profile-gateway"
+        },
+        {
+            "name": "profile-full",
+            "displayName": "Build Profile FULL",
+            "configurePreset": "profile-full"
         }
     ],
     "testPresets": [

@@ -28,7 +28,7 @@
  * @{
  */
 
-#include <modbus/utils.h>
+#include <modbus/internal/utils.h>
 #include <stddef.h>
 #include <string.h>
 

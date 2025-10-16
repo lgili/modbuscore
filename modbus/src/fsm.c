@@ -65,7 +65,7 @@
  * @{
  */
 
-#include <modbus/fsm.h>
+#include <modbus/internal/fsm.h>
 #include <stddef.h>
 
 extern uint16_t get_current_time_ms(void);

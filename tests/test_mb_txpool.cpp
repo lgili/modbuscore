@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include <modbus/mb_txpool.h>
+#include <modbus/internal/mb_txpool.h>
 #include <modbus/port/mutex.h>
 #include <thread>
 #include <vector>

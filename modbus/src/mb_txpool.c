@@ -3,7 +3,7 @@
  * @brief Implementation of transaction pool with freelist and diagnostics.
  */
 
-#include <modbus/mb_txpool.h>
+#include <modbus/internal/mb_txpool.h>
 #include <string.h>
 
 mb_err_t mb_txpool_init(mb_txpool_t *txpool,

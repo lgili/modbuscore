@@ -1,21 +1,38 @@
 /**
- * @file modbus_conf.h
+ * @file conf.h
  * @brief Configuration header for the Modbus library.
  *
- * This file contains compile-time configuration options, macros, and default
- * values that can be adjusted for different environments or constraints.
- * Users or integrators may modify these definitions before building the library
- * to customize its behavior.
+ * SIMPLIFIED CONFIGURATION SYSTEM:
+ * ================================
+ * This library now supports profile-based configuration for easy setup.
  *
- * These settings should be included before any other modbus headers, ensuring
- * all modules see the same configuration.
+ * RECOMMENDED: Use profiles.h for simplified configuration
+ * ----------------------------------------------------------
+ * Instead of defining dozens of individual flags, choose a profile:
+ *
+ * #define MB_USE_PROFILE_SIMPLE    // Desktop/testing (default)
+ * #define MB_USE_PROFILE_EMBEDDED  // MCU/IoT minimal
+ * #define MB_USE_PROFILE_GATEWAY   // Industrial gateway
+ * #define MB_USE_PROFILE_FULL      // Everything enabled
+ * #include <modbus/profiles.h>
+ *
+ * ADVANCED: Individual flag configuration (legacy)
+ * ----------------------------------------------------------
+ * This file allows fine-grained control by defining individual flags.
+ * This is only needed for advanced users or when profiles don't fit.
  *
  * Author:
  * Date: 2024-12-20
+ * Updated: 2025-01-15 (Added profile system)
  */
 
 #ifndef MODBUS_CONF_H
 #define MODBUS_CONF_H
+
+/* Try to auto-include profiles if user hasn't configured manually */
+#if !defined(MB_CONF_SKIP_PROFILES) && !defined(MB_CONF_BUILD_CLIENT)
+    #include <modbus/profiles.h>
+#endif
 
 #ifndef MB_CONF_BUILD_CLIENT
 #define MB_CONF_BUILD_CLIENT 1

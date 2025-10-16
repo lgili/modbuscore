@@ -37,8 +37,6 @@ if(MODBUS_ENABLE_SERVER)
     src/server.c
     src/mapping.c
   )
-  # Add convenience API for simplified server setup
-  list(APPEND SOURCES src/mb_server_convenience.c)
 endif()
 
 # Zero-copy IO (always enabled)
@@ -63,11 +61,12 @@ list(APPEND SOURCES src/mb_power.c)
 
 if(MODBUS_ENABLE_CLIENT)
   list(APPEND SOURCES src/client.c)
-  list(APPEND SOURCES src/client_sync.c)
-  # Add high-level convenience functions for common operations
+  # Add convenience functions for common operations
   list(APPEND SOURCES src/mb_client_convenience.c)
   # Add blocking host API for desktop/Linux/macOS/Windows
   list(APPEND SOURCES src/mb_host.c)
+  # Add simplified public API
+  list(APPEND SOURCES src/mb_simple.c)
 endif()
 
 if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
@@ -87,36 +86,23 @@ if(WIN32)
 endif()
 
 # Set HEADERS_PUBLIC variable (public headers, included in the library)
+# These are the new simplified public API headers
 set(HEADERS_PUBLIC  
-  include/modbus/log.h
-  include/modbus/mempool.h
-  include/modbus/pdu.h
-  include/modbus/frame.h
   include/modbus/mb_types.h
-  include/modbus/ringbuf.h
   include/modbus/mb_err.h
-  include/modbus/mb_log.h
-  include/modbus/observe.h
   include/modbus/modbus.h
   include/modbus/conf.h
-  include/modbus/mapping.h
-  include/modbus/transport.h
-  include/modbus/transport_if.h
-  include/modbus/mb_iovec.h
-  include/modbus/mb_queue.h
-  include/modbus/mb_txpool.h
+  include/modbus/mb_embed.h
+  include/modbus/mb_simple.h
+  include/modbus/version.h
   include/modbus/mb_isr.h
   include/modbus/mb_qos.h
-  include/modbus/base.h
-  include/modbus/mb_embed.h
-  include/modbus/features.h
-  include/modbus/utils.h
-  include/modbus/fsm.h
-  include/modbus/version.h
-  include/modbus/core.h
-  include/modbus/port/freertos.h
+  include/modbus/mb_power.h
+  include/modbus/transport.h
+  include/modbus/transport_if.h
+  include/modbus/profiles.h
   include/modbus/port/bare.h
-  
+  include/modbus/port/freertos.h
 )
 
 if(MODBUS_ENABLE_TRANSPORT_ASCII)
@@ -132,19 +118,6 @@ if(MODBUS_ENABLE_TRANSPORT_TCP)
     include/modbus/transport/tcp.h
     include/modbus/transport/tcp_multi.h
   )
-endif()
-
-if(MODBUS_ENABLE_SERVER)
-  list(APPEND HEADERS_PUBLIC include/modbus/server.h)
-  # Add convenience API header
-  list(APPEND HEADERS_PUBLIC include/modbus/mb_server_convenience.h)
-endif()
-
-if(MODBUS_ENABLE_CLIENT)
-  list(APPEND HEADERS_PUBLIC include/modbus/client.h)
-  list(APPEND HEADERS_PUBLIC include/modbus/client_sync.h)
-  # Add blocking host API header for desktop/Linux/macOS/Windows
-  list(APPEND HEADERS_PUBLIC include/modbus/mb_host.h)
 endif()
 
 if(MODBUS_ENABLE_COMPAT_LIBMODBUS)
@@ -166,10 +139,39 @@ if(WIN32)
   list(APPEND HEADERS_PUBLIC include/modbus/port/win.h)
 endif()
 
-# Set HEADERS_PRIVATE variable (private headers won't be exposed)
-set(HEADERS_PRIVATE  
-  
+# Set HEADERS_PRIVATE variable (internal implementation headers)
+set(HEADERS_PRIVATE
+  include/modbus/internal/log.h
+  include/modbus/internal/pdu.h
+  include/modbus/internal/frame.h
+  include/modbus/internal/observe.h
+  include/modbus/internal/mapping.h
+  include/modbus/internal/transport_core.h
+  include/modbus/internal/utils.h
+  include/modbus/internal/base.h
+  include/modbus/internal/core.h
+  include/modbus/internal/mempool.h
+  include/modbus/internal/ringbuf.h
+  include/modbus/internal/mb_log.h
+  include/modbus/internal/mb_iovec.h
+  include/modbus/internal/mb_queue.h
+  include/modbus/internal/mb_txpool.h
+  include/modbus/internal/features.h
+  include/modbus/internal/fsm.h
+  include/modbus/internal/dup_filter.h
+  include/modbus/internal/rtu_resync.h
+  include/modbus/internal/mb_simple_backend.h
 )
+
+if(MODBUS_ENABLE_SERVER)
+  list(APPEND HEADERS_PRIVATE include/modbus/internal/server.h)
+endif()
+
+if(MODBUS_ENABLE_CLIENT)
+  list(APPEND HEADERS_PRIVATE include/modbus/internal/client.h)
+  list(APPEND HEADERS_PRIVATE include/modbus/mb_host.h)
+endif()
+
 
 # Include LibraryConfig.cmake
 include(${PROJECT_SOURCE_DIR}/cmake/LibraryConfig.cmake)

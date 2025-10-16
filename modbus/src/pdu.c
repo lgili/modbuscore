@@ -2,7 +2,7 @@
  * @file pdu.c
  */
 
-#include <modbus/pdu.h>
+#include <modbus/internal/pdu.h>
 
 #include <string.h>
 

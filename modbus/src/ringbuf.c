@@ -2,7 +2,7 @@
  * @file ringbuf.c
  */
 
-#include <modbus/ringbuf.h>
+#include <modbus/internal/ringbuf.h>
 
 #include <stddef.h>
 
