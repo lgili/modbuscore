@@ -1,0 +1,297 @@
+#include <string.h>
+
+#include <modbuscore/protocol/engine.h>
+#include <modbuscore/protocol/pdu.h>
+
+#define MBC_EXPECTED_UNSUPPORTED ((size_t)-1)
+
+static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type);
+static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next);
+static void reset_rx_buffer(mbc_engine_t *engine);
+static size_t determine_expected_length(const mbc_engine_t *engine);
+
+static mbc_transport_iface_t resolve_transport(const mbc_engine_config_t *config)
+{
+    if (config->use_override) {
+        return config->transport_override;
+    }
+
+    const mbc_runtime_config_t *deps = mbc_runtime_dependencies(config->runtime);
+    if (!deps) {
+        mbc_transport_iface_t empty = {0};
+        return empty;
+    }
+    return deps->transport;
+}
+
+mbc_status_t mbc_engine_init(mbc_engine_t *engine, const mbc_engine_config_t *config)
+{
+    if (!engine || !config || !config->runtime) {
+        return MBC_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (!mbc_runtime_is_ready(config->runtime)) {
+        return MBC_STATUS_NOT_INITIALISED;
+    }
+
+    mbc_transport_iface_t transport = resolve_transport(config);
+    if (!transport.send || !transport.receive) {
+        return MBC_STATUS_INVALID_ARGUMENT;
+    }
+
+    uint32_t timeout = config->response_timeout_ms ? config->response_timeout_ms : 1000U;
+
+    *engine = (mbc_engine_t){
+        .state = MBC_ENGINE_STATE_IDLE,
+        .role = config->role,
+        .runtime = config->runtime,
+        .transport = transport,
+        .initialised = true,
+        .event_cb = config->event_cb,
+        .event_ctx = config->event_ctx,
+        .response_timeout_ms = timeout,
+        .last_activity_ms = mbc_transport_now(&transport),
+        .rx_length = 0U,
+        .expected_length = 0U,
+        .pdu_ready = false,
+    };
+
+    return MBC_STATUS_OK;
+}
+
+void mbc_engine_shutdown(mbc_engine_t *engine)
+{
+    if (!engine) {
+        return;
+    }
+
+    *engine = (mbc_engine_t){0};
+}
+
+bool mbc_engine_is_ready(const mbc_engine_t *engine)
+{
+    return engine && engine->initialised;
+}
+
+mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
+{
+    if (!mbc_engine_is_ready(engine)) {
+        return MBC_STATUS_NOT_INITIALISED;
+    }
+
+    if (budget == 0U) {
+        return MBC_STATUS_INVALID_ARGUMENT;
+    }
+
+    emit_event(engine, MBC_ENGINE_EVENT_STEP_BEGIN);
+
+    mbc_status_t status = MBC_STATUS_OK;
+
+    while (budget-- > 0U) {
+        size_t space = sizeof(engine->rx_buffer) - engine->rx_length;
+        if (space == 0U) {
+            emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+            return MBC_STATUS_NO_RESOURCES;
+        }
+
+        mbc_transport_io_t io = {0};
+        status = mbc_transport_receive(&engine->transport,
+                                       &engine->rx_buffer[engine->rx_length],
+                                       space,
+                                       &io);
+        if (!mbc_status_is_ok(status)) {
+            break;
+        }
+
+        if (io.processed == 0U) {
+            break;
+        }
+
+        engine->rx_length += io.processed;
+        engine->last_activity_ms = mbc_transport_now(&engine->transport);
+        emit_event(engine, MBC_ENGINE_EVENT_RX_READY);
+
+        if (engine->role == MBC_ENGINE_ROLE_CLIENT) {
+            if (engine->state != MBC_ENGINE_STATE_WAIT_RESPONSE) {
+                enter_state(engine, MBC_ENGINE_STATE_WAIT_RESPONSE);
+            }
+        } else {
+            if (engine->state == MBC_ENGINE_STATE_IDLE) {
+                enter_state(engine, MBC_ENGINE_STATE_RECEIVING);
+            }
+        }
+
+        if (engine->expected_length == 0U) {
+            const size_t expected = determine_expected_length(engine);
+            if (expected == MBC_EXPECTED_UNSUPPORTED) {
+                reset_rx_buffer(engine);
+                emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                return MBC_STATUS_UNSUPPORTED;
+            }
+            engine->expected_length = expected;
+        }
+
+        if (engine->expected_length > 0U && engine->rx_length >= engine->expected_length) {
+            mbc_pdu_t decoded = {0};
+            mbc_status_t decode_status = mbc_pdu_decode(engine->rx_buffer,
+                                                        engine->expected_length,
+                                                        &decoded);
+            reset_rx_buffer(engine);
+            if (!mbc_status_is_ok(decode_status)) {
+                emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                return decode_status;
+            }
+
+            engine->current_pdu = decoded;
+            engine->pdu_ready = true;
+            emit_event(engine, MBC_ENGINE_EVENT_PDU_READY);
+
+            enter_state(engine, MBC_ENGINE_STATE_IDLE);
+
+            break;
+        }
+    }
+
+    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+
+    if (engine->role == MBC_ENGINE_ROLE_CLIENT && engine->state == MBC_ENGINE_STATE_WAIT_RESPONSE) {
+        const uint64_t now = mbc_transport_now(&engine->transport);
+        if (now - engine->last_activity_ms >= engine->response_timeout_ms) {
+            emit_event(engine, MBC_ENGINE_EVENT_TIMEOUT);
+            enter_state(engine, MBC_ENGINE_STATE_IDLE);
+            return MBC_STATUS_TIMEOUT;
+        }
+    }
+
+    return status;
+}
+
+mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buffer, size_t length)
+{
+    if (!mbc_engine_is_ready(engine)) {
+        return MBC_STATUS_NOT_INITIALISED;
+    }
+
+    if (!buffer || length == 0U) {
+        return MBC_STATUS_INVALID_ARGUMENT;
+    }
+
+    if (engine->role == MBC_ENGINE_ROLE_CLIENT) {
+        if (engine->state != MBC_ENGINE_STATE_IDLE) {
+            return MBC_STATUS_BUSY;
+        }
+    } else {
+        if (engine->state != MBC_ENGINE_STATE_IDLE && engine->state != MBC_ENGINE_STATE_RECEIVING) {
+            return MBC_STATUS_BUSY;
+        }
+    }
+
+    mbc_transport_io_t io = {0};
+
+    mbc_engine_state_t previous = engine->state;
+    enter_state(engine, MBC_ENGINE_STATE_SENDING);
+
+    mbc_status_t status = mbc_transport_send(&engine->transport, buffer, length, &io);
+    if (!mbc_status_is_ok(status) || io.processed != length) {
+        enter_state(engine, previous);
+        return status;
+    }
+
+    emit_event(engine, MBC_ENGINE_EVENT_TX_SENT);
+
+    enter_state(engine, (engine->role == MBC_ENGINE_ROLE_CLIENT) ? MBC_ENGINE_STATE_WAIT_RESPONSE
+                                                                 : MBC_ENGINE_STATE_IDLE);
+    reset_rx_buffer(engine);
+    return MBC_STATUS_OK;
+}
+
+bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out)
+{
+    if (!engine || !out || !engine->pdu_ready) {
+        return false;
+    }
+
+    *out = engine->current_pdu;
+    engine->pdu_ready = false;
+    return true;
+}
+
+static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type)
+{
+    if (!engine->event_cb) {
+        return;
+    }
+
+    mbc_engine_event_t evt = {
+        .type = type,
+        .timestamp_ms = mbc_transport_now(&engine->transport),
+    };
+    engine->event_cb(engine->event_ctx, &evt);
+}
+
+static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next)
+{
+    engine->state = next;
+    engine->last_activity_ms = mbc_transport_now(&engine->transport);
+    if (engine->event_cb) {
+        mbc_engine_event_t evt = {
+            .type = MBC_ENGINE_EVENT_STATE_CHANGE,
+            .timestamp_ms = engine->last_activity_ms,
+        };
+        engine->event_cb(engine->event_ctx, &evt);
+    }
+}
+
+static void reset_rx_buffer(mbc_engine_t *engine)
+{
+    engine->rx_length = 0U;
+    engine->expected_length = 0U;
+}
+
+static size_t determine_expected_length(const mbc_engine_t *engine)
+{
+    if (engine->rx_length < 2U) {
+        return 0U;
+    }
+
+    const uint8_t function = engine->rx_buffer[1];
+    const bool exception = (function & 0x80U) != 0U;
+    const uint8_t base = function & 0x7FU;
+
+    if (exception) {
+        return (engine->rx_length >= 3U) ? 3U : 0U;
+    }
+
+    if (engine->role == MBC_ENGINE_ROLE_SERVER) {
+        switch (base) {
+        case 0x03:
+        case 0x06:
+            return 6U;
+        case 0x10:
+            if (engine->rx_length >= 7U) {
+                const uint8_t byte_count = engine->rx_buffer[6];
+                return (size_t)(7U + byte_count);
+            }
+            return 0U;
+        default:
+            return MBC_EXPECTED_UNSUPPORTED;
+        }
+    }
+
+    /* Cliente aguardando resposta */
+    switch (base) {
+    case 0x03:
+        if (engine->rx_length >= 3U) {
+            const uint8_t byte_count = engine->rx_buffer[2];
+            return (size_t)(3U + byte_count);
+        }
+        return 0U;
+    case 0x06:
+        return 6U;
+    case 0x10:
+        return 6U;
+    default:
+        return MBC_EXPECTED_UNSUPPORTED;
+    }
+}

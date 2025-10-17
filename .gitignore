@@ -1,0 +1,15 @@
+# Build artifacts
+build/
+out/
+dist/
+
+# IDE / OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Generated coverage / profiling
+*.gcda
+*.gcno
+coverage/
