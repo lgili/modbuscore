@@ -1,0 +1,170 @@
+# ModbusCore 3.0 – Roadmap para Reimplementação do Zero
+
+Este documento descreve o plano completo para reconstruir a biblioteca ModbusCore do zero, garantindo API unificada, portabilidade total e arquitetura baseada em injeção de dependências. Cada fase possui objetivos, entregáveis obrigatórios e critérios de saída antes de avançar.
+
+---
+
+## Visão & Princípios Orientadores
+
+1. **API única e consistente** para todos os cenários (desktop, embedded, servidor).
+2. **Arquitetura modular** com injeção de dependências (DI) explícita em todas as camadas.
+3. **Experiência de desenvolvimento (DX)** fluida: perfis declarativos, exemplos executáveis, documentação integrada.
+4. **Testabilidade total**: tudo deve ser mockável e testável de cima a baixo.
+5. **Robustez e extensibilidade**: suportar novos transports/protocolos sem tocar o core.
+
+---
+
+## Fase 0 – Pesquisa & Requisitos
+
+- **Objetivo**: Capturar requisitos, restrições e expectativas.
+- **Entregáveis**:
+  - Lista de casos de uso (cliente, servidor, gateway, diagnostics).
+  - Matriz de plataformas alvo (bare metal, FreeRTOS, POSIX, Windows).
+  - Mapa de integración com projetos existentes (compat libmodbus, perfis current).
+  - Inventário de lições aprendidas da base atual (dívidas técnicas/resgates).
+- **Critério de saída**:
+  - Reunião com stakeholders/usuários aprova o escopo.
+  - Documento “Requirements.md” versionado.
+
+---
+
+## Fase 1 – Arquitetura e DSL de Configuração
+
+- **Objetivo**: Definir a espinha dorsal da nova biblioteca.
+- **Entregáveis**:
+  - Arquitetura de camadas (Core, Runtime, Adapters, Drivers, Tooling).
+  - Definição de interfaces centrais:
+    - `mb_transport_iface`
+    - `mb_clock_iface`
+    - `mb_allocator_iface`
+    - `mb_logger_iface`
+    - `mb_diag_sink`
+  - Especificação do DSL de configuração (TOML/YAML) e conversor para C/CMake.
+- **Critério de saída**:
+  - Diagramas revistos e aprovados.
+  - Prototipo mínimo criando e injetando dependências (sem lógica Modbus ainda).
+
+---
+
+## Fase 2 – Runtime de Injeção de Dependências
+
+- **Objetivo**: Implementar o “container” DI e builders de runtime.
+- **Entregáveis**:
+  - `mb_runtime_builder`: orquestra instâncias (transporte, mempool, watchdog).
+  - Suporte a ownership explícito (stack vs heap vs static).
+  - Sistema de perfis declarativos montando runtime default.
+- **Critério de saída**:
+  - Testes com mocks demonstrando substituição de qualquer componente.
+  - Ferramenta CLI simples (`modbus new`) gerando esqueleto baseado em perfis.
+
+---
+
+## Fase 3 – Núcleo Protocolar (Stateless)
+
+- **Objetivo**: Implementar núcleo Modbus puramente orientado a dados/estado externo.
+- **Entregáveis**:
+  - State Machines para cliente e servidor independentes de transporte.
+  - Manejo completo de FCs com tabelas de operação (hooks por FC).
+  - Tratamento de tempo via `mb_clock_iface`.
+  - Hooks de métricas/telemetria.
+- **Critério de saída**:
+  - Testes unitários 100% cobrindo modos happy-path / error / timeout.
+  - Benchmarks básicos comparando com versão antiga (mínimo regressão).
+
+---
+
+## Fase 4 – Drivers Oficiais de Transporte & Port
+
+- **Objetivo**: Fornecer implementações padrão com DI.
+- **Entregáveis**:
+  - Drivers certificados:
+    - POSIX TCP/UDP
+    - Windows Winsock
+    - FreeRTOS stream buffers
+    - Bare-metal UART (RTU) com guard-times configuráveis
+  - Suite de mocks profissionais (modo deterministic, latência configurável).
+- **Critério de saída**:
+  - Cada driver com testes integrados e documentação de integração passo a passo.
+  - Perfis `POSIX_CLIENT`, `FREERTOS_RTU`, `BARE_GATEWAY` reproduzindo end-to-end.
+
+---
+
+## Fase 5 – Experiência do Desenvolvedor (DX) & Tooling
+
+- **Objetivo**: Facilitar onboarding, scaffolding e documentação.
+- **Entregáveis**:
+  - CLI “modbus” com comandos:
+    - `modbus new profile`
+    - `modbus add transport`
+    - `modbus doctor` (diagnóstico de config).
+  - Exemplos executáveis (desktop, RTU, gateway, CI pipeline).
+  - Documentação viva (Doxygen + Sphinx + snippets compilados).
+- **Critério de saída**:
+  - Tutorial “Hello Modbus em 5 minutos” validado por usuário externo.
+  - Documentação automática versionada (gh-pages ou docs site).
+
+---
+
+## Fase 6 – Compatibilidade & Migração
+
+- **Objetivo**: Garantir caminho de migração da base atual para a 3.0.
+- **Entregáveis**:
+  - Camada de compatibilidade (wrappers) com warnings controlados.
+  - Guia de migração detalhado (API antiga → nova API DI).
+  - Ferramenta de lint/análise apontando usos obsoletos.
+- **Critério de saída**:
+  - Conjunto de projetos reais migrados com sucesso.
+  - CI comparando comportamento das duas versões (paridade funcional).
+
+---
+
+## Fase 7 – Robustez, Diagnósticos e Segurança
+
+- **Objetivo**: Completar features críticos de produção.
+- **Entregáveis**:
+  - Módulos opcionais:
+    - TLS / DTLS (quando aplicável).
+    - Modo “managed auto-heal” (retries, debouncing, circuit-breaker).
+    - Diagnósticos avançados (Eventos, logs estruturados, tracing).
+  - Testes de fuzzing e fault-injection integrados.
+- **Critério de saída**:
+  - Cobertura de fuzz nos parsers > 1B execs sem falha.
+  - Certificação interna de resiliência (latência, ruído, drop > 30%).
+
+---
+
+## Fase 8 – Distribuição, Suporte e Roadmap Futuro
+
+- **Objetivo**: Preparar lançamento e governança contínua.
+- **Entregáveis**:
+  - Releases binários/pacotes (conan/vcpkg, pkg-config, CMake package).
+  - Política de versionamento semântico e suporte LTS.
+  - Backlog público de features e roadmap pós-lançamento.
+- **Critério de saída**:
+  - Lançamento da versão 3.0 (release notes, changelog, anúncio).
+  - Acordo de suporte com comunidade / equipes internas.
+
+---
+
+## Checklist de Governança por Fase
+
+- Documentar decisões (ADR) e associá-las ao roadmap.
+- Cada fase só avança após aprovação em design review.
+- Manter branch dedicado por fase com testes verdes antes do merge.
+- Atualizar métricas (performance, footprint, DX) a cada marco.
+
+---
+
+## Próximos Passos Imediatos
+
+1. Realizar Fase 0 (pesquisa) com entrevistas, levantamento de requisitos.
+2. Montar time/líderes responsáveis por cada fase.
+3. Agendar checkpoint quinzenal de alinhamento estratégico.
+
+---
+
+**Contato & Manutenção do Roadmap**
+- Responsável inicial: `@lgili`
+- Documentos relacionados: `Requirements.md`, `Architecture.md`, `Design_ADRs/`
+
+Este roadmap deve ser atualizado continuamente conforme feedback e descobertas de implementação surgirem.
