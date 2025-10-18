@@ -14,10 +14,6 @@ dist/
 *.gcno
 coverage/
 
-# Jekyll / Documentation
-vendor/
-.bundle/
-Gemfile.lock
-docs/_site/
-.jekyll-cache/
-.sass-cache/
+# Documentation
+site/
+.cache/

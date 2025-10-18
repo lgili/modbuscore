@@ -5,13 +5,17 @@ on:
     branches: [ main ]
     paths:
       - 'docs/**'
+      - 'mkdocs.yml'
       - 'README.md'
+      - 'requirements.txt'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'docs/**'
+      - 'mkdocs.yml'
       - 'README.md'
+      - 'requirements.txt'
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
@@ -32,43 +36,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          ruby-version: '3.1'
-          bundler-cache: true
+          python-version: '3.11'
+          cache: 'pip'
 
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v4
 
-      - name: Create Gemfile
-        run: |
-          cat > Gemfile << 'EOF'
-          source "https://rubygems.org"
-
-          gem "jekyll", "~> 3.9.0"
-          gem "jekyll-theme-cayman"
-          gem "jekyll-feed"
-          gem "jekyll-seo-tag"
-          gem "kramdown-parser-gfm"
-          gem "webrick", "~> 1.7"
-          EOF
-
       - name: Install dependencies
         run: |
-          bundle install
+          pip install -r requirements.txt
 
-      - name: Build with Jekyll
+      - name: Build with MkDocs
         run: |
-          bundle exec jekyll build --source docs --destination docs/_site --baseurl "${{ steps.pages.outputs.base_path }}"
+          mkdocs build --strict --site-dir site
         env:
-          JEKYLL_ENV: production
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/_site
+          path: site
 
   # Deployment job
   deploy:
