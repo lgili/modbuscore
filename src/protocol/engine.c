@@ -1,15 +1,38 @@
+/**
+ * @file engine.c
+ * @brief Protocol engine implementation with FSM and framing support.
+ *
+ * This file implements the core protocol engine that handles:
+ * - Request/response state machine
+ * - Frame reception and PDU decoding
+ * - Both RTU and TCP (MBAP) framing modes
+ * - Timeout management
+ * - Event notifications
+ */
+
 #include <string.h>
 
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/pdu.h>
+#include <modbuscore/protocol/mbap.h>
 
 #define MBC_EXPECTED_UNSUPPORTED ((size_t)-1)
 
+/* Forward declarations of private functions */
 static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type);
 static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next);
 static void reset_rx_buffer(mbc_engine_t *engine);
 static size_t determine_expected_length(const mbc_engine_t *engine);
 
+/**
+ * @brief Resolve transport interface from config.
+ *
+ * If use_override is true, returns the override transport.
+ * Otherwise, returns the transport from runtime dependencies.
+ *
+ * @param config Engine configuration
+ * @return Transport interface
+ */
 static mbc_transport_iface_t resolve_transport(const mbc_engine_config_t *config)
 {
     if (config->use_override) {
@@ -44,6 +67,7 @@ mbc_status_t mbc_engine_init(mbc_engine_t *engine, const mbc_engine_config_t *co
     *engine = (mbc_engine_t){
         .state = MBC_ENGINE_STATE_IDLE,
         .role = config->role,
+        .framing = config->framing,
         .runtime = config->runtime,
         .transport = transport,
         .initialised = true,
@@ -133,14 +157,49 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
 
         if (engine->expected_length > 0U && engine->rx_length >= engine->expected_length) {
             mbc_pdu_t decoded = {0};
-            mbc_status_t decode_status = mbc_pdu_decode(engine->rx_buffer,
-                                                        engine->expected_length,
-                                                        &decoded);
-            reset_rx_buffer(engine);
-            if (!mbc_status_is_ok(decode_status)) {
-                emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
-                enter_state(engine, MBC_ENGINE_STATE_IDLE);
-                return decode_status;
+            mbc_status_t decode_status;
+
+            /* TCP mode: unwrap MBAP first */
+            if (engine->framing == MBC_FRAMING_TCP) {
+                mbc_mbap_header_t mbap_header;
+                const uint8_t *pdu_data = NULL;
+                size_t pdu_length = 0;
+
+                decode_status = mbc_mbap_decode(engine->rx_buffer, engine->expected_length,
+                                                 &mbap_header, &pdu_data, &pdu_length);
+                reset_rx_buffer(engine);
+
+                if (!mbc_status_is_ok(decode_status)) {
+                    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                    enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                    return decode_status;
+                }
+
+                /* Reconstruct PDU with unit ID from MBAP header */
+                if (pdu_length == 0 || pdu_length > MBC_PDU_MAX + 1) {
+                    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                    enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                    return MBC_STATUS_DECODING_ERROR;
+                }
+
+                decoded.unit_id = mbap_header.unit_id;
+                decoded.function = pdu_data[0];
+                decoded.payload_length = pdu_length - 1;
+                if (decoded.payload_length > 0) {
+                    memcpy(decoded.payload, &pdu_data[1], decoded.payload_length);
+                }
+            } else {
+                /* RTU mode: decode directly */
+                decode_status = mbc_pdu_decode(engine->rx_buffer,
+                                                engine->expected_length,
+                                                &decoded);
+                reset_rx_buffer(engine);
+
+                if (!mbc_status_is_ok(decode_status)) {
+                    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                    enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                    return decode_status;
+                }
             }
 
             engine->current_pdu = decoded;
@@ -193,9 +252,15 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
     enter_state(engine, MBC_ENGINE_STATE_SENDING);
 
     mbc_status_t status = mbc_transport_send(&engine->transport, buffer, length, &io);
-    if (!mbc_status_is_ok(status) || io.processed != length) {
+    if (!mbc_status_is_ok(status)) {
         enter_state(engine, previous);
         return status;
+    }
+
+    /* Check if all bytes were sent */
+    if (io.processed != length) {
+        enter_state(engine, previous);
+        return MBC_STATUS_IO_ERROR;  /* Partial send is an error in this implementation */
     }
 
     emit_event(engine, MBC_ENGINE_EVENT_TX_SENT);
@@ -217,6 +282,12 @@ bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out)
     return true;
 }
 
+/**
+ * @brief Emit an event to the registered callback.
+ *
+ * @param engine Engine instance
+ * @param type Event type
+ */
 static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type)
 {
     if (!engine->event_cb) {
@@ -230,6 +301,12 @@ static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type)
     engine->event_cb(engine->event_ctx, &evt);
 }
 
+/**
+ * @brief Enter a new FSM state and emit state change event.
+ *
+ * @param engine Engine instance
+ * @param next New state
+ */
 static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next)
 {
     engine->state = next;
@@ -243,14 +320,36 @@ static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next)
     }
 }
 
+/**
+ * @brief Reset receive buffer state.
+ *
+ * @param engine Engine instance
+ */
 static void reset_rx_buffer(mbc_engine_t *engine)
 {
     engine->rx_length = 0U;
     engine->expected_length = 0U;
 }
 
+/**
+ * @brief Determine expected frame length based on current buffer content.
+ *
+ * This function analyzes the partial frame in the RX buffer and determines
+ * how many total bytes are expected for a complete frame. The logic differs
+ * between RTU and TCP (MBAP) framing modes.
+ *
+ * @param engine Engine instance
+ * @return Expected frame length in bytes, 0 if not enough data yet,
+ *         MBC_EXPECTED_UNSUPPORTED if unsupported function code
+ */
 static size_t determine_expected_length(const mbc_engine_t *engine)
 {
+    /* TCP mode uses MBAP framing */
+    if (engine->framing == MBC_FRAMING_TCP) {
+        return mbc_mbap_expected_length(engine->rx_buffer, engine->rx_length);
+    }
+
+    /* RTU mode */
     if (engine->rx_length < 2U) {
         return 0U;
     }
@@ -279,7 +378,7 @@ static size_t determine_expected_length(const mbc_engine_t *engine)
         }
     }
 
-    /* Cliente aguardando resposta */
+    /* Client waiting for response (RTU mode) */
     switch (base) {
     case 0x03:
         if (engine->rx_length >= 3U) {

@@ -1,5 +1,16 @@
+/**
+ * @file runtime.c
+ * @brief Implementation of runtime dependency management.
+ */
+
 #include <modbuscore/runtime/runtime.h>
 
+/**
+ * @brief Validate runtime configuration.
+ *
+ * @param config Configuration to validate
+ * @return MBC_STATUS_OK if valid, error code otherwise
+ */
 static mbc_status_t validate_config(const mbc_runtime_config_t *config)
 {
     if (!config) {

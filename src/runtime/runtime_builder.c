@@ -1,8 +1,20 @@
+/**
+ * @file runtime_builder.c
+ * @brief Implementation of runtime builder with default dependencies.
+ */
+
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <modbuscore/runtime/builder.h>
 
+/**
+ * @brief Default clock implementation using monotonic time if available.
+ *
+ * @param ctx Context (unused)
+ * @return Current time in milliseconds
+ */
 static uint64_t default_clock_now(void *ctx)
 {
     (void)ctx;
@@ -21,18 +33,38 @@ static uint64_t default_clock_now(void *ctx)
     return (uint64_t)((ticks * 1000ULL) / CLOCKS_PER_SEC);
 }
 
+/**
+ * @brief Default allocator using malloc.
+ *
+ * @param ctx Context (unused)
+ * @param size Number of bytes to allocate
+ * @return Pointer to allocated memory, or NULL on failure
+ */
 static void *default_alloc(void *ctx, size_t size)
 {
     (void)ctx;
     return malloc(size);
 }
 
+/**
+ * @brief Default deallocator using free.
+ *
+ * @param ctx Context (unused)
+ * @param ptr Pointer to free
+ */
 static void default_free(void *ctx, void *ptr)
 {
     (void)ctx;
     free(ptr);
 }
 
+/**
+ * @brief Default logger (no-op implementation).
+ *
+ * @param ctx Context (unused)
+ * @param category Log category (unused)
+ * @param message Log message (unused)
+ */
 static void default_logger(void *ctx, const char *category, const char *message)
 {
     (void)ctx;
@@ -138,5 +170,6 @@ mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t *builder, mbc_runti
         builder->logger_set = true;
     }
 
+    memset(runtime, 0, sizeof(*runtime));
     return mbc_runtime_init(runtime, &builder->config);
 }

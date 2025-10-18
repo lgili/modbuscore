@@ -1,3 +1,8 @@
+/**
+ * @file iface.c
+ * @brief Implementation of transport interface helper functions.
+ */
+
 #include <modbuscore/transport/iface.h>
 
 mbc_status_t mbc_transport_send(const mbc_transport_iface_t *iface,

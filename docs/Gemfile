@@ -1,0 +1,17 @@
+source "https://rubygems.org"
+
+# Jekyll version
+gem "jekyll", "~> 3.9.0"
+
+# Theme
+gem "jekyll-theme-cayman"
+
+# Plugins
+gem "jekyll-feed", "~> 0.12"
+gem "jekyll-seo-tag", "~> 2.6"
+
+# Required for GFM (GitHub Flavored Markdown)
+gem "kramdown-parser-gfm"
+
+# Required for local development
+gem "webrick", "~> 1.7"

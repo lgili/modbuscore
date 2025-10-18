@@ -85,14 +85,30 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
 - **Objetivo**: Fornecer implementações padrão com DI.
 - **Entregáveis**:
   - Drivers certificados:
-    - POSIX TCP/UDP
-    - Windows Winsock
-    - FreeRTOS stream buffers
-    - Bare-metal UART (RTU) com guard-times configuráveis
-  - Suite de mocks profissionais (modo deterministic, latência configurável).
+    - ✅ POSIX TCP (completado)
+    - ⏳ POSIX UDP (opcional)
+    - ✅ Windows Winsock (cliente)
+    - ⏳ FreeRTOS stream buffers (futuro)
+    - ✅ Bare-metal UART (RTU) com guard-times configuráveis
+    - ⏳ POSIX RTU (termios)
+    - ⏳ Windows RTU (Win32 serial API)
+  - ✅ Suite de mocks profissionais (modo deterministic, latência configurável).
+- **Progresso atual (Fase 4A)**:
+  - ✅ Driver POSIX TCP implementado (324 linhas)
+  - ✅ Socket não-bloqueante com polling cooperativo
+  - ✅ Resolução de hostname (IP + DNS)
+  - ✅ TCP_NODELAY e keepalive configurados
+  - ✅ Testes unitários (test_posix_tcp.c)
+  - ✅ Exemplo end-to-end funcional (example_tcp_client_fc03.c)
+  - ✅ Driver Winsock TCP (cliente não-bloqueante com WSAStartup)
+  - ✅ Servidor mock Python para testes de integração
+  - ✅ Script de teste automatizado (run_integration_test.sh)
+  - ✅ Documentação completa (PHASE4_COMPLETE.md)
+  - ✅ Mock de transporte determinístico (`mock.c`) com falhas, latência e helpers de teste
+  - ✅ Casos de resiliência para o engine (`tests/test_engine_resilience.c`)
 - **Critério de saída**:
-  - Cada driver com testes integrados e documentação de integração passo a passo.
-  - Perfis `POSIX_CLIENT`, `FREERTOS_RTU`, `BARE_GATEWAY` reproduzindo end-to-end.
+  - ✅ Driver TCP com testes integrados e documentação passo a passo
+  - ⏳ Perfis `POSIX_CLIENT`, `FREERTOS_RTU`, `BARE_GATEWAY` (futuro)
 
 ---
 

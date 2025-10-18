@@ -1,3 +1,8 @@
+/**
+ * @file pdu.c
+ * @brief Implementation of Modbus PDU encoding/decoding utilities.
+ */
+
 #include <string.h>
 
 #include <modbuscore/protocol/pdu.h>
