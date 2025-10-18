@@ -49,6 +49,15 @@ target_include_directories(modbuscore
 
 target_compile_features(modbuscore PUBLIC c_std_17)
 
+# Compiler flags for better compatibility
+if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(modbuscore PRIVATE
+    -Wall
+    -Wextra
+    $<$<CONFIG:Release>:-fno-strict-aliasing>
+  )
+endif()
+
 # Platform-specific libraries
 if(WIN32)
   target_link_libraries(modbuscore PUBLIC ws2_32)
