@@ -2,26 +2,34 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <modbuscore/transport/iface.h>
 #include <modbuscore/transport/mock.h>
 
 static void test_invalid_arguments(void)
 {
+    printf("[test_invalid_arguments] START\n");
     uint8_t buffer[8];
     mbc_transport_io_t io = {0};
     mbc_transport_iface_t iface = {0};
 
+    printf("[test_invalid_arguments] Testing NULL iface...\n");
     assert(mbc_transport_send(NULL, buffer, sizeof(buffer), &io) == MBC_STATUS_INVALID_ARGUMENT);
     assert(mbc_transport_receive(NULL, buffer, sizeof(buffer), &io) == MBC_STATUS_INVALID_ARGUMENT);
 
+    printf("[test_invalid_arguments] Creating mock...\n");
     mbc_mock_transport_t *mock = NULL;
     assert(mbc_mock_transport_create(NULL, &iface, &mock) == MBC_STATUS_OK);
+    printf("[test_invalid_arguments] Mock created: %p\n", (void*)mock);
 
+    printf("[test_invalid_arguments] Testing invalid buffer...\n");
     assert(mbc_transport_send(&iface, NULL, sizeof(buffer), &io) == MBC_STATUS_INVALID_ARGUMENT);
     assert(mbc_transport_receive(&iface, buffer, 0U, &io) == MBC_STATUS_INVALID_ARGUMENT);
 
+    printf("[test_invalid_arguments] Destroying mock...\n");
     mbc_mock_transport_destroy(mock);
+    printf("[test_invalid_arguments] DONE\n");
 }
 
 static void test_send_receive_success(void)
@@ -79,8 +87,11 @@ static void test_time_and_yield(void)
 
 int main(void)
 {
+    printf("=== Transport Interface Tests Starting ===\n");
+    fflush(stdout);
     test_invalid_arguments();
     test_send_receive_success();
     test_time_and_yield();
+    printf("=== All Transport Interface Tests Passed ===\n");
     return 0;
 }

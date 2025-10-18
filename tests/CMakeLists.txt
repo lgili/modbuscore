@@ -119,13 +119,15 @@ target_include_directories(pdu_smoke PRIVATE
 
 add_test(NAME pdu_smoke COMMAND pdu_smoke)
 
-# Example: End-to-end TCP client com FC03
-add_executable(example_tcp_client_fc03
-  example_tcp_client_fc03.c
-)
+# Example: End-to-end TCP client with FC03 (POSIX only - uses unistd.h and usleep)
+if(NOT WIN32)
+  add_executable(example_tcp_client_fc03
+    example_tcp_client_fc03.c
+  )
 
-target_link_libraries(example_tcp_client_fc03 PRIVATE ModbusCore::modbuscore)
-target_include_directories(example_tcp_client_fc03 PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+  target_link_libraries(example_tcp_client_fc03 PRIVATE ModbusCore::modbuscore)
+  target_include_directories(example_tcp_client_fc03 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+endif()

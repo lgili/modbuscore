@@ -4,6 +4,7 @@
 #ifdef _WIN32
 
 #include <windows.h>
+#include <stdio.h>  /* For _snprintf */
 
 typedef struct mbc_win32_rtu_ctx {
     HANDLE handle;

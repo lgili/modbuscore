@@ -74,7 +74,7 @@ static void build_fc03_response_frame(uint16_t transaction_id,
 
 static void submit_simple_request(engine_test_env_t *env, mbc_engine_t *engine, uint16_t transaction_id)
 {
-    mbc_pdu_t request_pdu;
+    mbc_pdu_t request_pdu = {0};
     assert(mbc_pdu_build_read_holding_request(&request_pdu, 1U, 0U, 2U) == MBC_STATUS_OK);
 
     uint8_t pdu_buf[256];

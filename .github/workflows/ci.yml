@@ -35,6 +35,8 @@ jobs:
     - name: Run tests
       run: |
         cd build
+        # Increase stack size to avoid potential stack overflow in GitHub Actions
+        ulimit -s unlimited || ulimit -s 65532
         ctest --output-on-failure --verbose
 
   build-macos:
@@ -63,6 +65,8 @@ jobs:
     - name: Run tests
       run: |
         cd build
+        # Increase stack size to avoid potential stack overflow in GitHub Actions
+        ulimit -s unlimited || ulimit -s 65532
         ctest --output-on-failure --verbose
 
   build-windows:

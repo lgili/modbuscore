@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <modbuscore/transport/mock.h>
 
@@ -177,10 +178,18 @@ static void test_error_controls(void)
 
 int main(void)
 {
+    printf("=== Mock Transport Tests Starting ===\n");
+    fflush(stdout);
     test_rx_flow();
+    printf("test_rx_flow PASSED\n");
     test_tx_flow();
+    printf("test_tx_flow PASSED\n");
     test_reset_and_yield();
+    printf("test_reset_and_yield PASSED\n");
     test_fetch_capacity_guard();
+    printf("test_fetch_capacity_guard PASSED\n");
     test_error_controls();
+    printf("test_error_controls PASSED\n");
+    printf("=== All Mock Transport Tests Passed ===\n");
     return 0;
 }

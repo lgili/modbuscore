@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <modbuscore/runtime/runtime.h>
 #include <modbuscore/runtime/builder.h>
@@ -47,35 +48,53 @@ static void fake_free(void *ctx, void *ptr)
 
 static void test_runtime_init_direct(void)
 {
+    printf("[test_runtime_init_direct] START\n");
     mbc_runtime_t runtime = {0};
     uint64_t counter = 0U;
     log_capture_t logs = {0};
-    mbc_transport_iface_t transport;
+    mbc_transport_iface_t transport = {0};
     mbc_mock_transport_t *mock = NULL;
+    printf("[test_runtime_init_direct] Creating mock transport...\n");
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
+    printf("[test_runtime_init_direct] Mock transport created: %p\n", (void*)mock);
 
+    printf("[test_runtime_init_direct] Building config...\n");
     mbc_runtime_config_t config = {
         .transport = transport,
         .clock = {.ctx = &counter, .now_ms = fake_now},
         .allocator = {.ctx = NULL, .alloc = fake_alloc, .free = fake_free},
         .logger = {.ctx = &logs, .write = fake_logger},
     };
+    printf("[test_runtime_init_direct] Config built, transport.ctx = %p\n", transport.ctx);
 
+    printf("[test_runtime_init_direct] Testing NULL args...\n");
     assert(mbc_runtime_init(NULL, NULL) == MBC_STATUS_INVALID_ARGUMENT);
     assert(mbc_runtime_init(&runtime, NULL) == MBC_STATUS_INVALID_ARGUMENT);
+    printf("[test_runtime_init_direct] Initializing runtime...\n");
     assert(mbc_runtime_init(&runtime, &config) == MBC_STATUS_OK);
+    printf("[test_runtime_init_direct] Runtime initialized\n");
     assert(mbc_runtime_is_ready(&runtime));
 
+    printf("[test_runtime_init_direct] Getting dependencies...\n");
     const mbc_runtime_config_t *deps = mbc_runtime_dependencies(&runtime);
+    printf("[test_runtime_init_direct] Got deps: %p\n", (void*)deps);
+    printf("[test_runtime_init_direct] deps->transport.ctx = %p, mock = %p\n", deps->transport.ctx, (void*)mock);
     assert(deps && deps->transport.ctx == mock);
+    printf("[test_runtime_init_direct] Calling clock...\n");
     uint64_t first = deps->clock.now_ms(deps->clock.ctx);
+    printf("[test_runtime_init_direct] First clock call: %llu\n", first);
     uint64_t second = deps->clock.now_ms(deps->clock.ctx);
+    printf("[test_runtime_init_direct] Second clock call: %llu\n", second);
     assert(first == 0ULL);
     assert(second == 1ULL);
 
+    printf("[test_runtime_init_direct] Testing double init...\n");
     assert(mbc_runtime_init(&runtime, &config) == MBC_STATUS_ALREADY_INITIALISED);
+    printf("[test_runtime_init_direct] Shutting down...\n");
     mbc_runtime_shutdown(&runtime);
+    printf("[test_runtime_init_direct] Destroying mock...\n");
     mbc_mock_transport_destroy(mock);
+    printf("[test_runtime_init_direct] DONE\n");
 }
 
 static void test_runtime_builder_with_defaults(void)
@@ -83,7 +102,7 @@ static void test_runtime_builder_with_defaults(void)
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
 
-    mbc_transport_iface_t transport;
+    mbc_transport_iface_t transport = {0};
     mbc_mock_transport_t *mock = NULL;
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
     mbc_runtime_builder_with_transport(&builder, &transport);
@@ -114,7 +133,7 @@ static void test_runtime_builder_with_custom_components(void)
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
 
-    mbc_transport_iface_t transport;
+    mbc_transport_iface_t transport = {0};
     mbc_mock_transport_t *mock = NULL;
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
 
@@ -156,9 +175,12 @@ static void test_runtime_builder_missing_transport(void)
 
 int main(void)
 {
+    printf("=== Runtime Tests Starting ===\n");
+    fflush(stdout);
     test_runtime_init_direct();
     test_runtime_builder_with_defaults();
     test_runtime_builder_with_custom_components();
     test_runtime_builder_missing_transport();
+    printf("=== All Runtime Tests Passed ===\n");
     return 0;
 }
