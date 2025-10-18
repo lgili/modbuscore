@@ -77,17 +77,17 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON ..
+        cmake -DBUILD_TESTING=ON ..
 
     - name: Build
       run: |
         cd build
-        cmake --build . --config Release
+        cmake --build . --config Debug
 
     - name: Run tests
       run: |
         cd build
-        ctest -C Release --output-on-failure --verbose
+        ctest -C Debug --output-on-failure --verbose
 
   integration-test:
     name: Integration Tests
