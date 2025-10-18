@@ -46,13 +46,22 @@ jobs:
         id: pages
         uses: actions/configure-pages@v4
 
-      - name: Install dependencies
+      - name: Install Doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
 
-      - name: Build with MkDocs
+      - name: Build C API documentation with Doxygen
         run: |
-          mkdocs build --strict --site-dir site
+          doxygen Doxyfile
+
+      - name: Build documentation with MkDocs
+        run: |
+          mkdocs build --site-dir site
         env:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
 

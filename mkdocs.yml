@@ -81,6 +81,7 @@ nav:
       - Status Codes: api/status.md
       - PDU: api/pdu.md
       - MBAP: api/mbap.md
+      - C API Reference: api-reference/html/index.html
   - Protocol:
       - FSM Overview: protocol/fsm_overview.md
 
