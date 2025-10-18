@@ -17,18 +17,25 @@ set(MODBUSCORE_SOURCES
   src/runtime/runtime_builder.c
   src/transport/iface.c
   src/transport/mock.c
-  src/transport/posix_tcp.c
   src/transport/rtu_uart.c
-  src/transport/posix_rtu.c
   src/protocol/pdu.c
   src/protocol/engine.c
   src/protocol/mbap.c
 )
 
-list(APPEND MODBUSCORE_SOURCES
-  src/transport/winsock_tcp.c
-  src/transport/win32_rtu.c
-)
+# Platform-specific transport implementations
+if(WIN32)
+  list(APPEND MODBUSCORE_SOURCES
+    src/transport/winsock_tcp.c
+    src/transport/win32_rtu.c
+  )
+else()
+  # POSIX systems (Linux, macOS, BSD, etc.)
+  list(APPEND MODBUSCORE_SOURCES
+    src/transport/posix_tcp.c
+    src/transport/posix_rtu.c
+  )
+endif()
 
 add_library(modbuscore STATIC ${MODBUSCORE_SOURCES})
 
@@ -41,6 +48,11 @@ target_include_directories(modbuscore
 )
 
 target_compile_features(modbuscore PUBLIC c_std_17)
+
+# Platform-specific libraries
+if(WIN32)
+  target_link_libraries(modbuscore PUBLIC ws2_32)
+endif()
 
 if(BUILD_TESTING)
   include(CTest)

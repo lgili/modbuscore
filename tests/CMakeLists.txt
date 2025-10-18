@@ -46,41 +46,42 @@ target_include_directories(rtu_uart_smoke PRIVATE
 
 add_test(NAME rtu_uart_smoke COMMAND rtu_uart_smoke)
 
-add_executable(posix_rtu_smoke
-  test_posix_rtu.c
-)
+# Platform-specific transport tests
+if(WIN32)
+  # Windows-specific tests
+  add_executable(winsock_tcp_smoke test_winsock_tcp.c)
+  target_link_libraries(winsock_tcp_smoke PRIVATE ModbusCore::modbuscore)
+  target_include_directories(winsock_tcp_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  add_test(NAME winsock_tcp_smoke COMMAND winsock_tcp_smoke)
 
-target_link_libraries(posix_rtu_smoke PRIVATE ModbusCore::modbuscore)
-target_include_directories(posix_rtu_smoke PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+  add_executable(win32_rtu_smoke test_win32_rtu.c)
+  target_link_libraries(win32_rtu_smoke PRIVATE ModbusCore::modbuscore)
+  target_include_directories(win32_rtu_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  add_test(NAME win32_rtu_smoke COMMAND win32_rtu_smoke)
+else()
+  # POSIX-specific tests (Linux, macOS, BSD, etc.)
+  add_executable(posix_rtu_smoke test_posix_rtu.c)
+  target_link_libraries(posix_rtu_smoke PRIVATE ModbusCore::modbuscore)
+  target_include_directories(posix_rtu_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  add_test(NAME posix_rtu_smoke COMMAND posix_rtu_smoke)
 
-add_test(NAME posix_rtu_smoke COMMAND posix_rtu_smoke)
-
-add_executable(winsock_tcp_smoke
-  test_winsock_tcp.c
-)
-
-target_link_libraries(winsock_tcp_smoke PRIVATE ModbusCore::modbuscore)
-target_include_directories(winsock_tcp_smoke PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-add_test(NAME winsock_tcp_smoke COMMAND winsock_tcp_smoke)
-
-add_executable(win32_rtu_smoke
-  test_win32_rtu.c
-)
-
-target_link_libraries(win32_rtu_smoke PRIVATE ModbusCore::modbuscore)
-target_include_directories(win32_rtu_smoke PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-add_test(NAME win32_rtu_smoke COMMAND win32_rtu_smoke)
+  add_executable(posix_tcp_smoke test_posix_tcp.c)
+  target_link_libraries(posix_tcp_smoke PRIVATE ModbusCore::modbuscore)
+  target_include_directories(posix_tcp_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  add_test(NAME posix_tcp_smoke COMMAND posix_tcp_smoke)
+endif()
 
 add_executable(engine_resilience_smoke
   test_engine_resilience.c
@@ -117,18 +118,6 @@ target_include_directories(pdu_smoke PRIVATE
 )
 
 add_test(NAME pdu_smoke COMMAND pdu_smoke)
-
-add_executable(posix_tcp_smoke
-  test_posix_tcp.c
-)
-
-target_link_libraries(posix_tcp_smoke PRIVATE ModbusCore::modbuscore)
-target_include_directories(posix_tcp_smoke PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-add_test(NAME posix_tcp_smoke COMMAND posix_tcp_smoke)
 
 # Example: End-to-end TCP client com FC03
 add_executable(example_tcp_client_fc03
