@@ -323,13 +323,12 @@ mbc_status_t mbc_mock_transport_create(const mbc_mock_transport_config_t *config
     mock->next_send_status = MBC_STATUS_OK;
     mock->next_receive_status = MBC_STATUS_OK;
 
-    *out_iface = (mbc_transport_iface_t){
-        .ctx = mock,
-        .send = mock_send,
-        .receive = mock_receive,
-        .now = mock_now,
-        .yield = mock_yield,
-    };
+    /* Fill transport interface explicitly */
+    out_iface->ctx = mock;
+    out_iface->send = mock_send;
+    out_iface->receive = mock_receive;
+    out_iface->now = mock_now;
+    out_iface->yield = mock_yield;
 
     *out_ctx = mock;
     return MBC_STATUS_OK;

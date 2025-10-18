@@ -25,7 +25,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON ..
+        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON ..
 
     - name: Build
       run: |
@@ -53,7 +53,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON ..
+        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON ..
 
     - name: Build
       run: |
@@ -77,7 +77,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON ..
+        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON ..
 
     - name: Build
       run: |
@@ -107,7 +107,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON ..
+        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON ..
         cmake --build .
 
     - name: Start Modbus server
