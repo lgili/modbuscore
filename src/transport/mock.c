@@ -101,6 +101,12 @@ static mbc_status_t ensure_capacity(mock_frame_list_t *list, size_t desired)
         return MBC_STATUS_NO_RESOURCES;
     }
 
+    /* Zero-initialize the newly allocated slots */
+    size_t old_capacity = list->capacity;
+    if (new_capacity > old_capacity) {
+        memset(&new_items[old_capacity], 0, (new_capacity - old_capacity) * sizeof(*new_items));
+    }
+
     list->items = new_items;
     list->capacity = new_capacity;
     return MBC_STATUS_OK;
