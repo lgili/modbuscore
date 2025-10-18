@@ -1,3 +1,12 @@
+/* Enable POSIX extensions for cfmakeraw, clock_gettime, nanosleep */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+/* Enable BSD extensions for cfmakeraw on some systems */
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <modbuscore/transport/posix_rtu.h>
 #include <modbuscore/transport/rtu_uart.h>
 

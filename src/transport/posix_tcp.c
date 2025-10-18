@@ -3,6 +3,11 @@
  * @brief Implementation of non-blocking POSIX TCP transport driver.
  */
 
+/* Enable POSIX extensions for getaddrinfo, usleep, clock_gettime */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <modbuscore/transport/posix_tcp.h>
 
 #include <sys/socket.h>
