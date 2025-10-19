@@ -542,12 +542,103 @@ static void test_winsock_tcp_engine_server(void)
     WSACleanup();
 }
 
+static void test_winsock_tcp_engine_client_timeout(void)
+{
+    SOCKET client_fd = INVALID_SOCKET;
+    SOCKET server_fd = INVALID_SOCKET;
+    assert(mbc_status_is_ok(create_connected_socket_pair(&client_fd, &server_fd)));
+
+    socket_transport_ctx_t transport_ctx = {
+        .fd = client_fd,
+    };
+
+    mbc_transport_iface_t transport = {
+        .ctx = &transport_ctx,
+        .send = socket_transport_send,
+        .receive = socket_transport_receive,
+        .now = socket_transport_now,
+        .yield = socket_transport_yield,
+    };
+
+    uint8_t request_frame[TCP_MAX_FRAME] = {0};
+    size_t request_length = 0U;
+    mbc_pdu_t request_pdu;
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
+                                                     request_frame,
+                                                     sizeof(request_frame),
+                                                     &request_length)));
+
+    mbc_runtime_builder_t builder;
+    mbc_runtime_builder_init(&builder);
+    mbc_runtime_builder_with_transport(&builder, &transport);
+
+    mbc_runtime_t runtime;
+    assert(mbc_runtime_builder_build(&builder, &runtime) == MBC_STATUS_OK);
+
+    mbc_engine_t engine;
+    mbc_engine_config_t cfg = {
+        .runtime = &runtime,
+        .role = MBC_ENGINE_ROLE_CLIENT,
+        .framing = MBC_FRAMING_TCP,
+        .use_override = false,
+        .response_timeout_ms = 20,
+    };
+    assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
+
+    assert(mbc_engine_submit_request(&engine,
+                                     request_frame,
+                                     request_length) == MBC_STATUS_OK);
+
+    /* Drain transmitted request from peer */
+    uint8_t peer_buffer[TCP_MAX_FRAME] = {0};
+    size_t total = 0U;
+    while (total < request_length) {
+        int rc = recv(server_fd, (char *)peer_buffer + total, (int)(request_length - total), 0);
+        if (rc > 0) {
+            total += (size_t)rc;
+            continue;
+        }
+        if (rc == 0) {
+            break;
+        }
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            Sleep(1);
+            continue;
+        }
+        assert(false && "recv failed while draining client request");
+    }
+    assert(total == request_length);
+    assert(memcmp(peer_buffer, request_frame, request_length) == 0);
+
+    bool timed_out = false;
+    for (int i = 0; i < 200 && !timed_out; ++i) {
+        mbc_status_t status = mbc_engine_step(&engine, 32U);
+        if (status == MBC_STATUS_TIMEOUT) {
+            timed_out = true;
+            break;
+        }
+        assert(status == MBC_STATUS_OK);
+        mbc_transport_yield(&transport);
+        Sleep(1);
+    }
+    assert(timed_out);
+    assert(engine.state == MBC_ENGINE_STATE_IDLE);
+
+    mbc_engine_shutdown(&engine);
+    mbc_runtime_shutdown(&runtime);
+    closesocket(client_fd);
+    closesocket(server_fd);
+    WSACleanup();
+}
+
 int main(void)
 {
     printf("=== Winsock TCP Tests ===\n\n");
     test_winsock_loop();
     test_winsock_tcp_engine_client();
     test_winsock_tcp_engine_server();
+    test_winsock_tcp_engine_client_timeout();
     printf("\n=== All Winsock TCP tests completed ===\n");
     return 0;
 }

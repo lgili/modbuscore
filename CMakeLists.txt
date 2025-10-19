@@ -21,6 +21,7 @@ set(MODBUSCORE_SOURCES
   src/protocol/pdu.c
   src/protocol/engine.c
   src/protocol/mbap.c
+  src/protocol/crc.c
 )
 
 # Platform-specific transport implementations
@@ -67,3 +68,5 @@ if(BUILD_TESTING)
   include(CTest)
   add_subdirectory(tests)
 endif()
+
+add_subdirectory(examples)

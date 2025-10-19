@@ -22,6 +22,7 @@
 #include <modbuscore/transport/iface.h>
 #include <modbuscore/protocol/events.h>
 #include <modbuscore/protocol/pdu.h>
+#include <modbuscore/protocol/mbap.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,6 +89,8 @@ typedef struct mbc_engine {
     size_t expected_length;             /**< Expected frame length */
     bool pdu_ready;                     /**< PDU ready flag */
     mbc_pdu_t current_pdu;              /**< Current decoded PDU */
+    mbc_mbap_header_t last_mbap_header; /**< Last decoded MBAP header (TCP only) */
+    bool last_mbap_valid;               /**< Flag indicating header is valid */
 } mbc_engine_t;
 
 /**
@@ -152,6 +155,15 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
  * @return true if PDU was available and copied to out, false otherwise
  */
 bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out);
+
+/**
+ * @brief Retrieve the last MBAP header decoded by the engine (TCP mode).
+ *
+ * @param engine Engine instance
+ * @param out Header destination
+ * @return true if a header is available, false otherwise
+ */
+bool mbc_engine_last_mbap_header(const mbc_engine_t *engine, mbc_mbap_header_t *out);
 
 #ifdef __cplusplus
 }

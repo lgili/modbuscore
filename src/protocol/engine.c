@@ -15,6 +15,7 @@
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/pdu.h>
 #include <modbuscore/protocol/mbap.h>
+#include <modbuscore/protocol/crc.h>
 
 #define MBC_EXPECTED_UNSUPPORTED ((size_t)-1)
 
@@ -78,6 +79,8 @@ mbc_status_t mbc_engine_init(mbc_engine_t *engine, const mbc_engine_config_t *co
         .rx_length = 0U,
         .expected_length = 0U,
         .pdu_ready = false,
+        .last_mbap_header = {0},
+        .last_mbap_valid = false,
     };
 
     return MBC_STATUS_OK;
@@ -159,13 +162,15 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
             mbc_pdu_t decoded = {0};
             mbc_status_t decode_status;
 
+            size_t frame_length = engine->expected_length;
+
             /* TCP mode: unwrap MBAP first */
             if (engine->framing == MBC_FRAMING_TCP) {
                 mbc_mbap_header_t mbap_header;
                 const uint8_t *pdu_data = NULL;
                 size_t pdu_length = 0;
 
-                decode_status = mbc_mbap_decode(engine->rx_buffer, engine->expected_length,
+                decode_status = mbc_mbap_decode(engine->rx_buffer, frame_length,
                                                  &mbap_header, &pdu_data, &pdu_length);
                 reset_rx_buffer(engine);
 
@@ -188,10 +193,26 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
                 if (decoded.payload_length > 0) {
                     memcpy(decoded.payload, &pdu_data[1], decoded.payload_length);
                 }
+                engine->last_mbap_header = mbap_header;
+                engine->last_mbap_valid = true;
             } else {
-                /* RTU mode: decode directly */
+                if (frame_length < 4U) {
+                    reset_rx_buffer(engine);
+                    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                    enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                    return MBC_STATUS_DECODING_ERROR;
+                }
+
+                if (!mbc_crc16_validate(engine->rx_buffer, frame_length)) {
+                    reset_rx_buffer(engine);
+                    emit_event(engine, MBC_ENGINE_EVENT_STEP_END);
+                    enter_state(engine, MBC_ENGINE_STATE_IDLE);
+                    return MBC_STATUS_DECODING_ERROR;
+                }
+
+                const size_t pdu_length = frame_length - 2U;
                 decode_status = mbc_pdu_decode(engine->rx_buffer,
-                                                engine->expected_length,
+                                                pdu_length,
                                                 &decoded);
                 reset_rx_buffer(engine);
 
@@ -251,14 +272,31 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
     mbc_engine_state_t previous = engine->state;
     enter_state(engine, MBC_ENGINE_STATE_SENDING);
 
-    mbc_status_t status = mbc_transport_send(&engine->transport, buffer, length, &io);
+    const uint8_t *tx_buffer = buffer;
+    size_t tx_length = length;
+    uint8_t frame_with_crc[sizeof(engine->rx_buffer)];
+
+    if (engine->framing == MBC_FRAMING_RTU) {
+        if (length + 2U > sizeof(frame_with_crc)) {
+            enter_state(engine, previous);
+            return MBC_STATUS_NO_RESOURCES;
+        }
+        memcpy(frame_with_crc, buffer, length);
+        uint16_t crc = mbc_crc16(buffer, length);
+        frame_with_crc[length] = (uint8_t)(crc & 0xFFU);
+        frame_with_crc[length + 1U] = (uint8_t)((crc >> 8) & 0xFFU);
+        tx_buffer = frame_with_crc;
+        tx_length = length + 2U;
+    }
+
+    mbc_status_t status = mbc_transport_send(&engine->transport, tx_buffer, tx_length, &io);
     if (!mbc_status_is_ok(status)) {
         enter_state(engine, previous);
         return status;
     }
 
     /* Check if all bytes were sent */
-    if (io.processed != length) {
+    if (io.processed != tx_length) {
         enter_state(engine, previous);
         return MBC_STATUS_IO_ERROR;  /* Partial send is an error in this implementation */
     }
@@ -279,6 +317,15 @@ bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out)
 
     *out = engine->current_pdu;
     engine->pdu_ready = false;
+    return true;
+}
+
+bool mbc_engine_last_mbap_header(const mbc_engine_t *engine, mbc_mbap_header_t *out)
+{
+    if (!engine || !out || !engine->last_mbap_valid) {
+        return false;
+    }
+    *out = engine->last_mbap_header;
     return true;
 }
 
@@ -359,18 +406,18 @@ static size_t determine_expected_length(const mbc_engine_t *engine)
     const uint8_t base = function & 0x7FU;
 
     if (exception) {
-        return (engine->rx_length >= 3U) ? 3U : 0U;
+        return (engine->rx_length >= 3U) ? 5U : 0U;
     }
 
     if (engine->role == MBC_ENGINE_ROLE_SERVER) {
         switch (base) {
         case 0x03:
         case 0x06:
-            return 6U;
+            return 8U;
         case 0x10:
             if (engine->rx_length >= 7U) {
                 const uint8_t byte_count = engine->rx_buffer[6];
-                return (size_t)(7U + byte_count);
+                return (size_t)(7U + byte_count + 2U);
             }
             return 0U;
         default:
@@ -383,13 +430,13 @@ static size_t determine_expected_length(const mbc_engine_t *engine)
     case 0x03:
         if (engine->rx_length >= 3U) {
             const uint8_t byte_count = engine->rx_buffer[2];
-            return (size_t)(3U + byte_count);
+            return (size_t)(3U + byte_count + 2U);
         }
         return 0U;
     case 0x06:
-        return 6U;
+        return 8U;
     case 0x10:
-        return 6U;
+        return 8U;
     default:
         return MBC_EXPECTED_UNSUPPORTED;
     }

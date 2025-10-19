@@ -39,17 +39,29 @@ static void *tcp_server_thread(void *arg)
 
     int opt = 1;
     setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#ifdef SO_REUSEPORT
+    setsockopt(srv, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
 
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
         .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         .sin_port = htons(args->port),
     };
-    assert(bind(srv, (struct sockaddr *)&addr, sizeof(addr)) == 0);
-    assert(listen(srv, 1) == 0);
+    if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(srv);
+        return NULL;
+    }
+    if (listen(srv, 1) != 0) {
+        close(srv);
+        return NULL;
+    }
 
     int cli = accept(srv, NULL, NULL);
-    assert(cli >= 0);
+    if (cli < 0) {
+        close(srv);
+        return NULL;
+    }
 
     size_t total = 0;
     while (total < args->request_len) {
@@ -488,6 +500,95 @@ static void test_tcp_engine_server(void)
     close(fds[1]);
 }
 
+static void test_tcp_engine_client_timeout(void)
+{
+    int fds[2] = {-1, -1};
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+    assert(mbc_status_is_ok(make_nonblocking(fds[0])));
+    assert(mbc_status_is_ok(make_nonblocking(fds[1])));
+
+    socket_transport_ctx_t transport_ctx = {
+        .fd = fds[0],
+    };
+
+    mbc_transport_iface_t transport = {
+        .ctx = &transport_ctx,
+        .send = socket_transport_send,
+        .receive = socket_transport_receive,
+        .now = socket_transport_now,
+        .yield = socket_transport_yield,
+    };
+
+    uint8_t request_frame[TCP_MAX_FRAME] = {0};
+    size_t request_length = 0U;
+    mbc_pdu_t request_pdu;
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
+                                                     request_frame,
+                                                     sizeof(request_frame),
+                                                     &request_length)));
+
+    mbc_runtime_builder_t builder;
+    mbc_runtime_builder_init(&builder);
+    mbc_runtime_builder_with_transport(&builder, &transport);
+
+    mbc_runtime_t runtime;
+    assert(mbc_runtime_builder_build(&builder, &runtime) == MBC_STATUS_OK);
+
+    mbc_engine_t engine;
+    mbc_engine_config_t cfg = {
+        .runtime = &runtime,
+        .role = MBC_ENGINE_ROLE_CLIENT,
+        .framing = MBC_FRAMING_TCP,
+        .use_override = false,
+        .response_timeout_ms = 20,
+    };
+    assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
+
+    assert(mbc_engine_submit_request(&engine,
+                                     request_frame,
+                                     request_length) == MBC_STATUS_OK);
+
+    /* Drain request from peer side */
+    uint8_t peer_buffer[TCP_MAX_FRAME] = {0};
+    size_t total = 0U;
+    while (total < request_length) {
+        ssize_t rc = recv(fds[1], peer_buffer + total, request_length - total, 0);
+        if (rc > 0) {
+            total += (size_t)rc;
+            continue;
+        }
+        if (rc == 0) {
+            break;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            usleep(1000);
+            continue;
+        }
+        assert(false && "recv failed while draining client request");
+    }
+    assert(total == request_length);
+    assert(memcmp(peer_buffer, request_frame, request_length) == 0);
+
+    bool timed_out = false;
+    for (int i = 0; i < 200 && !timed_out; ++i) {
+        mbc_status_t status = mbc_engine_step(&engine, 32U);
+        if (status == MBC_STATUS_TIMEOUT) {
+            timed_out = true;
+            break;
+        }
+        assert(status == MBC_STATUS_OK);
+        mbc_transport_yield(&transport);
+        usleep(1000);
+    }
+    assert(timed_out);
+    assert(engine.state == MBC_ENGINE_STATE_IDLE);
+
+    mbc_engine_shutdown(&engine);
+    mbc_runtime_shutdown(&runtime);
+    close(fds[0]);
+    close(fds[1]);
+}
+
 static void test_tcp_invalid_inputs(void)
 {
     mbc_transport_iface_t iface;
@@ -521,6 +622,7 @@ int main(void)
     test_tcp_loop();
     test_tcp_engine_client();
     test_tcp_engine_server();
+    test_tcp_engine_client_timeout();
     test_tcp_invalid_inputs();
     printf("\n=== All TCP tests completed ===\n");
     return 0;
