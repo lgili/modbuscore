@@ -6,9 +6,9 @@
  * @brief Utilities for Modbus RTU CRC16 calculation and validation.
  */
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,7 +21,7 @@ extern "C" {
  * @param length Number of bytes to process
  * @return Computed CRC16 value (LSB-first representation)
  */
-uint16_t mbc_crc16(const uint8_t *data, size_t length);
+uint16_t mbc_crc16(const uint8_t* data, size_t length);
 
 /**
  * @brief Validate that the last two bytes of @p frame match CRC16 over the payload.
@@ -30,7 +30,7 @@ uint16_t mbc_crc16(const uint8_t *data, size_t length);
  * @param length Total frame length including CRC (must be >= 2)
  * @return true if CRC matches, false otherwise
  */
-bool mbc_crc16_validate(const uint8_t *frame, size_t length);
+bool mbc_crc16_validate(const uint8_t* frame, size_t length);
 
 #ifdef __cplusplus
 }

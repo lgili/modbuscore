@@ -1,9 +1,8 @@
+#include <assert.h>
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/mbap.h>
 #include <modbuscore/protocol/pdu.h>
 #include <modbuscore/runtime/builder.h>
-
-#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,35 +10,35 @@
 #include <string.h>
 
 #ifdef _WIN32
-#  include <winsock2.h>
-#  include <ws2tcpip.h>
-#  include <windows.h>
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 typedef SOCKET tcp_socket_t;
-#  define CLOSESOCK closesocket
+#define CLOSESOCK closesocket
 static uint64_t now_ms(void) { return GetTickCount64(); }
 static void sleep_ms(uint32_t ms) { Sleep(ms); }
 #else
-#  include <arpa/inet.h>
-#  include <errno.h>
-#  include <fcntl.h>
-#  include <netinet/in.h>
-#  include <signal.h>
-#  include <sys/socket.h>
-#  include <sys/time.h>
-#  include <sys/types.h>
-#  include <time.h>
-#  include <unistd.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 typedef int tcp_socket_t;
-#  define INVALID_SOCKET (-1)
-#  define CLOSESOCK close
+#define INVALID_SOCKET (-1)
+#define CLOSESOCK close
 static uint64_t now_ms(void)
 {
-#  ifdef CLOCK_MONOTONIC
+#ifdef CLOCK_MONOTONIC
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
         return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)(ts.tv_nsec / 1000000ULL);
     }
-#  endif
+#endif
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)(tv.tv_usec / 1000ULL);
@@ -75,9 +74,10 @@ static int set_nonblocking(tcp_socket_t fd)
 #endif
 }
 
-static mbc_status_t transport_send(void *ctx, const uint8_t *buffer, size_t length, mbc_transport_io_t *out)
+static mbc_status_t transport_send(void* ctx, const uint8_t* buffer, size_t length,
+                                   mbc_transport_io_t* out)
 {
-    tcp_transport_ctx_t *tcp = ctx;
+    tcp_transport_ctx_t* tcp = ctx;
     if (!tcp || (!buffer && length > 0U)) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
@@ -85,7 +85,7 @@ static mbc_status_t transport_send(void *ctx, const uint8_t *buffer, size_t leng
     size_t sent_total = 0U;
     while (sent_total < length) {
 #ifdef _WIN32
-        int rc = send(tcp->fd, (const char *)buffer + sent_total, (int)(length - sent_total), 0);
+        int rc = send(tcp->fd, (const char*)buffer + sent_total, (int)(length - sent_total), 0);
 #else
         ssize_t rc = send(tcp->fd, buffer + sent_total, length - sent_total, 0);
 #endif
@@ -116,15 +116,16 @@ static mbc_status_t transport_send(void *ctx, const uint8_t *buffer, size_t leng
     return (sent_total == length) ? MBC_STATUS_OK : MBC_STATUS_IO_ERROR;
 }
 
-static mbc_status_t transport_receive(void *ctx, uint8_t *buffer, size_t capacity, mbc_transport_io_t *out)
+static mbc_status_t transport_receive(void* ctx, uint8_t* buffer, size_t capacity,
+                                      mbc_transport_io_t* out)
 {
-    tcp_transport_ctx_t *tcp = ctx;
+    tcp_transport_ctx_t* tcp = ctx;
     if (!tcp || !buffer || capacity == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
 #ifdef _WIN32
-    int rc = recv(tcp->fd, (char *)buffer, (int)capacity, 0);
+    int rc = recv(tcp->fd, (char*)buffer, (int)capacity, 0);
     if (rc < 0) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
@@ -154,19 +155,19 @@ static mbc_status_t transport_receive(void *ctx, uint8_t *buffer, size_t capacit
     return (rc == 0) ? MBC_STATUS_IO_ERROR : MBC_STATUS_OK;
 }
 
-static uint64_t transport_now(void *ctx)
+static uint64_t transport_now(void* ctx)
 {
     (void)ctx;
     return now_ms();
 }
 
-static void transport_yield(void *ctx)
+static void transport_yield(void* ctx)
 {
     (void)ctx;
     sleep_ms(1);
 }
 
-static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_pdu_t *out)
+static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_pdu_t* out)
 {
     if (!out) {
         return false;
@@ -178,9 +179,7 @@ static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_p
     return true;
 }
 
-static bool handle_request(const mbc_pdu_t *request,
-                           mbc_pdu_t *response,
-                           uint16_t *registers,
+static bool handle_request(const mbc_pdu_t* request, mbc_pdu_t* response, uint16_t* registers,
                            size_t register_count)
 {
     if (!request || !response || !registers) {
@@ -251,14 +250,14 @@ static bool handle_request(const mbc_pdu_t *request,
     }
 }
 
-static void usage(const char *prog)
+static void usage(const char* prog)
 {
     printf("Usage: %s [--port <tcp-port>] [--unit <id>] [--max-requests <n>]\n", prog);
     printf("Default port: %d, unit id: 0x11\n", DEFAULT_PORT);
     printf("Start this server, then run the TCP client example to interact.\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     uint16_t port = DEFAULT_PORT;
     uint8_t unit_id = 0x11U;
@@ -299,7 +298,7 @@ int main(int argc, char **argv)
     }
 
     int opt = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -307,7 +306,7 @@ int main(int argc, char **argv)
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(port);
 
-    if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    if (bind(listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         fprintf(stderr, "Bind failed on port %u\n", port);
         CLOSESOCK(listen_fd);
 #ifdef _WIN32
@@ -446,12 +445,8 @@ int main(int argc, char **argv)
             header.unit_id = last_header.unit_id;
         }
 
-        if (mbc_mbap_encode(&header,
-                            response_payload,
-                            1U + response.payload_length,
-                            response_frame,
-                            sizeof(response_frame),
-                            &response_len) != MBC_STATUS_OK) {
+        if (mbc_mbap_encode(&header, response_payload, 1U + response.payload_length, response_frame,
+                            sizeof(response_frame), &response_len) != MBC_STATUS_OK) {
             fprintf(stderr, "Failed to encode MBAP frame\n");
             break;
         }

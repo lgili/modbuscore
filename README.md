@@ -239,6 +239,28 @@ clang-tidy src/protocol/engine.c -- -Iinclude -std=c17
 Ambos usam as configurações de `.clang-format` e `.clang-tidy`. A pipeline de CI
 também consome esses arquivos, então rodar localmente evita divergências.
 
+### Makefile Shortcuts
+
+Um `Makefile` na raiz oferece alvos úteis:
+
+```bash
+# configure + build (alvo padrão)
+make
+
+# lint/format
+make format
+make tidy
+
+# rodar ctest com output detalhado
+make test
+
+# compilar todos os exemplos
+make examples
+```
+
+Use `make help` para listar todos os alvos e sobrescreva ferramentas conforme
+necessário, por exemplo `make PYTHON=python` ou `make CLANG_TIDY=run-clang-tidy`.
+
 ---
 
 ## 🎓 Examples

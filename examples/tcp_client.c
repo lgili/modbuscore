@@ -4,9 +4,9 @@
 #include <modbuscore/runtime/builder.h>
 #include <modbuscore/transport/iface.h>
 #ifdef _WIN32
-#  include <modbuscore/transport/winsock_tcp.h>
+#include <modbuscore/transport/winsock_tcp.h>
 #else
-#  include <modbuscore/transport/posix_tcp.h>
+#include <modbuscore/transport/posix_tcp.h>
 #endif
 
 #include <stdbool.h>
@@ -22,7 +22,8 @@
 #define DEFAULT_PORT 15020
 #define DEFAULT_UNIT 0x11U
 
-static bool await_pdu(mbc_engine_t *engine, mbc_transport_iface_t *transport, uint32_t max_iterations, mbc_pdu_t *out)
+static bool await_pdu(mbc_engine_t* engine, mbc_transport_iface_t* transport,
+                      uint32_t max_iterations, mbc_pdu_t* out)
 {
     for (uint32_t i = 0; i < max_iterations; ++i) {
         mbc_status_t status = mbc_engine_step(engine, 256U);
@@ -46,8 +47,7 @@ static bool await_pdu(mbc_engine_t *engine, mbc_transport_iface_t *transport, ui
     return false;
 }
 
-static bool submit_mbap_request(mbc_engine_t *engine,
-                                const mbc_pdu_t *request,
+static bool submit_mbap_request(mbc_engine_t* engine, const mbc_pdu_t* request,
                                 uint16_t transaction_id)
 {
     uint8_t payload[1 + MBC_PDU_MAX];
@@ -63,11 +63,7 @@ static bool submit_mbap_request(mbc_engine_t *engine,
 
     uint8_t frame[260];
     size_t frame_length = 0U;
-    if (mbc_mbap_encode(&header,
-                        payload,
-                        1U + request->payload_length,
-                        frame,
-                        sizeof(frame),
+    if (mbc_mbap_encode(&header, payload, 1U + request->payload_length, frame, sizeof(frame),
                         &frame_length) != MBC_STATUS_OK) {
         return false;
     }
@@ -75,16 +71,16 @@ static bool submit_mbap_request(mbc_engine_t *engine,
     return mbc_status_is_ok(mbc_engine_submit_request(engine, frame, frame_length));
 }
 
-static void usage(const char *prog)
+static void usage(const char* prog)
 {
     printf("Usage: %s [--host <addr>] [--port <tcp-port>] [--unit <id>]\n", prog);
     printf("Default host: %s, port: %d, unit: 0x%02X\n", DEFAULT_HOST, DEFAULT_PORT, DEFAULT_UNIT);
     printf("Ensure the TCP server example is running before executing this client.\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-    const char *host = DEFAULT_HOST;
+    const char* host = DEFAULT_HOST;
     uint16_t port = DEFAULT_PORT;
     uint8_t unit = DEFAULT_UNIT;
 
@@ -113,7 +109,7 @@ int main(int argc, char **argv)
         .recv_timeout_ms = 2000,
     };
     mbc_transport_iface_t transport;
-    mbc_winsock_tcp_ctx_t *ctx = NULL;
+    mbc_winsock_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_winsock_tcp_create(&config, &transport, &ctx);
 #else
     mbc_posix_tcp_config_t config = {
@@ -123,7 +119,7 @@ int main(int argc, char **argv)
         .recv_timeout_ms = 2000,
     };
     mbc_transport_iface_t transport;
-    mbc_posix_tcp_ctx_t *ctx = NULL;
+    mbc_posix_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_tcp_create(&config, &transport, &ctx);
 #endif
     if (!mbc_status_is_ok(status)) {
@@ -171,7 +167,8 @@ int main(int argc, char **argv)
     printf("Reading holding registers (unit 0x%02X)...\n", unit);
     mbc_pdu_t read_request;
     mbc_status_t pdu_status = mbc_pdu_build_read_holding_request(&read_request, unit, 0U, 4U);
-    if (!mbc_status_is_ok(pdu_status) || !submit_mbap_request(&engine, &read_request, transaction++)) {
+    if (!mbc_status_is_ok(pdu_status) ||
+        !submit_mbap_request(&engine, &read_request, transaction++)) {
         fprintf(stderr, "Failed to send read request\n");
         goto cleanup;
     }
@@ -182,9 +179,10 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    const uint8_t *register_data = NULL;
+    const uint8_t* register_data = NULL;
     size_t register_count = 0U;
-    if (mbc_pdu_parse_read_holding_response(&response, &register_data, &register_count) == MBC_STATUS_OK) {
+    if (mbc_pdu_parse_read_holding_response(&response, &register_data, &register_count) ==
+        MBC_STATUS_OK) {
         printf("Holding registers:\n");
         for (size_t i = 0; i < register_count; ++i) {
             uint16_t value = (uint16_t)(register_data[i * 2U] << 8) | register_data[i * 2U + 1U];
@@ -201,7 +199,8 @@ int main(int argc, char **argv)
     printf("\nWriting register 1 with value 0x1234\n");
     mbc_pdu_t write_request;
     pdu_status = mbc_pdu_build_write_single_register(&write_request, unit, 1U, 0x1234U);
-    if (!mbc_status_is_ok(pdu_status) || !submit_mbap_request(&engine, &write_request, transaction++)) {
+    if (!mbc_status_is_ok(pdu_status) ||
+        !submit_mbap_request(&engine, &write_request, transaction++)) {
         fprintf(stderr, "Failed to send write request\n");
         goto cleanup;
     }
@@ -226,7 +225,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "Timed out waiting for follow-up read\n");
         goto cleanup;
     }
-    if (mbc_pdu_parse_read_holding_response(&response, &register_data, &register_count) == MBC_STATUS_OK) {
+    if (mbc_pdu_parse_read_holding_response(&response, &register_data, &register_count) ==
+        MBC_STATUS_OK) {
         for (size_t i = 0; i < register_count; ++i) {
             uint16_t value = (uint16_t)(register_data[i * 2U] << 8) | register_data[i * 2U + 1U];
             printf("  [%zu] = 0x%04X (%u)\n", i, value, value);

@@ -2,10 +2,17 @@
 
 #ifdef _WIN32
 
+#include <stdio.h> /* For _snprintf */
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-#include <stdio.h>  /* For _snprintf */
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -41,8 +48,8 @@ static void winsock_cleanup(void)
 static mbc_status_t configure_socket(SOCKET sock)
 {
     BOOL flag = TRUE;
-    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
-    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (const char *)&flag, sizeof(flag));
+    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const char*)&flag, sizeof(flag));
+    setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (const char*)&flag, sizeof(flag));
 
     u_long mode = 1;
     if (ioctlsocket(sock, FIONBIO, &mode) != NO_ERROR) {
@@ -51,7 +58,7 @@ static mbc_status_t configure_socket(SOCKET sock)
     return MBC_STATUS_OK;
 }
 
-static mbc_status_t resolve_host(const char *host, uint16_t port, struct addrinfo **out)
+static mbc_status_t resolve_host(const char* host, uint16_t port, struct addrinfo** out)
 {
     char port_buffer[6];
     _snprintf(port_buffer, sizeof(port_buffer), "%u", (unsigned)port);
@@ -62,7 +69,7 @@ static mbc_status_t resolve_host(const char *host, uint16_t port, struct addrinf
         .ai_protocol = IPPROTO_TCP,
     };
 
-    struct addrinfo *result = NULL;
+    struct addrinfo* result = NULL;
     int rc = getaddrinfo(host, port_buffer, &hints, &result);
     if (rc != 0 || !result) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -90,19 +97,17 @@ static mbc_status_t wait_for_connect(SOCKET sock, uint32_t timeout_ms)
 
     int opt = 0;
     int opt_len = sizeof(opt);
-    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&opt, &opt_len) != 0) {
+    if (getsockopt(sock, SOL_SOCKET, SO_ERROR, (char*)&opt, &opt_len) != 0) {
         return MBC_STATUS_IO_ERROR;
     }
 
     return (opt == 0) ? MBC_STATUS_OK : MBC_STATUS_IO_ERROR;
 }
 
-static mbc_status_t winsock_send(void *ctx,
-                                 const uint8_t *buffer,
-                                 size_t length,
-                                 mbc_transport_io_t *out)
+static mbc_status_t winsock_send(void* ctx, const uint8_t* buffer, size_t length,
+                                 mbc_transport_io_t* out)
 {
-    mbc_winsock_tcp_ctx_t *tcp = ctx;
+    mbc_winsock_tcp_ctx_t* tcp = ctx;
     if (!tcp || (!buffer && length > 0U)) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
@@ -110,7 +115,7 @@ static mbc_status_t winsock_send(void *ctx,
         return MBC_STATUS_IO_ERROR;
     }
 
-    int sent = send(tcp->socket_handle, (const char *)buffer, (int)length, 0);
+    int sent = send(tcp->socket_handle, (const char*)buffer, (int)length, 0);
     if (sent == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
@@ -129,12 +134,10 @@ static mbc_status_t winsock_send(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static mbc_status_t winsock_receive(void *ctx,
-                                    uint8_t *buffer,
-                                    size_t capacity,
-                                    mbc_transport_io_t *out)
+static mbc_status_t winsock_receive(void* ctx, uint8_t* buffer, size_t capacity,
+                                    mbc_transport_io_t* out)
 {
-    mbc_winsock_tcp_ctx_t *tcp = ctx;
+    mbc_winsock_tcp_ctx_t* tcp = ctx;
     if (!tcp || !buffer || capacity == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
@@ -142,7 +145,7 @@ static mbc_status_t winsock_receive(void *ctx,
         return MBC_STATUS_IO_ERROR;
     }
 
-    int received = recv(tcp->socket_handle, (char *)buffer, (int)capacity, 0);
+    int received = recv(tcp->socket_handle, (char*)buffer, (int)capacity, 0);
     if (received == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
@@ -166,7 +169,7 @@ static mbc_status_t winsock_receive(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static uint64_t winsock_now(void *ctx)
+static uint64_t winsock_now(void* ctx)
 {
     (void)ctx;
     LARGE_INTEGER freq, counter;
@@ -176,15 +179,15 @@ static uint64_t winsock_now(void *ctx)
     return (uint64_t)(counter.QuadPart * 1000ULL / freq.QuadPart);
 }
 
-static void winsock_yield(void *ctx)
+static void winsock_yield(void* ctx)
 {
     (void)ctx;
     Sleep(1);
 }
 
-mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
-                                    mbc_transport_iface_t *out_iface,
-                                    mbc_winsock_tcp_ctx_t **out_ctx)
+mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t* config,
+                                    mbc_transport_iface_t* out_iface,
+                                    mbc_winsock_tcp_ctx_t** out_ctx)
 {
     if (!config || !config->host || config->port == 0U || !out_iface || !out_ctx) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -195,7 +198,7 @@ mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
         return status;
     }
 
-    struct addrinfo *addr_list = NULL;
+    struct addrinfo* addr_list = NULL;
     status = resolve_host(config->host, config->port, &addr_list);
     if (!mbc_status_is_ok(status)) {
         winsock_cleanup();
@@ -203,7 +206,7 @@ mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
     }
 
     SOCKET sock = INVALID_SOCKET;
-    struct addrinfo *entry = addr_list;
+    struct addrinfo* entry = addr_list;
     mbc_status_t last_status = MBC_STATUS_IO_ERROR;
 
     for (; entry; entry = entry->ai_next) {
@@ -248,7 +251,7 @@ mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
         return last_status;
     }
 
-    mbc_winsock_tcp_ctx_t *tcp = calloc(1, sizeof(*tcp));
+    mbc_winsock_tcp_ctx_t* tcp = calloc(1, sizeof(*tcp));
     if (!tcp) {
         closesocket(sock);
         winsock_cleanup();
@@ -271,7 +274,7 @@ mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
     return MBC_STATUS_OK;
 }
 
-void mbc_winsock_tcp_destroy(mbc_winsock_tcp_ctx_t *ctx)
+void mbc_winsock_tcp_destroy(mbc_winsock_tcp_ctx_t* ctx)
 {
     if (!ctx) {
         return;
@@ -286,16 +289,16 @@ void mbc_winsock_tcp_destroy(mbc_winsock_tcp_ctx_t *ctx)
     winsock_cleanup();
 }
 
-bool mbc_winsock_tcp_is_connected(const mbc_winsock_tcp_ctx_t *ctx)
+bool mbc_winsock_tcp_is_connected(const mbc_winsock_tcp_ctx_t* ctx)
 {
     return ctx && ctx->connected;
 }
 
 #else /* !_WIN32 */
 
-mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
-                                    mbc_transport_iface_t *out_iface,
-                                    mbc_winsock_tcp_ctx_t **out_ctx)
+mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t* config,
+                                    mbc_transport_iface_t* out_iface,
+                                    mbc_winsock_tcp_ctx_t** out_ctx)
 {
     (void)config;
     (void)out_iface;
@@ -303,12 +306,9 @@ mbc_status_t mbc_winsock_tcp_create(const mbc_winsock_tcp_config_t *config,
     return MBC_STATUS_UNSUPPORTED;
 }
 
-void mbc_winsock_tcp_destroy(mbc_winsock_tcp_ctx_t *ctx)
-{
-    (void)ctx;
-}
+void mbc_winsock_tcp_destroy(mbc_winsock_tcp_ctx_t* ctx) { (void)ctx; }
 
-bool mbc_winsock_tcp_is_connected(const mbc_winsock_tcp_ctx_t *ctx)
+bool mbc_winsock_tcp_is_connected(const mbc_winsock_tcp_ctx_t* ctx)
 {
     (void)ctx;
     return false;

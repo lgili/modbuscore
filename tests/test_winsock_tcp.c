@@ -1,19 +1,18 @@
 #include <assert.h>
-#include <string.h>
+#include <modbuscore/protocol/engine.h>
+#include <modbuscore/protocol/mbap.h>
+#include <modbuscore/protocol/pdu.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/transport/winsock_tcp.h>
 #include <stdbool.h>
 #include <stdio.h>
-
-#include <modbuscore/transport/winsock_tcp.h>
-#include <modbuscore/runtime/builder.h>
-#include <modbuscore/protocol/engine.h>
-#include <modbuscore/protocol/pdu.h>
-#include <modbuscore/protocol/mbap.h>
+#include <string.h>
 
 #ifdef _WIN32
+#include <process.h>
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <windows.h>
-#include <process.h>
 
 #define TCP_MAX_FRAME 260U
 
@@ -25,9 +24,9 @@ typedef struct {
     size_t response_len;
 } server_args_t;
 
-static unsigned __stdcall server_thread(void *arg)
+static unsigned __stdcall server_thread(void* arg)
 {
-    server_args_t *args = arg;
+    server_args_t* args = arg;
 
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -36,7 +35,7 @@ static unsigned __stdcall server_thread(void *arg)
     assert(srv != INVALID_SOCKET);
 
     BOOL opt = TRUE;
-    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+    setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -44,7 +43,7 @@ static unsigned __stdcall server_thread(void *arg)
     addr.sin_port = htons(args->port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-    assert(bind(srv, (struct sockaddr *)&addr, sizeof(addr)) == 0);
+    assert(bind(srv, (struct sockaddr*)&addr, sizeof(addr)) == 0);
     assert(listen(srv, 1) == 0);
 
     SOCKET cli = accept(srv, NULL, NULL);
@@ -52,8 +51,7 @@ static unsigned __stdcall server_thread(void *arg)
 
     size_t total = 0;
     while (total < args->request_len) {
-        int n = recv(cli, (char *)args->request + total,
-                     (int)(args->request_len - total), 0);
+        int n = recv(cli, (char*)args->request + total, (int)(args->request_len - total), 0);
         assert(n >= 0);
         if (n == 0) {
             break;
@@ -64,8 +62,7 @@ static unsigned __stdcall server_thread(void *arg)
 
     size_t sent = 0;
     while (sent < args->response_len) {
-        int n = send(cli, (const char *)args->response + sent,
-                     (int)(args->response_len - sent), 0);
+        int n = send(cli, (const char*)args->response + sent, (int)(args->response_len - sent), 0);
         assert(n >= 0);
         if (n == 0) {
             break;
@@ -83,8 +80,8 @@ static unsigned __stdcall server_thread(void *arg)
 static void test_winsock_loop(void)
 {
     const uint16_t port = 15030;
-    uint8_t request[] = {0x00,0x02,0x00,0x00,0x00,0x06,0x11,0x03,0x00,0x00,0x00,0x02};
-    uint8_t response[] = {0x00,0x02,0x00,0x00,0x00,0x05,0x11,0x03,0x02,0x00,0x2B};
+    uint8_t request[] = {0x00, 0x02, 0x00, 0x00, 0x00, 0x06, 0x11, 0x03, 0x00, 0x00, 0x00, 0x02};
+    uint8_t response[] = {0x00, 0x02, 0x00, 0x00, 0x00, 0x05, 0x11, 0x03, 0x02, 0x00, 0x2B};
 
     server_args_t args = {
         .port = port,
@@ -105,7 +102,7 @@ static void test_winsock_loop(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_winsock_tcp_ctx_t *ctx = NULL;
+    mbc_winsock_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_winsock_tcp_create(&config, &iface, &ctx);
     assert(mbc_status_is_ok(status));
 
@@ -118,8 +115,7 @@ static void test_winsock_loop(void)
     size_t total = 0;
     while (total < sizeof(response)) {
         io.processed = 0;
-        status = mbc_transport_receive(&iface, rx + total,
-                                       sizeof(response) - total, &io);
+        status = mbc_transport_receive(&iface, rx + total, sizeof(response) - total, &io);
         assert(mbc_status_is_ok(status));
         if (io.processed == 0U) {
             iface.yield(iface.ctx);
@@ -134,17 +130,14 @@ static void test_winsock_loop(void)
     CloseHandle(thread);
 }
 
-static mbc_status_t build_fc03_request_frame(mbc_pdu_t *pdu,
-                                             uint8_t *frame,
-                                             size_t capacity,
-                                             size_t *out_length)
+static mbc_status_t build_fc03_request_frame(mbc_pdu_t* pdu, uint8_t* frame, size_t capacity,
+                                             size_t* out_length)
 {
     if (!pdu || !frame || !out_length) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
-    mbc_status_t status = mbc_pdu_build_read_holding_request(
-        pdu, 0x11U, 0x0000U, 0x0001U);
+    mbc_status_t status = mbc_pdu_build_read_holding_request(pdu, 0x11U, 0x0000U, 0x0001U);
     if (!mbc_status_is_ok(status)) {
         return status;
     }
@@ -161,29 +154,20 @@ static mbc_status_t build_fc03_request_frame(mbc_pdu_t *pdu,
     };
 
     size_t pdu_length = 1U + pdu->payload_length;
-    return mbc_mbap_encode(&header,
-                           pdu_bytes,
-                           pdu_length,
-                           frame,
-                           capacity,
-                           out_length);
+    return mbc_mbap_encode(&header, pdu_bytes, pdu_length, frame, capacity, out_length);
 }
 
 static void test_winsock_tcp_engine_client(void)
 {
     const uint16_t port = 15031;
-    const uint8_t response_frame[] = {
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
-        0x11, 0x03, 0x02, 0x00, 0x2A
-    };
+    const uint8_t response_frame[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
+                                      0x11, 0x03, 0x02, 0x00, 0x2A};
 
     uint8_t request_frame[260] = {0};
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     server_args_t args = {
         .port = port,
@@ -204,7 +188,7 @@ static void test_winsock_tcp_engine_client(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_winsock_tcp_ctx_t *ctx = NULL;
+    mbc_winsock_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_winsock_tcp_create(&config, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
         printf("Winsock TCP engine client test skipped (connection failed, status=%d)\n", status);
@@ -231,9 +215,7 @@ static void test_winsock_tcp_engine_client(void)
     assert(mbc_engine_init(&engine, &engine_cfg) == MBC_STATUS_OK);
 
     assert(request_length <= 260);
-    assert(mbc_engine_submit_request(&engine,
-                                     request_frame,
-                                     request_length) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, request_length) == MBC_STATUS_OK);
 
     mbc_pdu_t response_pdu = {0};
     bool response_ready = false;
@@ -253,11 +235,10 @@ static void test_winsock_tcp_engine_client(void)
 
     assert(response_ready);
 
-    const uint8_t *register_data = NULL;
+    const uint8_t* register_data = NULL;
     size_t register_count = 0U;
-    assert(mbc_pdu_parse_read_holding_response(&response_pdu,
-                                               &register_data,
-                                               &register_count) == MBC_STATUS_OK);
+    assert(mbc_pdu_parse_read_holding_response(&response_pdu, &register_data, &register_count) ==
+           MBC_STATUS_OK);
     assert(register_count == 1U);
     assert(register_data[0] == 0x00U && register_data[1] == 0x2AU);
 
@@ -272,7 +253,7 @@ static void test_winsock_tcp_engine_client(void)
 }
 
 /* Helper to create a connected socket pair for testing server mode */
-static mbc_status_t create_connected_socket_pair(SOCKET *client_fd, SOCKET *server_fd)
+static mbc_status_t create_connected_socket_pair(SOCKET* client_fd, SOCKET* server_fd)
 {
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -289,7 +270,7 @@ static mbc_status_t create_connected_socket_pair(SOCKET *client_fd, SOCKET *serv
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = 0; /* Let OS choose port */
 
-    if (bind(listener, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    if (bind(listener, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         closesocket(listener);
         return MBC_STATUS_IO_ERROR;
     }
@@ -301,7 +282,7 @@ static mbc_status_t create_connected_socket_pair(SOCKET *client_fd, SOCKET *serv
 
     /* Get the actual port */
     int addr_len = sizeof(addr);
-    if (getsockname(listener, (struct sockaddr *)&addr, &addr_len) != 0) {
+    if (getsockname(listener, (struct sockaddr*)&addr, &addr_len) != 0) {
         closesocket(listener);
         return MBC_STATUS_IO_ERROR;
     }
@@ -313,7 +294,7 @@ static mbc_status_t create_connected_socket_pair(SOCKET *client_fd, SOCKET *serv
         return MBC_STATUS_IO_ERROR;
     }
 
-    if (connect(*client_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    if (connect(*client_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         closesocket(*client_fd);
         closesocket(listener);
         return MBC_STATUS_IO_ERROR;
@@ -342,19 +323,17 @@ typedef struct {
     SOCKET fd;
 } socket_transport_ctx_t;
 
-static mbc_status_t socket_transport_send(void *ctx,
-                                          const uint8_t *buffer,
-                                          size_t length,
-                                          mbc_transport_io_t *out)
+static mbc_status_t socket_transport_send(void* ctx, const uint8_t* buffer, size_t length,
+                                          mbc_transport_io_t* out)
 {
-    socket_transport_ctx_t *sock = ctx;
+    socket_transport_ctx_t* sock = ctx;
     if (!sock || (!buffer && length > 0U)) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
     size_t total = 0U;
     while (total < length) {
-        int rc = send(sock->fd, (const char *)buffer + total, (int)(length - total), 0);
+        int rc = send(sock->fd, (const char*)buffer + total, (int)(length - total), 0);
         if (rc < 0) {
             int err = WSAGetLastError();
             if (err == WSAEWOULDBLOCK) {
@@ -375,17 +354,15 @@ static mbc_status_t socket_transport_send(void *ctx,
     return (total == length) ? MBC_STATUS_OK : MBC_STATUS_IO_ERROR;
 }
 
-static mbc_status_t socket_transport_receive(void *ctx,
-                                             uint8_t *buffer,
-                                             size_t capacity,
-                                             mbc_transport_io_t *out)
+static mbc_status_t socket_transport_receive(void* ctx, uint8_t* buffer, size_t capacity,
+                                             mbc_transport_io_t* out)
 {
-    socket_transport_ctx_t *sock = ctx;
+    socket_transport_ctx_t* sock = ctx;
     if (!sock || !buffer || capacity == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
-    int rc = recv(sock->fd, (char *)buffer, (int)capacity, 0);
+    int rc = recv(sock->fd, (char*)buffer, (int)capacity, 0);
     if (rc < 0) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
@@ -403,13 +380,13 @@ static mbc_status_t socket_transport_receive(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static uint64_t socket_transport_now(void *ctx)
+static uint64_t socket_transport_now(void* ctx)
 {
     (void)ctx;
     return (uint64_t)GetTickCount64();
 }
 
-static void socket_transport_yield(void *ctx)
+static void socket_transport_yield(void* ctx)
 {
     (void)ctx;
     Sleep(1);
@@ -452,18 +429,16 @@ static void test_winsock_tcp_engine_server(void)
     uint8_t request_frame[TCP_MAX_FRAME];
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     const uint16_t transaction_id = (uint16_t)((request_frame[0] << 8) | request_frame[1]);
 
     /* Send request from client socket */
     size_t sent = 0;
     while (sent < request_length) {
-        int rc = send(client_fd, (const char *)request_frame + sent,
-                     (int)(request_length - sent), 0);
+        int rc =
+            send(client_fd, (const char*)request_frame + sent, (int)(request_length - sent), 0);
         assert(rc > 0);
         sent += (size_t)rc;
     }
@@ -504,11 +479,8 @@ static void test_winsock_tcp_engine_server(void)
 
     uint8_t response_frame[TCP_MAX_FRAME];
     size_t response_length = 0U;
-    assert(mbc_mbap_encode(&header,
-                           response_pdu_bytes,
-                           1U + response_pdu.payload_length,
-                           response_frame,
-                           sizeof(response_frame),
+    assert(mbc_mbap_encode(&header, response_pdu_bytes, 1U + response_pdu.payload_length,
+                           response_frame, sizeof(response_frame),
                            &response_length) == MBC_STATUS_OK);
 
     assert(mbc_engine_submit_request(&engine, response_frame, response_length) == MBC_STATUS_OK);
@@ -517,7 +489,7 @@ static void test_winsock_tcp_engine_server(void)
     uint8_t received[TCP_MAX_FRAME] = {0};
     size_t total = 0U;
     while (total < response_length) {
-        int rc = recv(client_fd, (char *)received + total, (int)(response_length - total), 0);
+        int rc = recv(client_fd, (char*)received + total, (int)(response_length - total), 0);
         if (rc > 0) {
             total += (size_t)rc;
             continue;
@@ -563,10 +535,8 @@ static void test_winsock_tcp_engine_client_timeout(void)
     uint8_t request_frame[TCP_MAX_FRAME] = {0};
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
@@ -585,15 +555,13 @@ static void test_winsock_tcp_engine_client_timeout(void)
     };
     assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
 
-    assert(mbc_engine_submit_request(&engine,
-                                     request_frame,
-                                     request_length) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, request_length) == MBC_STATUS_OK);
 
     /* Drain transmitted request from peer */
     uint8_t peer_buffer[TCP_MAX_FRAME] = {0};
     size_t total = 0U;
     while (total < request_length) {
-        int rc = recv(server_fd, (char *)peer_buffer + total, (int)(request_length - total), 0);
+        int rc = recv(server_fd, (char*)peer_buffer + total, (int)(request_length - total), 0);
         if (rc > 0) {
             total += (size_t)rc;
             continue;
@@ -646,7 +614,7 @@ int main(void)
 int main(void)
 {
     mbc_transport_iface_t iface;
-    mbc_winsock_tcp_ctx_t *ctx = NULL;
+    mbc_winsock_tcp_ctx_t* ctx = NULL;
     mbc_winsock_tcp_config_t cfg = {
         .host = "127.0.0.1",
         .port = 502,

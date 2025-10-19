@@ -3,14 +3,11 @@
  * @brief Implementation of Modbus PDU encoding/decoding utilities.
  */
 
+#include <modbuscore/protocol/pdu.h>
 #include <string.h>
 
-#include <modbuscore/protocol/pdu.h>
-
-mbc_status_t mbc_pdu_encode(const mbc_pdu_t *pdu,
-                            uint8_t *buffer,
-                            size_t capacity,
-                            size_t *out_length)
+mbc_status_t mbc_pdu_encode(const mbc_pdu_t* pdu, uint8_t* buffer, size_t capacity,
+                            size_t* out_length)
 {
     if (!pdu || !buffer) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -38,9 +35,7 @@ mbc_status_t mbc_pdu_encode(const mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_decode(const uint8_t *buffer,
-                            size_t length,
-                            mbc_pdu_t *out)
+mbc_status_t mbc_pdu_decode(const uint8_t* buffer, size_t length, mbc_pdu_t* out)
 {
     if (!buffer || !out || length < 2U) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -61,9 +56,7 @@ mbc_status_t mbc_pdu_decode(const uint8_t *buffer,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t *pdu,
-                                                uint8_t unit_id,
-                                                uint16_t address,
+mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t* pdu, uint8_t unit_id, uint16_t address,
                                                 uint16_t quantity)
 {
     if (!pdu || quantity == 0U || quantity > 125U) {
@@ -80,9 +73,7 @@ mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t *pdu,
-                                                 uint8_t unit_id,
-                                                 uint16_t address,
+mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t* pdu, uint8_t unit_id, uint16_t address,
                                                  uint16_t value)
 {
     if (!pdu) {
@@ -99,10 +90,8 @@ mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t *pdu,
-                                                    uint8_t unit_id,
-                                                    uint16_t address,
-                                                    const uint16_t *values,
+mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t* pdu, uint8_t unit_id,
+                                                    uint16_t address, const uint16_t* values,
                                                     size_t quantity)
 {
     if (!pdu || !values || quantity == 0U || quantity > 123U) {
@@ -131,9 +120,8 @@ mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t *pdu,
-                                                 const uint8_t **out_data,
-                                                 size_t *out_registers)
+mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t* pdu, const uint8_t** out_data,
+                                                 size_t* out_registers)
 {
     if (!pdu || !out_data || !out_registers) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -153,9 +141,8 @@ mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t *pdu,
-                                                 uint16_t *out_address,
-                                                 uint16_t *out_value)
+mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t* pdu, uint16_t* out_address,
+                                                 uint16_t* out_value)
 {
     if (!pdu || !out_address || !out_value) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -170,9 +157,8 @@ mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t *pdu,
-                                                   uint16_t *out_address,
-                                                   uint16_t *out_quantity)
+mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t* pdu, uint16_t* out_address,
+                                                   uint16_t* out_quantity)
 {
     if (!pdu || !out_address || !out_quantity) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -187,9 +173,7 @@ mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t *pdu,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_pdu_parse_exception(const mbc_pdu_t *pdu,
-                                     uint8_t *out_function,
-                                     uint8_t *out_code)
+mbc_status_t mbc_pdu_parse_exception(const mbc_pdu_t* pdu, uint8_t* out_function, uint8_t* out_code)
 {
     if (!pdu || !out_function || !out_code) {
         return MBC_STATUS_INVALID_ARGUMENT;

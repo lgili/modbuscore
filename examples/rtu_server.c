@@ -4,13 +4,13 @@
 #include <modbuscore/transport/iface.h>
 
 #ifdef _WIN32
-#  include <modbuscore/transport/win32_rtu.h>
+#include <modbuscore/transport/win32_rtu.h>
 #else
-#  include <modbuscore/transport/posix_rtu.h>
-#  include <fcntl.h>
-#  include <stdlib.h>
-#  include <string.h>
-#  include <unistd.h>
+#include <fcntl.h>
+#include <modbuscore/transport/posix_rtu.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #endif
 
 #include <stdbool.h>
@@ -19,7 +19,7 @@
 
 #define HOLDING_REG_COUNT 64
 
-static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_pdu_t *out)
+static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_pdu_t* out)
 {
     if (!out) {
         return false;
@@ -31,9 +31,7 @@ static bool encode_exception(uint8_t unit, uint8_t function, uint8_t code, mbc_p
     return true;
 }
 
-static bool handle_request(const mbc_pdu_t *request,
-                           mbc_pdu_t *response,
-                           uint16_t *registers,
+static bool handle_request(const mbc_pdu_t* request, mbc_pdu_t* response, uint16_t* registers,
                            size_t register_count)
 {
     if (!request || !response || !registers) {
@@ -104,7 +102,7 @@ static bool handle_request(const mbc_pdu_t *request,
     }
 }
 
-static void usage(const char *prog)
+static void usage(const char* prog)
 {
 #ifdef _WIN32
     printf("Usage: %s --port <COMx> [--baud <rate>] [--unit <id>]\n", prog);
@@ -114,14 +112,14 @@ static void usage(const char *prog)
     printf("Default baud: 9600, unit: 0x11\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     uint32_t baud_rate = 9600U;
     uint8_t unit_id = 0x11U;
 #ifdef _WIN32
-    const char *port_name = NULL;
+    const char* port_name = NULL;
 #else
-    const char *device_path = NULL;
+    const char* device_path = NULL;
 #endif
 
     for (int i = 1; i < argc; ++i) {
@@ -161,7 +159,7 @@ int main(int argc, char **argv)
         .rx_buffer_capacity = 256,
     };
     mbc_transport_iface_t transport;
-    mbc_win32_rtu_ctx_t *ctx = NULL;
+    mbc_win32_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_win32_rtu_create(&cfg, &transport, &ctx);
 #else
     if (!device_path) {
@@ -178,7 +176,7 @@ int main(int argc, char **argv)
         .rx_buffer_capacity = 256,
     };
     mbc_transport_iface_t transport;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &transport, &ctx);
 #endif
 

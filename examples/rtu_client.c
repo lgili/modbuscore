@@ -2,11 +2,11 @@
 #include <modbuscore/protocol/pdu.h>
 #include <modbuscore/runtime/builder.h>
 #ifdef _WIN32
-#  include <modbuscore/transport/win32_rtu.h>
+#include <modbuscore/transport/win32_rtu.h>
 #else
-#  include <modbuscore/transport/posix_rtu.h>
-#  include <time.h>
-#  include <unistd.h>
+#include <modbuscore/transport/posix_rtu.h>
+#include <time.h>
+#include <unistd.h>
 #endif
 
 #include <stdbool.h>
@@ -15,7 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool await_pdu(mbc_engine_t *engine, mbc_transport_iface_t *transport, uint32_t max_iters, mbc_pdu_t *out)
+static bool await_pdu(mbc_engine_t* engine, mbc_transport_iface_t* transport, uint32_t max_iters,
+                      mbc_pdu_t* out)
 {
     for (uint32_t i = 0; i < max_iters; ++i) {
         mbc_status_t st = mbc_engine_step(engine, 256U);
@@ -39,7 +40,7 @@ static bool await_pdu(mbc_engine_t *engine, mbc_transport_iface_t *transport, ui
     return false;
 }
 
-static bool submit_rtu(mbc_engine_t *engine, const mbc_pdu_t *pdu)
+static bool submit_rtu(mbc_engine_t* engine, const mbc_pdu_t* pdu)
 {
     uint8_t frame[2 + MBC_PDU_MAX];
     size_t frame_len = 0U;
@@ -49,7 +50,7 @@ static bool submit_rtu(mbc_engine_t *engine, const mbc_pdu_t *pdu)
     return mbc_status_is_ok(mbc_engine_submit_request(engine, frame, frame_len));
 }
 
-static void usage(const char *prog)
+static void usage(const char* prog)
 {
 #ifdef _WIN32
     printf("Usage: %s --port <COMx> [--baud <rate>] [--unit <id>]\n", prog);
@@ -59,14 +60,14 @@ static void usage(const char *prog)
     printf("Default baud: 9600, unit: 0x11\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     uint32_t baud_rate = 9600U;
     uint8_t unit = 0x11U;
 #ifdef _WIN32
-    const char *port_name = NULL;
+    const char* port_name = NULL;
 #else
-    const char *device_path = NULL;
+    const char* device_path = NULL;
 #endif
 
     for (int i = 1; i < argc; ++i) {
@@ -106,7 +107,7 @@ int main(int argc, char **argv)
         .rx_buffer_capacity = 256,
     };
     mbc_transport_iface_t transport;
-    mbc_win32_rtu_ctx_t *ctx = NULL;
+    mbc_win32_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_win32_rtu_create(&cfg, &transport, &ctx);
 #else
     if (!device_path) {
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
         .rx_buffer_capacity = 256,
     };
     mbc_transport_iface_t transport;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &transport, &ctx);
 #endif
 
@@ -181,7 +182,7 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    const uint8_t *data = NULL;
+    const uint8_t* data = NULL;
     size_t count = 0U;
     if (mbc_pdu_parse_read_holding_response(&response, &data, &count) == MBC_STATUS_OK) {
         for (size_t i = 0; i < count; ++i) {

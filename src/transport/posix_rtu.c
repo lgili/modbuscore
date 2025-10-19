@@ -25,12 +25,14 @@ typedef struct mbc_posix_rtu_ctx {
     int fd_read;
     int fd_write;
     bool same_fd;
-    mbc_rtu_uart_ctx_t *rtu;
+    mbc_rtu_uart_ctx_t* rtu;
 } mbc_posix_rtu_ctx_internal_t;
 
 static speed_t map_baud(uint32_t baud)
 {
-#define MAP(value, constant) case value: return constant
+#define MAP(value, constant)                                                                       \
+    case value:                                                                                    \
+        return constant
     switch (baud) {
         MAP(9600, B9600);
         MAP(19200, B19200);
@@ -50,7 +52,7 @@ static speed_t map_baud(uint32_t baud)
 #undef MAP
 }
 
-static int configure_termios(int fd, const mbc_posix_rtu_config_t *config)
+static int configure_termios(int fd, const mbc_posix_rtu_config_t* config)
 {
     struct termios tio;
     if (tcgetattr(fd, &tio) != 0) {
@@ -62,10 +64,18 @@ static int configure_termios(int fd, const mbc_posix_rtu_config_t *config)
 
     tio.c_cflag &= ~CSIZE;
     switch (config->data_bits ? config->data_bits : 8) {
-    case 5: tio.c_cflag |= CS5; break;
-    case 6: tio.c_cflag |= CS6; break;
-    case 7: tio.c_cflag |= CS7; break;
-    default: tio.c_cflag |= CS8; break;
+    case 5:
+        tio.c_cflag |= CS5;
+        break;
+    case 6:
+        tio.c_cflag |= CS6;
+        break;
+    case 7:
+        tio.c_cflag |= CS7;
+        break;
+    default:
+        tio.c_cflag |= CS8;
+        break;
     }
 
     tio.c_cflag &= ~(PARENB | PARODD);
@@ -117,9 +127,9 @@ static uint64_t clock_now_us(void)
     return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)(ts.tv_nsec / 1000ULL);
 }
 
-static size_t posix_backend_write(void *ctx, const uint8_t *data, size_t length)
+static size_t posix_backend_write(void* ctx, const uint8_t* data, size_t length)
 {
-    mbc_posix_rtu_ctx_internal_t *posix = ctx;
+    mbc_posix_rtu_ctx_internal_t* posix = ctx;
     const int fd = posix->fd_write;
 
     ssize_t rc = write(fd, data, length);
@@ -132,9 +142,9 @@ static size_t posix_backend_write(void *ctx, const uint8_t *data, size_t length)
     return (size_t)rc;
 }
 
-static size_t posix_backend_read(void *ctx, uint8_t *data, size_t capacity)
+static size_t posix_backend_read(void* ctx, uint8_t* data, size_t capacity)
 {
-    mbc_posix_rtu_ctx_internal_t *posix = ctx;
+    mbc_posix_rtu_ctx_internal_t* posix = ctx;
     const int fd = posix->fd_read;
 
     ssize_t rc = read(fd, data, capacity);
@@ -147,22 +157,22 @@ static size_t posix_backend_read(void *ctx, uint8_t *data, size_t capacity)
     return (size_t)rc;
 }
 
-static void posix_backend_flush(void *ctx)
+static void posix_backend_flush(void* ctx)
 {
-    mbc_posix_rtu_ctx_internal_t *posix = ctx;
+    mbc_posix_rtu_ctx_internal_t* posix = ctx;
     const int fd = posix->fd_write;
     if (fd >= 0) {
         tcdrain(fd);
     }
 }
 
-static uint64_t posix_backend_now(void *ctx)
+static uint64_t posix_backend_now(void* ctx)
 {
     (void)ctx;
     return clock_now_us();
 }
 
-static void posix_backend_delay(void *ctx, uint32_t micros)
+static void posix_backend_delay(void* ctx, uint32_t micros)
 {
     (void)ctx;
     struct timespec ts = {
@@ -172,9 +182,8 @@ static void posix_backend_delay(void *ctx, uint32_t micros)
     nanosleep(&ts, NULL);
 }
 
-mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
-                                  mbc_transport_iface_t *out_iface,
-                                  mbc_posix_rtu_ctx_t **out_ctx)
+mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_posix_rtu_ctx_t** out_ctx)
 {
     if (!config || !config->device_path || !out_iface || !out_ctx) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -224,7 +233,7 @@ mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
-    mbc_posix_rtu_ctx_internal_t *ctx = calloc(1, sizeof(*ctx));
+    mbc_posix_rtu_ctx_internal_t* ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
         if (same_fd) {
             close(fd_rw);
@@ -245,14 +254,15 @@ mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
     ctx->same_fd = same_fd;
 
     mbc_rtu_uart_config_t uart_cfg = {
-        .backend = {
-            .ctx = ctx,
-            .write = posix_backend_write,
-            .read = posix_backend_read,
-            .flush = posix_backend_flush,
-            .now_us = posix_backend_now,
-            .delay_us = posix_backend_delay,
-        },
+        .backend =
+            {
+                .ctx = ctx,
+                .write = posix_backend_write,
+                .read = posix_backend_read,
+                .flush = posix_backend_flush,
+                .now_us = posix_backend_now,
+                .delay_us = posix_backend_delay,
+            },
         .baud_rate = config->baud_rate,
         .data_bits = config->data_bits,
         .parity_bits = (config->parity == 'E' || config->parity == 'O') ? 1U : 0U,
@@ -264,7 +274,12 @@ mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
     mbc_transport_iface_t rtu_iface;
     mbc_status_t status = mbc_rtu_uart_create(&uart_cfg, &rtu_iface, &ctx->rtu);
     if (!mbc_status_is_ok(status)) {
-        close(fd);
+        if (same_fd) {
+            close(fd_rw);
+        } else {
+            close(fd_ro);
+            close(fd_wo);
+        }
         free(ctx);
         return status;
     }
@@ -274,9 +289,9 @@ mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
     return MBC_STATUS_OK;
 }
 
-void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t *ctx)
+void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t* ctx)
 {
-    mbc_posix_rtu_ctx_internal_t *posix = (mbc_posix_rtu_ctx_internal_t *)ctx;
+    mbc_posix_rtu_ctx_internal_t* posix = (mbc_posix_rtu_ctx_internal_t*)ctx;
     if (!posix) {
         return;
     }
@@ -296,9 +311,9 @@ void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t *ctx)
     free(posix);
 }
 
-void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t *ctx)
+void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t* ctx)
 {
-    mbc_posix_rtu_ctx_internal_t *posix = (mbc_posix_rtu_ctx_internal_t *)ctx;
+    mbc_posix_rtu_ctx_internal_t* posix = (mbc_posix_rtu_ctx_internal_t*)ctx;
     if (!posix) {
         return;
     }
@@ -307,9 +322,8 @@ void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t *ctx)
 
 #else
 
-mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
-                                  mbc_transport_iface_t *out_iface,
-                                  mbc_posix_rtu_ctx_t **out_ctx)
+mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_posix_rtu_ctx_t** out_ctx)
 {
     (void)config;
     (void)out_iface;
@@ -317,14 +331,8 @@ mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
     return MBC_STATUS_UNSUPPORTED;
 }
 
-void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t *ctx)
-{
-    (void)ctx;
-}
+void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t* ctx) { (void)ctx; }
 
-void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t *ctx)
-{
-    (void)ctx;
-}
+void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t* ctx) { (void)ctx; }
 
 #endif

@@ -1,7 +1,6 @@
 #include <assert.h>
-#include <string.h>
-
 #include <modbuscore/protocol/pdu.h>
+#include <string.h>
 
 static void test_encode_decode_roundtrip(void)
 {
@@ -51,7 +50,7 @@ static void test_read_holding_build_parse(void)
         .payload_length = 5U,
     };
 
-    const uint8_t *data = NULL;
+    const uint8_t* data = NULL;
     size_t registers = 0U;
     assert(mbc_pdu_parse_read_holding_response(&response, &data, &registers) == MBC_STATUS_OK);
     assert(registers == 2U);
@@ -76,7 +75,8 @@ static void test_write_single_and_multiple(void)
 
     uint16_t regs[3] = {0x1111U, 0x2222U, 0x3333U};
     mbc_pdu_t multi = {0};
-    assert(mbc_pdu_build_write_multiple_registers(&multi, 0x02U, 0x0005U, regs, 3U) == MBC_STATUS_OK);
+    assert(mbc_pdu_build_write_multiple_registers(&multi, 0x02U, 0x0005U, regs, 3U) ==
+           MBC_STATUS_OK);
     assert(multi.payload_length == 5U + 6U);
 
     encoded = 0U;
@@ -88,7 +88,8 @@ static void test_write_single_and_multiple(void)
     };
 
     uint16_t quantity = 0U;
-    assert(mbc_pdu_parse_write_multiple_response(&multi_response, &addr, &quantity) == MBC_STATUS_OK);
+    assert(mbc_pdu_parse_write_multiple_response(&multi_response, &addr, &quantity) ==
+           MBC_STATUS_OK);
     assert(addr == 0x0005U && quantity == 3U);
 }
 
@@ -128,9 +129,10 @@ static void test_invalid_cases(void)
         .payload_length = 4U,
     };
 
-    const uint8_t *data = NULL;
+    const uint8_t* data = NULL;
     size_t registers = 0U;
-    assert(mbc_pdu_parse_read_holding_response(&response, &data, &registers) == MBC_STATUS_DECODING_ERROR);
+    assert(mbc_pdu_parse_read_holding_response(&response, &data, &registers) ==
+           MBC_STATUS_DECODING_ERROR);
 }
 
 int main(void)

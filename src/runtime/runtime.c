@@ -11,7 +11,7 @@
  * @param config Configuration to validate
  * @return MBC_STATUS_OK if valid, error code otherwise
  */
-static mbc_status_t validate_config(const mbc_runtime_config_t *config)
+static mbc_status_t validate_config(const mbc_runtime_config_t* config)
 {
     if (!config) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -36,7 +36,7 @@ static mbc_status_t validate_config(const mbc_runtime_config_t *config)
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_runtime_init(mbc_runtime_t *runtime, const mbc_runtime_config_t *config)
+mbc_status_t mbc_runtime_init(mbc_runtime_t* runtime, const mbc_runtime_config_t* config)
 {
     if (!runtime) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -56,7 +56,7 @@ mbc_status_t mbc_runtime_init(mbc_runtime_t *runtime, const mbc_runtime_config_t
     return MBC_STATUS_OK;
 }
 
-void mbc_runtime_shutdown(mbc_runtime_t *runtime)
+void mbc_runtime_shutdown(mbc_runtime_t* runtime)
 {
     if (!runtime) {
         return;
@@ -66,12 +66,9 @@ void mbc_runtime_shutdown(mbc_runtime_t *runtime)
     runtime->deps = (mbc_runtime_config_t){0};
 }
 
-bool mbc_runtime_is_ready(const mbc_runtime_t *runtime)
-{
-    return runtime && runtime->initialised;
-}
+bool mbc_runtime_is_ready(const mbc_runtime_t* runtime) { return runtime && runtime->initialised; }
 
-const mbc_runtime_config_t *mbc_runtime_dependencies(const mbc_runtime_t *runtime)
+const mbc_runtime_config_t* mbc_runtime_dependencies(const mbc_runtime_t* runtime)
 {
     if (!mbc_runtime_is_ready(runtime)) {
         return NULL;

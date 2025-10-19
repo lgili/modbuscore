@@ -1,12 +1,11 @@
 #include <assert.h>
-#include <stdbool.h>
-#include <string.h>
-
-#include <modbuscore/transport/rtu_uart.h>
 #include <modbuscore/protocol/crc.h>
-#include <modbuscore/runtime/builder.h>
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/pdu.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/transport/rtu_uart.h>
+#include <stdbool.h>
+#include <string.h>
 
 typedef struct {
     uint8_t tx_buffer[256];
@@ -23,9 +22,9 @@ typedef struct {
     int fail_partial_write;
 } fake_uart_t;
 
-static size_t fake_write(void *ctx, const uint8_t *data, size_t length)
+static size_t fake_write(void* ctx, const uint8_t* data, size_t length)
 {
-    fake_uart_t *uart = ctx;
+    fake_uart_t* uart = ctx;
     if (uart->fail_partial_write && length > 0U) {
         uart->fail_partial_write = 0;
         return length - 1U;
@@ -36,9 +35,9 @@ static size_t fake_write(void *ctx, const uint8_t *data, size_t length)
     return length;
 }
 
-static size_t fake_read(void *ctx, uint8_t *data, size_t capacity)
+static size_t fake_read(void* ctx, uint8_t* data, size_t capacity)
 {
-    fake_uart_t *uart = ctx;
+    fake_uart_t* uart = ctx;
     size_t to_copy = (uart->rx_len < capacity) ? uart->rx_len : capacity;
     if (uart->next_read_chunk > 0U && uart->next_read_chunk < to_copy) {
         to_copy = uart->next_read_chunk;
@@ -52,47 +51,45 @@ static size_t fake_read(void *ctx, uint8_t *data, size_t capacity)
     return to_copy;
 }
 
-static void fake_flush(void *ctx)
+static void fake_flush(void* ctx)
 {
-    fake_uart_t *uart = ctx;
+    fake_uart_t* uart = ctx;
     uart->flush_count++;
 }
 
-static uint64_t fake_now(void *ctx)
+static uint64_t fake_now(void* ctx)
 {
-    fake_uart_t *uart = ctx;
+    fake_uart_t* uart = ctx;
     uart->current_time += 50U;
     return uart->current_time;
 }
 
-static void fake_delay(void *ctx, uint32_t micros)
+static void fake_delay(void* ctx, uint32_t micros)
 {
-    fake_uart_t *uart = ctx;
+    fake_uart_t* uart = ctx;
     uart->delay_total += micros;
     uart->current_time += micros;
 }
 
-static mbc_rtu_uart_ctx_t *create_driver(fake_uart_t *backend,
-                                         mbc_transport_iface_t *iface,
-                                         uint32_t baud,
-                                         uint32_t guard_override,
-                                         size_t rx_capacity)
+static mbc_rtu_uart_ctx_t* create_driver(fake_uart_t* backend, mbc_transport_iface_t* iface,
+                                         uint32_t baud, uint32_t guard_override, size_t rx_capacity)
 {
     mbc_rtu_uart_config_t cfg = {
-        .backend = {
-            .ctx = backend,
-            .write = fake_write,
-            .read = fake_read,
-            .flush = fake_flush,
-            .now_us = fake_now,
-            .delay_us = fake_delay,
-        },
+        .backend =
+            {
+                .ctx = backend,
+                .write = fake_write,
+                .read = fake_read,
+                .flush = fake_flush,
+                .now_us = fake_now,
+                .delay_us = fake_delay,
+            },
         .baud_rate = baud,
         .guard_time_us = guard_override,
         .rx_buffer_capacity = rx_capacity,
     };
 
-    mbc_rtu_uart_ctx_t *ctx = NULL;
+    mbc_rtu_uart_ctx_t* ctx = NULL;
     assert(mbc_rtu_uart_create(&cfg, iface, &ctx) == MBC_STATUS_OK);
     return ctx;
 }
@@ -101,7 +98,7 @@ static void test_guard_time_respected(void)
 {
     fake_uart_t backend = {0};
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
 
     uint8_t frame[4] = {0x11, 0x22, 0x33, 0x44};
     mbc_transport_io_t io = {0};
@@ -121,7 +118,7 @@ static void test_receive_and_flush(void)
 {
     fake_uart_t backend = {0};
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 19200U, 0U, 32U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 19200U, 0U, 32U);
 
     const uint8_t payload[] = {0xAA, 0xBB, 0xCC, 0xDD};
     memcpy(backend.rx_buffer, payload, sizeof(payload));
@@ -148,7 +145,7 @@ static void test_partial_write_error(void)
 {
     fake_uart_t backend = {0};
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 9600U, 0U, 32U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 9600U, 0U, 32U);
 
     uint8_t frame[3] = {0x10, 0x20, 0x30};
     backend.fail_partial_write = 1;
@@ -163,7 +160,7 @@ static void test_receive_partial_chunks(void)
     fake_uart_t backend = {0};
     backend.next_read_chunk = 2U;
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 115200U, 0U, 32U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 115200U, 0U, 32U);
 
     const uint8_t payload[] = {0x01, 0x02, 0x03};
     memcpy(backend.rx_buffer, payload, sizeof(payload));
@@ -185,7 +182,7 @@ static void test_rtu_uart_engine_client(void)
     backend.current_time = 1000U;
 
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 19200U, 0U, 64U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 19200U, 0U, 64U);
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
@@ -205,11 +202,13 @@ static void test_rtu_uart_engine_client(void)
     assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
 
     const uint8_t request_frame[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x01};
-    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) ==
+           MBC_STATUS_OK);
     assert(backend.tx_len == sizeof(request_frame) + 2U);
     assert(memcmp(backend.tx_buffer, request_frame, sizeof(request_frame)) == 0);
-    uint16_t observed_crc = (uint16_t)((uint16_t)backend.tx_buffer[sizeof(request_frame)] |
-                                       ((uint16_t)backend.tx_buffer[sizeof(request_frame) + 1U] << 8));
+    uint16_t observed_crc =
+        (uint16_t)((uint16_t)backend.tx_buffer[sizeof(request_frame)] |
+                   ((uint16_t)backend.tx_buffer[sizeof(request_frame) + 1U] << 8));
     uint16_t expected_crc = mbc_crc16(request_frame, sizeof(request_frame));
     assert(observed_crc == expected_crc);
 
@@ -230,11 +229,10 @@ static void test_rtu_uart_engine_client(void)
     }
     assert(response_ready);
 
-    const uint8_t *register_data = NULL;
+    const uint8_t* register_data = NULL;
     size_t register_count = 0U;
-    assert(mbc_pdu_parse_read_holding_response(&response_pdu,
-                                               &register_data,
-                                               &register_count) == MBC_STATUS_OK);
+    assert(mbc_pdu_parse_read_holding_response(&response_pdu, &register_data, &register_count) ==
+           MBC_STATUS_OK);
     assert(register_count == 1U);
     assert(register_data[0] == 0x00U && register_data[1] == 0x2AU);
 
@@ -249,7 +247,7 @@ static void test_rtu_uart_engine_server(void)
     backend.current_time = 2000U;
 
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
@@ -286,7 +284,8 @@ static void test_rtu_uart_engine_server(void)
     assert(decoded_request.function == 0x03U);
 
     const uint8_t response_frame[] = {0x11, 0x03, 0x02, 0x12, 0x34};
-    assert(mbc_engine_submit_request(&engine, response_frame, sizeof(response_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, response_frame, sizeof(response_frame)) ==
+           MBC_STATUS_OK);
     assert(backend.tx_len == sizeof(response_frame) + 2U);
     assert(memcmp(backend.tx_buffer, response_frame, sizeof(response_frame)) == 0);
     uint16_t tx_crc = (uint16_t)((uint16_t)backend.tx_buffer[sizeof(response_frame)] |
@@ -305,7 +304,7 @@ static void test_rtu_uart_engine_client_crc_error(void)
     backend.current_time = 3000U;
 
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 19200U, 0U, 64U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 19200U, 0U, 64U);
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
@@ -325,7 +324,8 @@ static void test_rtu_uart_engine_client_crc_error(void)
     assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
 
     const uint8_t request_frame[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x01};
-    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) ==
+           MBC_STATUS_OK);
 
     const uint8_t response_frame[] = {0x11, 0x03, 0x02, 0x10, 0x20};
     uint16_t crc = mbc_crc16(response_frame, sizeof(response_frame));
@@ -363,7 +363,7 @@ static void test_rtu_uart_engine_server_crc_error(void)
     backend.current_time = 4000U;
 
     mbc_transport_iface_t iface;
-    mbc_rtu_uart_ctx_t *ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
+    mbc_rtu_uart_ctx_t* ctx = create_driver(&backend, &iface, 9600U, 0U, 64U);
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);

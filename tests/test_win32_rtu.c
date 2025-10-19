@@ -1,5 +1,4 @@
 #include <assert.h>
-
 #include <modbuscore/transport/win32_rtu.h>
 
 int main(void)
@@ -10,7 +9,7 @@ int main(void)
         .port_name = "COM1",
     };
     mbc_transport_iface_t iface;
-    mbc_win32_rtu_ctx_t *ctx = NULL;
+    mbc_win32_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_win32_rtu_create(&cfg, &iface, &ctx);
     if (mbc_status_is_ok(status)) {
         mbc_win32_rtu_destroy(ctx);
@@ -18,7 +17,7 @@ int main(void)
     return 0;
 #else
     mbc_transport_iface_t iface;
-    mbc_win32_rtu_ctx_t *ctx = NULL;
+    mbc_win32_rtu_ctx_t* ctx = NULL;
     mbc_win32_rtu_config_t cfg = {
         .port_name = "COM1",
     };

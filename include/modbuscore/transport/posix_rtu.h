@@ -1,18 +1,17 @@
 #ifndef MODBUSCORE_TRANSPORT_POSIX_RTU_H
 #define MODBUSCORE_TRANSPORT_POSIX_RTU_H
 
-#include <stddef.h>
-#include <stdint.h>
-
 #include <modbuscore/common/status.h>
 #include <modbuscore/transport/iface.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct mbc_posix_rtu_config {
-    const char *device_path;   /**< Caminho do dispositivo (ex: "/dev/ttyUSB0"). */
+    const char* device_path;   /**< Caminho do dispositivo (ex: "/dev/ttyUSB0"). */
     uint32_t baud_rate;        /**< Baud rate (ex: 9600). */
     uint8_t data_bits;         /**< Bits de dados (5-8, default 8). */
     char parity;               /**< 'N', 'E' ou 'O' (default 'N'). */
@@ -23,13 +22,12 @@ typedef struct mbc_posix_rtu_config {
 
 typedef struct mbc_posix_rtu_ctx mbc_posix_rtu_ctx_t;
 
-mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t *config,
-                                  mbc_transport_iface_t *out_iface,
-                                  mbc_posix_rtu_ctx_t **out_ctx);
+mbc_status_t mbc_posix_rtu_create(const mbc_posix_rtu_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_posix_rtu_ctx_t** out_ctx);
 
-void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t *ctx);
+void mbc_posix_rtu_destroy(mbc_posix_rtu_ctx_t* ctx);
 
-void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t *ctx);
+void mbc_posix_rtu_reset(mbc_posix_rtu_ctx_t* ctx);
 
 #ifdef __cplusplus
 }

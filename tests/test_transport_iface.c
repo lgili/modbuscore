@@ -1,11 +1,10 @@
 #include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-
 #include <modbuscore/transport/iface.h>
 #include <modbuscore/transport/mock.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 static void test_invalid_arguments(void)
 {
@@ -19,7 +18,7 @@ static void test_invalid_arguments(void)
     assert(mbc_transport_receive(NULL, buffer, sizeof(buffer), &io) == MBC_STATUS_INVALID_ARGUMENT);
 
     printf("[test_invalid_arguments] Creating mock...\n");
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &iface, &mock) == MBC_STATUS_OK);
     printf("[test_invalid_arguments] Mock created: %p\n", (void*)mock);
 
@@ -35,7 +34,7 @@ static void test_invalid_arguments(void)
 static void test_send_receive_success(void)
 {
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &iface, &mock) == MBC_STATUS_OK);
 
     uint8_t buffer[4] = {0};
@@ -51,7 +50,8 @@ static void test_send_receive_success(void)
     assert(memcmp(tx_copy, buffer, sizeof(buffer)) == 0);
 
     const uint8_t rx_payload[] = {0xAA};
-    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) == MBC_STATUS_OK);
+    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) ==
+           MBC_STATUS_OK);
     io.processed = 0U;
     buffer[0] = 0U;
     assert(mbc_transport_receive(&iface, buffer, sizeof(buffer), &io) == MBC_STATUS_OK);
@@ -67,7 +67,7 @@ static void test_send_receive_success(void)
 static void test_time_and_yield(void)
 {
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
 
     mbc_mock_transport_config_t config = {
         .initial_now_ms = 10U,

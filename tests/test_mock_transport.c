@@ -1,8 +1,7 @@
 #include <assert.h>
-#include <string.h>
-#include <stdio.h>
-
 #include <modbuscore/transport/mock.h>
+#include <stdio.h>
+#include <string.h>
 
 static void test_rx_flow(void)
 {
@@ -12,7 +11,7 @@ static void test_rx_flow(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(&config, &iface, &mock) == MBC_STATUS_OK);
 
     const uint8_t payload[] = {0x11, 0x22, 0x33};
@@ -28,7 +27,7 @@ static void test_rx_flow(void)
     assert(mbc_transport_receive(&iface, buffer, sizeof(buffer), &io) == MBC_STATUS_OK);
     assert(io.processed == 0U);
 
-    mbc_mock_transport_advance(mock, 1U);  /* total = 15ms */
+    mbc_mock_transport_advance(mock, 1U); /* total = 15ms */
     assert(mbc_transport_receive(&iface, buffer, sizeof(buffer), &io) == MBC_STATUS_OK);
     assert(io.processed == 2U);
     assert(buffer[0] == payload[0] && buffer[1] == payload[1]);
@@ -52,7 +51,7 @@ static void test_tx_flow(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(&config, &iface, &mock) == MBC_STATUS_OK);
 
     const uint8_t frame[] = {0xDE, 0xAD, 0xBE, 0xEF};
@@ -64,7 +63,7 @@ static void test_tx_flow(void)
     uint8_t out[4];
     size_t out_len = 0U;
     assert(mbc_mock_transport_fetch_tx(mock, out, sizeof(out), &out_len) == MBC_STATUS_OK);
-    assert(out_len == 0U);  /* Ainda aguardando latência */
+    assert(out_len == 0U); /* Ainda aguardando latência */
 
     mbc_mock_transport_advance(mock, 7U);
     assert(mbc_mock_transport_fetch_tx(mock, out, sizeof(out), &out_len) == MBC_STATUS_OK);
@@ -83,7 +82,7 @@ static void test_reset_and_yield(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(&config, &iface, &mock) == MBC_STATUS_OK);
     assert(mbc_transport_now(&iface) == 42U);
 
@@ -105,7 +104,7 @@ static void test_reset_and_yield(void)
 static void test_fetch_capacity_guard(void)
 {
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &iface, &mock) == MBC_STATUS_OK);
 
     const uint8_t payload[] = {0x01, 0x02, 0x03};
@@ -114,7 +113,8 @@ static void test_fetch_capacity_guard(void)
 
     uint8_t buffer[2];
     size_t out_len = 123U;
-    assert(mbc_mock_transport_fetch_tx(mock, buffer, sizeof(buffer), &out_len) == MBC_STATUS_NO_RESOURCES);
+    assert(mbc_mock_transport_fetch_tx(mock, buffer, sizeof(buffer), &out_len) ==
+           MBC_STATUS_NO_RESOURCES);
     assert(out_len == 0U);
 
     uint8_t bigger[3];
@@ -128,7 +128,7 @@ static void test_fetch_capacity_guard(void)
 static void test_error_controls(void)
 {
     mbc_transport_iface_t iface;
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &iface, &mock) == MBC_STATUS_OK);
 
     uint8_t tx_frame[] = {0x10};
@@ -149,7 +149,8 @@ static void test_error_controls(void)
     assert(mbc_transport_receive(&iface, buffer, sizeof(buffer), &io) == MBC_STATUS_IO_ERROR);
 
     const uint8_t rx_payload[] = {0xAA, 0xBB};
-    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) == MBC_STATUS_OK);
+    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) ==
+           MBC_STATUS_OK);
     mbc_mock_transport_fail_next_receive(mock, MBC_STATUS_IO_ERROR);
     assert(mbc_transport_receive(&iface, buffer, sizeof(buffer), &io) == MBC_STATUS_IO_ERROR);
     assert(mbc_mock_transport_pending_rx(mock) == 1U);
@@ -158,7 +159,8 @@ static void test_error_controls(void)
     assert(io.processed == sizeof(rx_payload));
     assert(memcmp(buffer, rx_payload, sizeof(rx_payload)) == 0);
 
-    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) == MBC_STATUS_OK);
+    assert(mbc_mock_transport_schedule_rx(mock, rx_payload, sizeof(rx_payload), 0U) ==
+           MBC_STATUS_OK);
     assert(mbc_mock_transport_drop_next_rx(mock) == MBC_STATUS_OK);
     assert(mbc_mock_transport_pending_rx(mock) == 0U);
 

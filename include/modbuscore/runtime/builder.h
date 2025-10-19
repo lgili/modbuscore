@@ -12,10 +12,9 @@
  * The transport layer is mandatory and must be set explicitly.
  */
 
-#include <stdbool.h>
-
 #include <modbuscore/common/status.h>
 #include <modbuscore/runtime/runtime.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,11 +24,11 @@ extern "C" {
  * @brief Runtime builder state.
  */
 typedef struct mbc_runtime_builder {
-    mbc_runtime_config_t config;    /**< Runtime configuration being built */
-    bool transport_set;             /**< True if transport has been set */
-    bool clock_set;                 /**< True if clock has been set */
-    bool allocator_set;             /**< True if allocator has been set */
-    bool logger_set;                /**< True if logger has been set */
+    mbc_runtime_config_t config; /**< Runtime configuration being built */
+    bool transport_set;          /**< True if transport has been set */
+    bool clock_set;              /**< True if clock has been set */
+    bool allocator_set;          /**< True if allocator has been set */
+    bool logger_set;             /**< True if logger has been set */
 } mbc_runtime_builder_t;
 
 /**
@@ -37,7 +36,7 @@ typedef struct mbc_runtime_builder {
  *
  * @param builder Pointer to builder structure
  */
-void mbc_runtime_builder_init(mbc_runtime_builder_t *builder);
+void mbc_runtime_builder_init(mbc_runtime_builder_t* builder);
 
 /**
  * @brief Set transport layer (required).
@@ -46,8 +45,8 @@ void mbc_runtime_builder_init(mbc_runtime_builder_t *builder);
  * @param transport Transport interface
  * @return Builder pointer for chaining
  */
-mbc_runtime_builder_t *mbc_runtime_builder_with_transport(mbc_runtime_builder_t *builder,
-                                                          const mbc_transport_iface_t *transport);
+mbc_runtime_builder_t* mbc_runtime_builder_with_transport(mbc_runtime_builder_t* builder,
+                                                          const mbc_transport_iface_t* transport);
 
 /**
  * @brief Set clock interface (optional, defaults to system clock).
@@ -56,8 +55,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_transport(mbc_runtime_builder_t 
  * @param clock Clock interface
  * @return Builder pointer for chaining
  */
-mbc_runtime_builder_t *mbc_runtime_builder_with_clock(mbc_runtime_builder_t *builder,
-                                                      const mbc_clock_iface_t *clock);
+mbc_runtime_builder_t* mbc_runtime_builder_with_clock(mbc_runtime_builder_t* builder,
+                                                      const mbc_clock_iface_t* clock);
 
 /**
  * @brief Set allocator interface (optional, defaults to malloc/free).
@@ -66,8 +65,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_clock(mbc_runtime_builder_t *bui
  * @param allocator Allocator interface
  * @return Builder pointer for chaining
  */
-mbc_runtime_builder_t *mbc_runtime_builder_with_allocator(mbc_runtime_builder_t *builder,
-                                                          const mbc_allocator_iface_t *allocator);
+mbc_runtime_builder_t* mbc_runtime_builder_with_allocator(mbc_runtime_builder_t* builder,
+                                                          const mbc_allocator_iface_t* allocator);
 
 /**
  * @brief Set logger interface (optional, defaults to no-op).
@@ -76,8 +75,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_allocator(mbc_runtime_builder_t 
  * @param logger Logger interface
  * @return Builder pointer for chaining
  */
-mbc_runtime_builder_t *mbc_runtime_builder_with_logger(mbc_runtime_builder_t *builder,
-                                                       const mbc_logger_iface_t *logger);
+mbc_runtime_builder_t* mbc_runtime_builder_with_logger(mbc_runtime_builder_t* builder,
+                                                       const mbc_logger_iface_t* logger);
 
 /**
  * @brief Build runtime from builder configuration.
@@ -89,7 +88,7 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_logger(mbc_runtime_builder_t *bu
  * @param runtime Pointer to runtime structure to initialize
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t *builder, mbc_runtime_t *runtime);
+mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t* builder, mbc_runtime_t* runtime);
 
 #ifdef __cplusplus
 }

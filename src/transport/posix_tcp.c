@@ -8,31 +8,30 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <modbuscore/transport/posix_tcp.h>
-
-#include <sys/socket.h>
-#include <sys/time.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <arpa/inet.h>
 #include <poll.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
-#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 
 /**
  * @brief Internal TCP context structure.
  */
 struct mbc_posix_tcp_ctx {
-    int sockfd;                /**< Socket file descriptor. */
-    bool connected;            /**< Active connection flag. */
-    uint32_t recv_timeout_ms;  /**< I/O timeout used when waiting for send/receive. */
+    int sockfd;               /**< Socket file descriptor. */
+    bool connected;           /**< Active connection flag. */
+    uint32_t recv_timeout_ms; /**< I/O timeout used when waiting for send/receive. */
 };
 
 /* ============================================================================
@@ -159,9 +158,7 @@ static mbc_status_t wait_for_writable_fd(int sockfd, uint32_t timeout_ms)
 /**
  * @brief Resolve hostname using getaddrinfo (IPv4/IPv6).
  */
-static mbc_status_t resolve_host(const char *host,
-                                 uint16_t port,
-                                 struct addrinfo **out_addrinfo)
+static mbc_status_t resolve_host(const char* host, uint16_t port, struct addrinfo** out_addrinfo)
 {
     if (!host || !out_addrinfo) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -174,12 +171,12 @@ static mbc_status_t resolve_host(const char *host,
     }
 
     struct addrinfo hints = {
-        .ai_family = AF_UNSPEC,       /* IPv4 or IPv6 */
+        .ai_family = AF_UNSPEC, /* IPv4 or IPv6 */
         .ai_socktype = SOCK_STREAM,
         .ai_protocol = IPPROTO_TCP,
     };
 
-    struct addrinfo *result = NULL;
+    struct addrinfo* result = NULL;
     int rc = getaddrinfo(host, port_str, &hints, &result);
     if (rc != 0 || !result) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -217,12 +214,10 @@ static mbc_status_t wait_for_connect(int sockfd, uint32_t timeout_ms)
  * mbc_transport_iface_t Interface Callbacks
  * ========================================================================== */
 
-static mbc_status_t posix_tcp_send(void *ctx,
-                                    const uint8_t *buffer,
-                                    size_t length,
-                                    mbc_transport_io_t *out)
+static mbc_status_t posix_tcp_send(void* ctx, const uint8_t* buffer, size_t length,
+                                   mbc_transport_io_t* out)
 {
-    mbc_posix_tcp_ctx_t *tcp = (mbc_posix_tcp_ctx_t *)ctx;
+    mbc_posix_tcp_ctx_t* tcp = (mbc_posix_tcp_ctx_t*)ctx;
 
     if (!tcp || !buffer || length == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -235,10 +230,7 @@ static mbc_status_t posix_tcp_send(void *ctx,
     size_t total_sent = 0U;
 
     while (total_sent < length) {
-        ssize_t sent = send(tcp->sockfd,
-                            buffer + total_sent,
-                            length - total_sent,
-                            0);
+        ssize_t sent = send(tcp->sockfd, buffer + total_sent, length - total_sent, 0);
         if (sent > 0) {
             total_sent += (size_t)sent;
             continue;
@@ -258,8 +250,7 @@ static mbc_status_t posix_tcp_send(void *ctx,
         }
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            mbc_status_t wait_status = wait_for_writable_fd(tcp->sockfd,
-                                                            tcp->recv_timeout_ms);
+            mbc_status_t wait_status = wait_for_writable_fd(tcp->sockfd, tcp->recv_timeout_ms);
             if (!mbc_status_is_ok(wait_status)) {
                 if (wait_status != MBC_STATUS_TIMEOUT) {
                     tcp->connected = false;
@@ -286,12 +277,10 @@ static mbc_status_t posix_tcp_send(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static mbc_status_t posix_tcp_receive(void *ctx,
-                                       uint8_t *buffer,
-                                       size_t capacity,
-                                       mbc_transport_io_t *out)
+static mbc_status_t posix_tcp_receive(void* ctx, uint8_t* buffer, size_t capacity,
+                                      mbc_transport_io_t* out)
 {
-    mbc_posix_tcp_ctx_t *tcp = (mbc_posix_tcp_ctx_t *)ctx;
+    mbc_posix_tcp_ctx_t* tcp = (mbc_posix_tcp_ctx_t*)ctx;
 
     if (!tcp || !buffer || capacity == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -330,32 +319,35 @@ static mbc_status_t posix_tcp_receive(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static uint64_t posix_tcp_now(void *ctx)
+static uint64_t posix_tcp_now(void* ctx)
 {
     (void)ctx;
     return get_timestamp_ms();
 }
 
-static void posix_tcp_yield(void *ctx)
+static void posix_tcp_yield(void* ctx)
 {
     (void)ctx;
     /* Cooperative yield: minimal sleep to release CPU */
-    usleep(1000);  /* 1ms */
+    struct timespec ts = {
+        .tv_sec = 0,
+        .tv_nsec = 1000000L,
+    };
+    nanosleep(&ts, NULL);
 }
 
 /* ============================================================================
  * Public API
  * ========================================================================== */
 
-mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t *config,
-                                   mbc_transport_iface_t *out_iface,
-                                   mbc_posix_tcp_ctx_t **out_ctx)
+mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_posix_tcp_ctx_t** out_ctx)
 {
     if (!config || !config->host || config->port == 0U || !out_iface || !out_ctx) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
-    struct addrinfo *addr_list = NULL;
+    struct addrinfo* addr_list = NULL;
     mbc_status_t status = resolve_host(config->host, config->port, &addr_list);
     if (!mbc_status_is_ok(status)) {
         return status;
@@ -364,7 +356,7 @@ mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t *config,
     int sockfd = -1;
     mbc_status_t last_status = MBC_STATUS_IO_ERROR;
 
-    for (struct addrinfo *entry = addr_list; entry != NULL; entry = entry->ai_next) {
+    for (struct addrinfo* entry = addr_list; entry != NULL; entry = entry->ai_next) {
         sockfd = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
         if (sockfd < 0) {
             last_status = MBC_STATUS_IO_ERROR;
@@ -417,7 +409,7 @@ mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t *config,
         return last_status;
     }
 
-    mbc_posix_tcp_ctx_t *tcp = (mbc_posix_tcp_ctx_t *)calloc(1, sizeof(*tcp));
+    mbc_posix_tcp_ctx_t* tcp = (mbc_posix_tcp_ctx_t*)calloc(1, sizeof(*tcp));
     if (!tcp) {
         close(sockfd);
         return MBC_STATUS_NO_RESOURCES;
@@ -438,7 +430,7 @@ mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t *config,
     return MBC_STATUS_OK;
 }
 
-void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t *ctx)
+void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t* ctx)
 {
     if (!ctx) {
         return;
@@ -453,7 +445,4 @@ void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t *ctx)
     free(ctx);
 }
 
-bool mbc_posix_tcp_is_connected(const mbc_posix_tcp_ctx_t *ctx)
-{
-    return ctx && ctx->connected;
-}
+bool mbc_posix_tcp_is_connected(const mbc_posix_tcp_ctx_t* ctx) { return ctx && ctx->connected; }

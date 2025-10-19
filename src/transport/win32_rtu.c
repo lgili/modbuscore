@@ -1,14 +1,14 @@
-#include <modbuscore/transport/win32_rtu.h>
 #include <modbuscore/transport/rtu_uart.h>
+#include <modbuscore/transport/win32_rtu.h>
 
 #ifdef _WIN32
 
+#include <stdio.h> /* For _snprintf */
 #include <windows.h>
-#include <stdio.h>  /* For _snprintf */
 
 typedef struct mbc_win32_rtu_ctx {
     HANDLE handle;
-    mbc_rtu_uart_ctx_t *rtu;
+    mbc_rtu_uart_ctx_t* rtu;
 } mbc_win32_rtu_ctx_internal_t;
 
 static uint64_t qpc_now_us(void)
@@ -20,9 +20,9 @@ static uint64_t qpc_now_us(void)
     return (uint64_t)(counter.QuadPart * 1000000ULL / freq.QuadPart);
 }
 
-static size_t win32_backend_write(void *ctx, const uint8_t *data, size_t length)
+static size_t win32_backend_write(void* ctx, const uint8_t* data, size_t length)
 {
-    mbc_win32_rtu_ctx_internal_t *win32 = ctx;
+    mbc_win32_rtu_ctx_internal_t* win32 = ctx;
     DWORD written = 0;
     if (!WriteFile(win32->handle, data, (DWORD)length, &written, NULL)) {
         return 0U;
@@ -30,9 +30,9 @@ static size_t win32_backend_write(void *ctx, const uint8_t *data, size_t length)
     return (size_t)written;
 }
 
-static size_t win32_backend_read(void *ctx, uint8_t *data, size_t capacity)
+static size_t win32_backend_read(void* ctx, uint8_t* data, size_t capacity)
 {
-    mbc_win32_rtu_ctx_internal_t *win32 = ctx;
+    mbc_win32_rtu_ctx_internal_t* win32 = ctx;
     DWORD read = 0;
     if (!ReadFile(win32->handle, data, (DWORD)capacity, &read, NULL)) {
         DWORD err = GetLastError();
@@ -44,19 +44,19 @@ static size_t win32_backend_read(void *ctx, uint8_t *data, size_t capacity)
     return (size_t)read;
 }
 
-static void win32_backend_flush(void *ctx)
+static void win32_backend_flush(void* ctx)
 {
-    mbc_win32_rtu_ctx_internal_t *win32 = ctx;
+    mbc_win32_rtu_ctx_internal_t* win32 = ctx;
     FlushFileBuffers(win32->handle);
 }
 
-static uint64_t win32_backend_now(void *ctx)
+static uint64_t win32_backend_now(void* ctx)
 {
     (void)ctx;
     return qpc_now_us();
 }
 
-static void win32_backend_delay(void *ctx, uint32_t micros)
+static void win32_backend_delay(void* ctx, uint32_t micros)
 {
     (void)ctx;
     if (micros >= 1000U) {
@@ -66,7 +66,7 @@ static void win32_backend_delay(void *ctx, uint32_t micros)
     }
 }
 
-static mbc_status_t configure_port(HANDLE handle, const mbc_win32_rtu_config_t *config)
+static mbc_status_t configure_port(HANDLE handle, const mbc_win32_rtu_config_t* config)
 {
     DCB dcb;
     SecureZeroMemory(&dcb, sizeof(dcb));
@@ -79,9 +79,17 @@ static mbc_status_t configure_port(HANDLE handle, const mbc_win32_rtu_config_t *
     dcb.ByteSize = config->data_bits ? config->data_bits : 8;
 
     switch (config->parity ? config->parity : 'N') {
-    case 'E': case 'e': dcb.Parity = EVENPARITY; break;
-    case 'O': case 'o': dcb.Parity = ODDPARITY; break;
-    default: dcb.Parity = NOPARITY; break;
+    case 'E':
+    case 'e':
+        dcb.Parity = EVENPARITY;
+        break;
+    case 'O':
+    case 'o':
+        dcb.Parity = ODDPARITY;
+        break;
+    default:
+        dcb.Parity = NOPARITY;
+        break;
     }
 
     dcb.StopBits = ((config->stop_bits ? config->stop_bits : 1) == 2) ? TWOSTOPBITS : ONESTOPBIT;
@@ -111,9 +119,8 @@ static mbc_status_t configure_port(HANDLE handle, const mbc_win32_rtu_config_t *
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
-                                  mbc_transport_iface_t *out_iface,
-                                  mbc_win32_rtu_ctx_t **out_ctx)
+mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_win32_rtu_ctx_t** out_ctx)
 {
     if (!config || !config->port_name || !out_iface || !out_ctx) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -122,13 +129,8 @@ mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
     char device[32];
     _snprintf(device, sizeof(device), "\\\\.\\%s", config->port_name);
 
-    HANDLE handle = CreateFileA(device,
-                                GENERIC_READ | GENERIC_WRITE,
-                                0,
-                                NULL,
-                                OPEN_EXISTING,
-                                FILE_ATTRIBUTE_NORMAL,
-                                NULL);
+    HANDLE handle = CreateFileA(device, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                                FILE_ATTRIBUTE_NORMAL, NULL);
     if (handle == INVALID_HANDLE_VALUE) {
         return MBC_STATUS_IO_ERROR;
     }
@@ -139,7 +141,7 @@ mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
         return status;
     }
 
-    mbc_win32_rtu_ctx_internal_t *ctx = calloc(1, sizeof(*ctx));
+    mbc_win32_rtu_ctx_internal_t* ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
         CloseHandle(handle);
         return MBC_STATUS_NO_RESOURCES;
@@ -147,14 +149,15 @@ mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
     ctx->handle = handle;
 
     mbc_rtu_uart_config_t uart_cfg = {
-        .backend = {
-            .ctx = ctx,
-            .write = win32_backend_write,
-            .read = win32_backend_read,
-            .flush = win32_backend_flush,
-            .now_us = win32_backend_now,
-            .delay_us = win32_backend_delay,
-        },
+        .backend =
+            {
+                .ctx = ctx,
+                .write = win32_backend_write,
+                .read = win32_backend_read,
+                .flush = win32_backend_flush,
+                .now_us = win32_backend_now,
+                .delay_us = win32_backend_delay,
+            },
         .baud_rate = config->baud_rate,
         .data_bits = config->data_bits,
         .parity_bits = (config->parity == 'E' || config->parity == 'O') ? 1U : 0U,
@@ -176,9 +179,9 @@ mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
     return MBC_STATUS_OK;
 }
 
-void mbc_win32_rtu_destroy(mbc_win32_rtu_ctx_t *ctx)
+void mbc_win32_rtu_destroy(mbc_win32_rtu_ctx_t* ctx)
 {
-    mbc_win32_rtu_ctx_internal_t *win32 = (mbc_win32_rtu_ctx_internal_t *)ctx;
+    mbc_win32_rtu_ctx_internal_t* win32 = (mbc_win32_rtu_ctx_internal_t*)ctx;
     if (!win32) {
         return;
     }
@@ -189,9 +192,9 @@ void mbc_win32_rtu_destroy(mbc_win32_rtu_ctx_t *ctx)
     free(win32);
 }
 
-void mbc_win32_rtu_reset(mbc_win32_rtu_ctx_t *ctx)
+void mbc_win32_rtu_reset(mbc_win32_rtu_ctx_t* ctx)
 {
-    mbc_win32_rtu_ctx_internal_t *win32 = (mbc_win32_rtu_ctx_internal_t *)ctx;
+    mbc_win32_rtu_ctx_internal_t* win32 = (mbc_win32_rtu_ctx_internal_t*)ctx;
     if (!win32) {
         return;
     }
@@ -200,9 +203,8 @@ void mbc_win32_rtu_reset(mbc_win32_rtu_ctx_t *ctx)
 
 #else
 
-mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
-                                  mbc_transport_iface_t *out_iface,
-                                  mbc_win32_rtu_ctx_t **out_ctx)
+mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_win32_rtu_ctx_t** out_ctx)
 {
     (void)config;
     (void)out_iface;
@@ -210,15 +212,8 @@ mbc_status_t mbc_win32_rtu_create(const mbc_win32_rtu_config_t *config,
     return MBC_STATUS_UNSUPPORTED;
 }
 
-void mbc_win32_rtu_destroy(mbc_win32_rtu_ctx_t *ctx)
-{
-    (void)ctx;
-}
+void mbc_win32_rtu_destroy(mbc_win32_rtu_ctx_t* ctx) { (void)ctx; }
 
-void mbc_win32_rtu_reset(mbc_win32_rtu_ctx_t *ctx)
-{
-    (void)ctx;
-}
+void mbc_win32_rtu_reset(mbc_win32_rtu_ctx_t* ctx) { (void)ctx; }
 
 #endif
-

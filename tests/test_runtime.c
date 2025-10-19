@@ -1,12 +1,11 @@
 #include <assert.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/runtime/runtime.h>
+#include <modbuscore/transport/mock.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-
-#include <modbuscore/runtime/runtime.h>
-#include <modbuscore/runtime/builder.h>
-#include <modbuscore/transport/mock.h>
 
 typedef struct {
     int count;
@@ -14,15 +13,15 @@ typedef struct {
     char last_message[64];
 } log_capture_t;
 
-static uint64_t fake_now(void *ctx)
+static uint64_t fake_now(void* ctx)
 {
-    uint64_t *counter = (uint64_t *)ctx;
+    uint64_t* counter = (uint64_t*)ctx;
     return (*counter)++;
 }
 
-static void fake_logger(void *ctx, const char *category, const char *message)
+static void fake_logger(void* ctx, const char* category, const char* message)
 {
-    log_capture_t *capture = (log_capture_t *)ctx;
+    log_capture_t* capture = (log_capture_t*)ctx;
     capture->count++;
     if (category) {
         strncpy(capture->last_category, category, sizeof(capture->last_category) - 1U);
@@ -34,13 +33,13 @@ static void fake_logger(void *ctx, const char *category, const char *message)
     }
 }
 
-static void *fake_alloc(void *ctx, size_t size)
+static void* fake_alloc(void* ctx, size_t size)
 {
     (void)ctx;
     return malloc(size);
 }
 
-static void fake_free(void *ctx, void *ptr)
+static void fake_free(void* ctx, void* ptr)
 {
     (void)ctx;
     free(ptr);
@@ -53,7 +52,7 @@ static void test_runtime_init_direct(void)
     uint64_t counter = 0U;
     log_capture_t logs = {0};
     mbc_transport_iface_t transport = {0};
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     printf("[test_runtime_init_direct] Creating mock transport...\n");
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
     printf("[test_runtime_init_direct] Mock transport created: %p\n", (void*)mock);
@@ -76,9 +75,10 @@ static void test_runtime_init_direct(void)
     assert(mbc_runtime_is_ready(&runtime));
 
     printf("[test_runtime_init_direct] Getting dependencies...\n");
-    const mbc_runtime_config_t *deps = mbc_runtime_dependencies(&runtime);
+    const mbc_runtime_config_t* deps = mbc_runtime_dependencies(&runtime);
     printf("[test_runtime_init_direct] Got deps: %p\n", (void*)deps);
-    printf("[test_runtime_init_direct] deps->transport.ctx = %p, mock = %p\n", deps->transport.ctx, (void*)mock);
+    printf("[test_runtime_init_direct] deps->transport.ctx = %p, mock = %p\n", deps->transport.ctx,
+           (void*)mock);
     assert(deps && deps->transport.ctx == mock);
     printf("[test_runtime_init_direct] Calling clock...\n");
     uint64_t first = deps->clock.now_ms(deps->clock.ctx);
@@ -103,7 +103,7 @@ static void test_runtime_builder_with_defaults(void)
     mbc_runtime_builder_init(&builder);
 
     mbc_transport_iface_t transport = {0};
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
     mbc_runtime_builder_with_transport(&builder, &transport);
 
@@ -111,10 +111,10 @@ static void test_runtime_builder_with_defaults(void)
     assert(mbc_runtime_builder_build(&builder, &runtime) == MBC_STATUS_OK);
     assert(mbc_runtime_is_ready(&runtime));
 
-    const mbc_runtime_config_t *deps = mbc_runtime_dependencies(&runtime);
+    const mbc_runtime_config_t* deps = mbc_runtime_dependencies(&runtime);
     assert(deps != NULL);
 
-    void *block = deps->allocator.alloc(deps->allocator.ctx, 8U);
+    void* block = deps->allocator.alloc(deps->allocator.ctx, 8U);
     assert(block != NULL);
     deps->allocator.free(deps->allocator.ctx, block);
 
@@ -134,7 +134,7 @@ static void test_runtime_builder_with_custom_components(void)
     mbc_runtime_builder_init(&builder);
 
     mbc_transport_iface_t transport = {0};
-    mbc_mock_transport_t *mock = NULL;
+    mbc_mock_transport_t* mock = NULL;
     assert(mbc_mock_transport_create(NULL, &transport, &mock) == MBC_STATUS_OK);
 
     uint64_t counter = 100U;
@@ -151,7 +151,7 @@ static void test_runtime_builder_with_custom_components(void)
     mbc_runtime_t runtime = {0};
     assert(mbc_runtime_builder_build(&builder, &runtime) == MBC_STATUS_OK);
 
-    const mbc_runtime_config_t *deps = mbc_runtime_dependencies(&runtime);
+    const mbc_runtime_config_t* deps = mbc_runtime_dependencies(&runtime);
     assert(deps != NULL);
     assert(deps->clock.now_ms(deps->clock.ctx) == 100ULL);
 

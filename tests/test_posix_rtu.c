@@ -1,20 +1,19 @@
 #include <assert.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdbool.h>
-
-#include <modbuscore/transport/posix_rtu.h>
-#include <modbuscore/runtime/builder.h>
+#include <modbuscore/protocol/crc.h>
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/pdu.h>
-#include <modbuscore/protocol/crc.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/transport/posix_rtu.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __unix__
+#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <errno.h>
+#include <unistd.h>
 
 static void test_posix_rtu_loop(void)
 {
@@ -30,7 +29,7 @@ static void test_posix_rtu_loop(void)
         return;
     }
 
-    char *slave_path = ptsname(master_fd);
+    char* slave_path = ptsname(master_fd);
     if (!slave_path) {
         printf("POSIX RTU tests skipped (ptsname failed: %s)\n", strerror(errno));
         close(master_fd);
@@ -43,11 +42,11 @@ static void test_posix_rtu_loop(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
-        printf("POSIX RTU tests skipped (device open failed with status=%d, errno=%s)\n",
-               status, strerror(errno));
+        printf("POSIX RTU tests skipped (device open failed with status=%d, errno=%s)\n", status,
+               strerror(errno));
         close(master_fd);
         return;
     }
@@ -78,7 +77,7 @@ static void test_posix_rtu_loop(void)
     printf("POSIX RTU tests completed successfully\n");
 }
 
-static bool read_exact(int fd, uint8_t *buffer, size_t length)
+static bool read_exact(int fd, uint8_t* buffer, size_t length)
 {
     size_t total = 0U;
     while (total < length) {
@@ -112,7 +111,7 @@ static void test_posix_rtu_engine_client(void)
         return;
     }
 
-    char *slave_path = ptsname(master_fd);
+    char* slave_path = ptsname(master_fd);
     if (!slave_path) {
         printf("POSIX RTU engine client test skipped (ptsname failed: %s)\n", strerror(errno));
         close(master_fd);
@@ -125,11 +124,12 @@ static void test_posix_rtu_engine_client(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
-        printf("POSIX RTU engine client test skipped (device open failed with status=%d, errno=%s)\n",
-               status, strerror(errno));
+        printf(
+            "POSIX RTU engine client test skipped (device open failed with status=%d, errno=%s)\n",
+            status, strerror(errno));
         close(master_fd);
         return;
     }
@@ -156,13 +156,15 @@ static void test_posix_rtu_engine_client(void)
     uint8_t request_frame[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x01};
 
     /* Submit request frame */
-    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) ==
+           MBC_STATUS_OK);
 
     uint8_t observed_request[sizeof(request_frame) + 2U];
     assert(read_exact(master_fd, observed_request, sizeof(observed_request)));
     assert(memcmp(observed_request, request_frame, sizeof(request_frame)) == 0);
-    uint16_t observed_crc = (uint16_t)((uint16_t)observed_request[sizeof(request_frame)] |
-                                       ((uint16_t)observed_request[sizeof(request_frame) + 1U] << 8));
+    uint16_t observed_crc =
+        (uint16_t)((uint16_t)observed_request[sizeof(request_frame)] |
+                   ((uint16_t)observed_request[sizeof(request_frame) + 1U] << 8));
     uint16_t expected_crc = mbc_crc16(request_frame, sizeof(request_frame));
     assert(observed_crc == expected_crc);
 
@@ -191,11 +193,10 @@ static void test_posix_rtu_engine_client(void)
     }
     assert(response_ready);
 
-    const uint8_t *register_data = NULL;
+    const uint8_t* register_data = NULL;
     size_t register_count = 0U;
-    assert(mbc_pdu_parse_read_holding_response(&response_pdu,
-                                               &register_data,
-                                               &register_count) == MBC_STATUS_OK);
+    assert(mbc_pdu_parse_read_holding_response(&response_pdu, &register_data, &register_count) ==
+           MBC_STATUS_OK);
     assert(register_count == 1U);
     assert(register_data[0] == 0x00U && register_data[1] == 0x2AU);
 
@@ -209,19 +210,22 @@ static void test_posix_rtu_engine_client_crc_error(void)
 {
     int master_fd = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (master_fd < 0) {
-        printf("POSIX RTU engine client CRC error test skipped (PTY not available: %s)\n", strerror(errno));
+        printf("POSIX RTU engine client CRC error test skipped (PTY not available: %s)\n",
+               strerror(errno));
         return;
     }
 
     if (grantpt(master_fd) != 0 || unlockpt(master_fd) != 0) {
-        printf("POSIX RTU engine client CRC error test skipped (PTY setup failed: %s)\n", strerror(errno));
+        printf("POSIX RTU engine client CRC error test skipped (PTY setup failed: %s)\n",
+               strerror(errno));
         close(master_fd);
         return;
     }
 
-    char *slave_path = ptsname(master_fd);
+    char* slave_path = ptsname(master_fd);
     if (!slave_path) {
-        printf("POSIX RTU engine client CRC error test skipped (ptsname failed: %s)\n", strerror(errno));
+        printf("POSIX RTU engine client CRC error test skipped (ptsname failed: %s)\n",
+               strerror(errno));
         close(master_fd);
         return;
     }
@@ -232,10 +236,11 @@ static void test_posix_rtu_engine_client_crc_error(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
-        printf("POSIX RTU engine client CRC error test skipped (device open failed with status=%d, errno=%s)\n",
+        printf("POSIX RTU engine client CRC error test skipped (device open failed with status=%d, "
+               "errno=%s)\n",
                status, strerror(errno));
         close(master_fd);
         return;
@@ -259,7 +264,8 @@ static void test_posix_rtu_engine_client_crc_error(void)
     assert(mbc_engine_init(&engine, &engine_cfg) == MBC_STATUS_OK);
 
     uint8_t request_frame[] = {0x11, 0x03, 0x00, 0x00, 0x00, 0x01};
-    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, sizeof(request_frame)) ==
+           MBC_STATUS_OK);
 
     uint8_t observed_request[sizeof(request_frame) + 2U];
     assert(read_exact(master_fd, observed_request, sizeof(observed_request)));
@@ -271,7 +277,8 @@ static void test_posix_rtu_engine_client_crc_error(void)
     memcpy(response_corrupt, response_frame, sizeof(response_frame));
     response_corrupt[sizeof(response_frame)] = (uint8_t)(crc & 0xFFU);
     response_corrupt[sizeof(response_frame) + 1U] = (uint8_t)((crc >> 8) & 0xFFU);
-    assert(write(master_fd, response_corrupt, sizeof(response_corrupt)) == (ssize_t)sizeof(response_corrupt));
+    assert(write(master_fd, response_corrupt, sizeof(response_corrupt)) ==
+           (ssize_t)sizeof(response_corrupt));
 
     bool saw_error = false;
     for (int i = 0; i < 10 && !saw_error; ++i) {
@@ -309,7 +316,7 @@ static void test_posix_rtu_engine_server(void)
         return;
     }
 
-    char *slave_path = ptsname(master_fd);
+    char* slave_path = ptsname(master_fd);
     if (!slave_path) {
         printf("POSIX RTU engine server test skipped (ptsname failed: %s)\n", strerror(errno));
         close(master_fd);
@@ -322,11 +329,12 @@ static void test_posix_rtu_engine_server(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
-        printf("POSIX RTU engine server test skipped (device open failed with status=%d, errno=%s)\n",
-               status, strerror(errno));
+        printf(
+            "POSIX RTU engine server test skipped (device open failed with status=%d, errno=%s)\n",
+            status, strerror(errno));
         close(master_fd);
         return;
     }
@@ -374,13 +382,15 @@ static void test_posix_rtu_engine_server(void)
 
     /* Build and send response */
     uint8_t response_frame[] = {0x11, 0x03, 0x02, 0x12, 0x34};
-    assert(mbc_engine_submit_request(&engine, response_frame, sizeof(response_frame)) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, response_frame, sizeof(response_frame)) ==
+           MBC_STATUS_OK);
 
     uint8_t observed_response[sizeof(response_frame) + 2U];
     assert(read_exact(master_fd, observed_response, sizeof(observed_response)));
     assert(memcmp(observed_response, response_frame, sizeof(response_frame)) == 0);
-    uint16_t observed_crc = (uint16_t)((uint16_t)observed_response[sizeof(response_frame)] |
-                                       ((uint16_t)observed_response[sizeof(response_frame) + 1U] << 8));
+    uint16_t observed_crc =
+        (uint16_t)((uint16_t)observed_response[sizeof(response_frame)] |
+                   ((uint16_t)observed_response[sizeof(response_frame) + 1U] << 8));
     uint16_t expected_crc = mbc_crc16(response_frame, sizeof(response_frame));
     assert(observed_crc == expected_crc);
 
@@ -394,19 +404,22 @@ static void test_posix_rtu_engine_server_crc_error(void)
 {
     int master_fd = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (master_fd < 0) {
-        printf("POSIX RTU engine server CRC error test skipped (PTY not available: %s)\n", strerror(errno));
+        printf("POSIX RTU engine server CRC error test skipped (PTY not available: %s)\n",
+               strerror(errno));
         return;
     }
 
     if (grantpt(master_fd) != 0 || unlockpt(master_fd) != 0) {
-        printf("POSIX RTU engine server CRC error test skipped (PTY setup failed: %s)\n", strerror(errno));
+        printf("POSIX RTU engine server CRC error test skipped (PTY setup failed: %s)\n",
+               strerror(errno));
         close(master_fd);
         return;
     }
 
-    char *slave_path = ptsname(master_fd);
+    char* slave_path = ptsname(master_fd);
     if (!slave_path) {
-        printf("POSIX RTU engine server CRC error test skipped (ptsname failed: %s)\n", strerror(errno));
+        printf("POSIX RTU engine server CRC error test skipped (ptsname failed: %s)\n",
+               strerror(errno));
         close(master_fd);
         return;
     }
@@ -417,10 +430,11 @@ static void test_posix_rtu_engine_server_crc_error(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_rtu_create(&cfg, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
-        printf("POSIX RTU engine server CRC error test skipped (device open failed with status=%d, errno=%s)\n",
+        printf("POSIX RTU engine server CRC error test skipped (device open failed with status=%d, "
+               "errno=%s)\n",
                status, strerror(errno));
         close(master_fd);
         return;
@@ -485,7 +499,7 @@ int main(void)
     printf("\n=== All POSIX RTU tests completed ===\n");
 #else
     mbc_transport_iface_t iface;
-    mbc_posix_rtu_ctx_t *ctx = NULL;
+    mbc_posix_rtu_ctx_t* ctx = NULL;
     mbc_posix_rtu_config_t cfg = {
         .device_path = NULL,
     };

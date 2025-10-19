@@ -11,10 +11,9 @@
  * runtime builder, allowing maximum flexibility in test scenarios.
  */
 
+#include <modbuscore/common/status.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <modbuscore/common/status.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,32 +23,32 @@ extern "C" {
  * @brief Transport I/O result structure.
  */
 typedef struct mbc_transport_io {
-    size_t processed;  /**< Number of bytes actually processed */
+    size_t processed; /**< Number of bytes actually processed */
 } mbc_transport_io_t;
 
 /**
  * @brief Clock interface for timestamp generation.
  */
 typedef struct mbc_clock_iface {
-    void *ctx;                          /**< User context */
-    uint64_t (*now_ms)(void *ctx);      /**< Get current time in milliseconds */
+    void* ctx;                     /**< User context */
+    uint64_t (*now_ms)(void* ctx); /**< Get current time in milliseconds */
 } mbc_clock_iface_t;
 
 /**
  * @brief Memory allocator interface.
  */
 typedef struct mbc_allocator_iface {
-    void *ctx;                                  /**< User context */
-    void *(*alloc)(void *ctx, size_t size);     /**< Allocate memory */
-    void (*free)(void *ctx, void *ptr);         /**< Free memory */
+    void* ctx;                              /**< User context */
+    void* (*alloc)(void* ctx, size_t size); /**< Allocate memory */
+    void (*free)(void* ctx, void* ptr);     /**< Free memory */
 } mbc_allocator_iface_t;
 
 /**
  * @brief Logger interface for diagnostics.
  */
 typedef struct mbc_logger_iface {
-    void *ctx;                                                      /**< User context */
-    void (*write)(void *ctx, const char *category, const char *message);  /**< Log a message */
+    void* ctx;                                                           /**< User context */
+    void (*write)(void* ctx, const char* category, const char* message); /**< Log a message */
 } mbc_logger_iface_t;
 
 /**
@@ -59,11 +58,13 @@ typedef struct mbc_logger_iface {
  * allowing the protocol engine to operate independently of the physical layer.
  */
 typedef struct mbc_transport_iface {
-    void *ctx;                                                                              /**< User context */
-    mbc_status_t (*send)(void *ctx, const uint8_t *buffer, size_t length, mbc_transport_io_t *out);     /**< Send data */
-    mbc_status_t (*receive)(void *ctx, uint8_t *buffer, size_t capacity, mbc_transport_io_t *out);      /**< Receive data */
-    uint64_t (*now)(void *ctx);                                                             /**< Get timestamp in milliseconds */
-    void (*yield)(void *ctx);                                                               /**< Cooperative yield (optional) */
+    void* ctx; /**< User context */
+    mbc_status_t (*send)(void* ctx, const uint8_t* buffer, size_t length,
+                         mbc_transport_io_t* out); /**< Send data */
+    mbc_status_t (*receive)(void* ctx, uint8_t* buffer, size_t capacity,
+                            mbc_transport_io_t* out); /**< Receive data */
+    uint64_t (*now)(void* ctx);                       /**< Get timestamp in milliseconds */
+    void (*yield)(void* ctx);                         /**< Cooperative yield (optional) */
 } mbc_transport_iface_t;
 
 #ifdef __cplusplus

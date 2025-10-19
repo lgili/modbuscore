@@ -14,9 +14,9 @@
 #define MBC_PROTOCOL_MBAP_H
 
 #include <modbuscore/common/status.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,10 +32,10 @@ extern "C" {
  * @brief MBAP header structure.
  */
 typedef struct {
-    uint16_t transaction_id;  /**< Transaction identifier for request/response matching */
-    uint16_t protocol_id;     /**< Protocol identifier (always 0 for Modbus) */
-    uint16_t length;          /**< Number of following bytes (unit_id + PDU length) */
-    uint8_t unit_id;          /**< Unit/slave identifier */
+    uint16_t transaction_id; /**< Transaction identifier for request/response matching */
+    uint16_t protocol_id;    /**< Protocol identifier (always 0 for Modbus) */
+    uint16_t length;         /**< Number of following bytes (unit_id + PDU length) */
+    uint8_t unit_id;         /**< Unit/slave identifier */
 } mbc_mbap_header_t;
 
 /**
@@ -49,12 +49,9 @@ typedef struct {
  * @param out_length Pointer to store actual frame length
  * @return Status code
  */
-mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t *header,
-                              const uint8_t *pdu_buffer,
-                              size_t pdu_length,
-                              uint8_t *out_buffer,
-                              size_t out_capacity,
-                              size_t *out_length);
+mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t* header, const uint8_t* pdu_buffer,
+                             size_t pdu_length, uint8_t* out_buffer, size_t out_capacity,
+                             size_t* out_length);
 
 /**
  * @brief Decode MBAP frame into header + PDU.
@@ -66,11 +63,9 @@ mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t *header,
  * @param out_pdu_length Pointer to store PDU length
  * @return Status code
  */
-mbc_status_t mbc_mbap_decode(const uint8_t *frame_buffer,
-                              size_t frame_length,
-                              mbc_mbap_header_t *out_header,
-                              const uint8_t **out_pdu,
-                              size_t *out_pdu_length);
+mbc_status_t mbc_mbap_decode(const uint8_t* frame_buffer, size_t frame_length,
+                             mbc_mbap_header_t* out_header, const uint8_t** out_pdu,
+                             size_t* out_pdu_length);
 
 /**
  * @brief Determine expected MBAP frame length from partial buffer.
@@ -82,7 +77,7 @@ mbc_status_t mbc_mbap_decode(const uint8_t *frame_buffer,
  * @param available Number of bytes currently available
  * @return Expected total frame length, or 0 if insufficient data
  */
-size_t mbc_mbap_expected_length(const uint8_t *buffer, size_t available);
+size_t mbc_mbap_expected_length(const uint8_t* buffer, size_t available);
 
 #ifdef __cplusplus
 }

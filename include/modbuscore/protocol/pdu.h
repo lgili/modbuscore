@@ -13,10 +13,9 @@
  * - Exception responses
  */
 
+#include <modbuscore/common/status.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <modbuscore/common/status.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,10 +30,10 @@ extern "C" {
  * @brief Modbus PDU structure.
  */
 typedef struct mbc_pdu {
-    uint8_t unit_id;                /**< Unit/Slave ID (0-247) */
-    uint8_t function;               /**< Function code (1-127, or 0x80+ for exceptions) */
-    uint8_t payload[MBC_PDU_MAX];   /**< PDU payload data */
-    size_t payload_length;          /**< Length of payload in bytes */
+    uint8_t unit_id;              /**< Unit/Slave ID (0-247) */
+    uint8_t function;             /**< Function code (1-127, or 0x80+ for exceptions) */
+    uint8_t payload[MBC_PDU_MAX]; /**< PDU payload data */
+    size_t payload_length;        /**< Length of payload in bytes */
 } mbc_pdu_t;
 
 /**
@@ -46,10 +45,8 @@ typedef struct mbc_pdu {
  * @param out_length Encoded length (optional, can be NULL)
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_encode(const mbc_pdu_t *pdu,
-                            uint8_t *buffer,
-                            size_t capacity,
-                            size_t *out_length);
+mbc_status_t mbc_pdu_encode(const mbc_pdu_t* pdu, uint8_t* buffer, size_t capacity,
+                            size_t* out_length);
 
 /**
  * @brief Decode byte buffer to PDU.
@@ -59,9 +56,7 @@ mbc_status_t mbc_pdu_encode(const mbc_pdu_t *pdu,
  * @param out Decoded PDU
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_decode(const uint8_t *buffer,
-                            size_t length,
-                            mbc_pdu_t *out);
+mbc_status_t mbc_pdu_decode(const uint8_t* buffer, size_t length, mbc_pdu_t* out);
 
 /**
  * @brief Build FC03 (Read Holding Registers) request PDU.
@@ -72,9 +67,7 @@ mbc_status_t mbc_pdu_decode(const uint8_t *buffer,
  * @param quantity Number of registers to read (1-125)
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t *pdu,
-                                                uint8_t unit_id,
-                                                uint16_t address,
+mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t* pdu, uint8_t unit_id, uint16_t address,
                                                 uint16_t quantity);
 
 /**
@@ -86,9 +79,7 @@ mbc_status_t mbc_pdu_build_read_holding_request(mbc_pdu_t *pdu,
  * @param value Register value to write
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t *pdu,
-                                                 uint8_t unit_id,
-                                                 uint16_t address,
+mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t* pdu, uint8_t unit_id, uint16_t address,
                                                  uint16_t value);
 
 /**
@@ -101,10 +92,8 @@ mbc_status_t mbc_pdu_build_write_single_register(mbc_pdu_t *pdu,
  * @param quantity Number of registers to write (1-123)
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t *pdu,
-                                                    uint8_t unit_id,
-                                                    uint16_t address,
-                                                    const uint16_t *values,
+mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t* pdu, uint8_t unit_id,
+                                                    uint16_t address, const uint16_t* values,
                                                     size_t quantity);
 
 /**
@@ -115,9 +104,8 @@ mbc_status_t mbc_pdu_build_write_multiple_registers(mbc_pdu_t *pdu,
  * @param out_registers Number of registers read
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t *pdu,
-                                                 const uint8_t **out_data,
-                                                 size_t *out_registers);
+mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t* pdu, const uint8_t** out_data,
+                                                 size_t* out_registers);
 
 /**
  * @brief Parse FC06 (Write Single Register) response PDU.
@@ -127,9 +115,8 @@ mbc_status_t mbc_pdu_parse_read_holding_response(const mbc_pdu_t *pdu,
  * @param out_value Register value that was written
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t *pdu,
-                                                 uint16_t *out_address,
-                                                 uint16_t *out_value);
+mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t* pdu, uint16_t* out_address,
+                                                 uint16_t* out_value);
 
 /**
  * @brief Parse FC16 (Write Multiple Registers) response PDU.
@@ -139,9 +126,8 @@ mbc_status_t mbc_pdu_parse_write_single_response(const mbc_pdu_t *pdu,
  * @param out_quantity Number of registers that were written
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t *pdu,
-                                                   uint16_t *out_address,
-                                                   uint16_t *out_quantity);
+mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t* pdu, uint16_t* out_address,
+                                                   uint16_t* out_quantity);
 
 /**
  * @brief Parse exception response PDU.
@@ -151,9 +137,8 @@ mbc_status_t mbc_pdu_parse_write_multiple_response(const mbc_pdu_t *pdu,
  * @param out_code Exception code
  * @return MBC_STATUS_OK on success, error code otherwise
  */
-mbc_status_t mbc_pdu_parse_exception(const mbc_pdu_t *pdu,
-                                     uint8_t *out_function,
-                                     uint8_t *out_code);
+mbc_status_t mbc_pdu_parse_exception(const mbc_pdu_t* pdu, uint8_t* out_function,
+                                     uint8_t* out_code);
 
 #ifdef __cplusplus
 }

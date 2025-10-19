@@ -1,16 +1,15 @@
+#include "engine_test_helpers.h"
+
 #include <assert.h>
+#include <modbuscore/protocol/crc.h>
+#include <modbuscore/protocol/engine.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/transport/mock.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <modbuscore/protocol/engine.h>
-#include <modbuscore/protocol/crc.h>
-#include <modbuscore/runtime/builder.h>
-#include <modbuscore/transport/mock.h>
-
-#include "engine_test_helpers.h"
-
-static void init_default_env(engine_test_env_t *env)
+static void init_default_env(engine_test_env_t* env)
 {
     mbc_mock_transport_config_t cfg = {
         .initial_now_ms = 0U,
@@ -19,9 +18,7 @@ static void init_default_env(engine_test_env_t *env)
     engine_test_env_init(env, &cfg);
 }
 
-static size_t build_rtu_adu(const uint8_t *payload,
-                            size_t payload_len,
-                            uint8_t *out,
+static size_t build_rtu_adu(const uint8_t* payload, size_t payload_len, uint8_t* out,
                             size_t capacity)
 {
     assert(payload);
@@ -63,7 +60,8 @@ static void test_engine_step_transitions(void)
     engine_test_env_t env;
     init_default_env(&env);
     uint8_t request_adu[sizeof(request_fc03) + 2U];
-    size_t request_len = build_rtu_adu(request_fc03, sizeof(request_fc03), request_adu, sizeof(request_adu));
+    size_t request_len =
+        build_rtu_adu(request_fc03, sizeof(request_fc03), request_adu, sizeof(request_adu));
     assert(mbc_mock_transport_schedule_rx(env.mock, request_adu, request_len, 0U) == MBC_STATUS_OK);
 
     mbc_engine_t engine;
@@ -156,8 +154,10 @@ static void test_engine_client_response_decode(void)
     assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
 
     uint8_t response_adu[sizeof(response_fc03) + 2U];
-    size_t response_len = build_rtu_adu(response_fc03, sizeof(response_fc03), response_adu, sizeof(response_adu));
-    assert(mbc_mock_transport_schedule_rx(env.mock, response_adu, response_len, 0U) == MBC_STATUS_OK);
+    size_t response_len =
+        build_rtu_adu(response_fc03, sizeof(response_fc03), response_adu, sizeof(response_adu));
+    assert(mbc_mock_transport_schedule_rx(env.mock, response_adu, response_len, 0U) ==
+           MBC_STATUS_OK);
     engine_test_env_clear_events(&env);
 
     assert(mbc_engine_step(&engine, response_len) == MBC_STATUS_OK);
@@ -195,7 +195,8 @@ static void test_engine_timeout_client(void)
     engine_test_env_clear_events(&env);
     assert(mbc_engine_submit_request(&engine, frame, sizeof(frame)) == MBC_STATUS_OK);
     uint8_t frame_expected[sizeof(frame) + 2U];
-    size_t frame_expected_len = build_rtu_adu(frame, sizeof(frame), frame_expected, sizeof(frame_expected));
+    size_t frame_expected_len =
+        build_rtu_adu(frame, sizeof(frame), frame_expected, sizeof(frame_expected));
     engine_test_env_fetch_tx(&env, frame_expected, frame_expected_len);
     assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
 
@@ -282,7 +283,8 @@ static void test_engine_receive_failure(void)
     engine_test_env_clear_events(&env);
     assert(mbc_engine_submit_request(&engine, frame, sizeof(frame)) == MBC_STATUS_OK);
     uint8_t frame_expected[sizeof(frame) + 2U];
-    size_t frame_expected_len = build_rtu_adu(frame, sizeof(frame), frame_expected, sizeof(frame_expected));
+    size_t frame_expected_len =
+        build_rtu_adu(frame, sizeof(frame), frame_expected, sizeof(frame_expected));
     engine_test_env_fetch_tx(&env, frame_expected, frame_expected_len);
     assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
 
@@ -291,7 +293,7 @@ static void test_engine_receive_failure(void)
     mbc_status_t status = mbc_engine_step(&engine, frame_expected_len);
     assert(status == MBC_STATUS_IO_ERROR);
     assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
-    assert(env.events_total >= 1U);  /* STEP_BEGIN/END still emitted */
+    assert(env.events_total >= 1U); /* STEP_BEGIN/END still emitted */
 
     mbc_engine_shutdown(&engine);
     engine_test_env_shutdown(&env);
@@ -314,7 +316,8 @@ static void test_engine_disconnect_mid_step(void)
     assert(mbc_engine_init(&engine, &config) == MBC_STATUS_OK);
 
     const uint8_t request_fc06[] = {0x01U, 0x06U, 0x00U, 0x02U, 0x00U, 0x63U};
-    assert(mbc_mock_transport_schedule_rx(env.mock, request_fc06, sizeof(request_fc06), 0U) == MBC_STATUS_OK);
+    assert(mbc_mock_transport_schedule_rx(env.mock, request_fc06, sizeof(request_fc06), 0U) ==
+           MBC_STATUS_OK);
     mbc_mock_transport_set_connected(env.mock, false);
     engine_test_env_clear_events(&env);
     mbc_status_t status = mbc_engine_step(&engine, sizeof(request_fc06));

@@ -10,20 +10,19 @@
  * - Event notifications
  */
 
-#include <string.h>
-
-#include <modbuscore/protocol/engine.h>
-#include <modbuscore/protocol/pdu.h>
-#include <modbuscore/protocol/mbap.h>
 #include <modbuscore/protocol/crc.h>
+#include <modbuscore/protocol/engine.h>
+#include <modbuscore/protocol/mbap.h>
+#include <modbuscore/protocol/pdu.h>
+#include <string.h>
 
 #define MBC_EXPECTED_UNSUPPORTED ((size_t)-1)
 
 /* Forward declarations of private functions */
-static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type);
-static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next);
-static void reset_rx_buffer(mbc_engine_t *engine);
-static size_t determine_expected_length(const mbc_engine_t *engine);
+static void emit_event(mbc_engine_t* engine, mbc_engine_event_type_t type);
+static void enter_state(mbc_engine_t* engine, mbc_engine_state_t next);
+static void reset_rx_buffer(mbc_engine_t* engine);
+static size_t determine_expected_length(const mbc_engine_t* engine);
 
 /**
  * @brief Resolve transport interface from config.
@@ -34,13 +33,13 @@ static size_t determine_expected_length(const mbc_engine_t *engine);
  * @param config Engine configuration
  * @return Transport interface
  */
-static mbc_transport_iface_t resolve_transport(const mbc_engine_config_t *config)
+static mbc_transport_iface_t resolve_transport(const mbc_engine_config_t* config)
 {
     if (config->use_override) {
         return config->transport_override;
     }
 
-    const mbc_runtime_config_t *deps = mbc_runtime_dependencies(config->runtime);
+    const mbc_runtime_config_t* deps = mbc_runtime_dependencies(config->runtime);
     if (!deps) {
         mbc_transport_iface_t empty = {0};
         return empty;
@@ -48,7 +47,7 @@ static mbc_transport_iface_t resolve_transport(const mbc_engine_config_t *config
     return deps->transport;
 }
 
-mbc_status_t mbc_engine_init(mbc_engine_t *engine, const mbc_engine_config_t *config)
+mbc_status_t mbc_engine_init(mbc_engine_t* engine, const mbc_engine_config_t* config)
 {
     if (!engine || !config || !config->runtime) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -86,7 +85,7 @@ mbc_status_t mbc_engine_init(mbc_engine_t *engine, const mbc_engine_config_t *co
     return MBC_STATUS_OK;
 }
 
-void mbc_engine_shutdown(mbc_engine_t *engine)
+void mbc_engine_shutdown(mbc_engine_t* engine)
 {
     if (!engine) {
         return;
@@ -95,12 +94,9 @@ void mbc_engine_shutdown(mbc_engine_t *engine)
     *engine = (mbc_engine_t){0};
 }
 
-bool mbc_engine_is_ready(const mbc_engine_t *engine)
-{
-    return engine && engine->initialised;
-}
+bool mbc_engine_is_ready(const mbc_engine_t* engine) { return engine && engine->initialised; }
 
-mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
+mbc_status_t mbc_engine_step(mbc_engine_t* engine, size_t budget)
 {
     if (!mbc_engine_is_ready(engine)) {
         return MBC_STATUS_NOT_INITIALISED;
@@ -122,10 +118,8 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
         }
 
         mbc_transport_io_t io = {0};
-        status = mbc_transport_receive(&engine->transport,
-                                       &engine->rx_buffer[engine->rx_length],
-                                       space,
-                                       &io);
+        status = mbc_transport_receive(&engine->transport, &engine->rx_buffer[engine->rx_length],
+                                       space, &io);
         if (!mbc_status_is_ok(status)) {
             break;
         }
@@ -167,11 +161,11 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
             /* TCP mode: unwrap MBAP first */
             if (engine->framing == MBC_FRAMING_TCP) {
                 mbc_mbap_header_t mbap_header;
-                const uint8_t *pdu_data = NULL;
+                const uint8_t* pdu_data = NULL;
                 size_t pdu_length = 0;
 
-                decode_status = mbc_mbap_decode(engine->rx_buffer, frame_length,
-                                                 &mbap_header, &pdu_data, &pdu_length);
+                decode_status = mbc_mbap_decode(engine->rx_buffer, frame_length, &mbap_header,
+                                                &pdu_data, &pdu_length);
                 reset_rx_buffer(engine);
 
                 if (!mbc_status_is_ok(decode_status)) {
@@ -211,9 +205,7 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
                 }
 
                 const size_t pdu_length = frame_length - 2U;
-                decode_status = mbc_pdu_decode(engine->rx_buffer,
-                                                pdu_length,
-                                                &decoded);
+                decode_status = mbc_pdu_decode(engine->rx_buffer, pdu_length, &decoded);
                 reset_rx_buffer(engine);
 
                 if (!mbc_status_is_ok(decode_status)) {
@@ -247,7 +239,7 @@ mbc_status_t mbc_engine_step(mbc_engine_t *engine, size_t budget)
     return status;
 }
 
-mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buffer, size_t length)
+mbc_status_t mbc_engine_submit_request(mbc_engine_t* engine, const uint8_t* buffer, size_t length)
 {
     if (!mbc_engine_is_ready(engine)) {
         return MBC_STATUS_NOT_INITIALISED;
@@ -272,7 +264,7 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
     mbc_engine_state_t previous = engine->state;
     enter_state(engine, MBC_ENGINE_STATE_SENDING);
 
-    const uint8_t *tx_buffer = buffer;
+    const uint8_t* tx_buffer = buffer;
     size_t tx_length = length;
     uint8_t frame_with_crc[sizeof(engine->rx_buffer)];
 
@@ -298,7 +290,7 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
     /* Check if all bytes were sent */
     if (io.processed != tx_length) {
         enter_state(engine, previous);
-        return MBC_STATUS_IO_ERROR;  /* Partial send is an error in this implementation */
+        return MBC_STATUS_IO_ERROR; /* Partial send is an error in this implementation */
     }
 
     emit_event(engine, MBC_ENGINE_EVENT_TX_SENT);
@@ -309,7 +301,7 @@ mbc_status_t mbc_engine_submit_request(mbc_engine_t *engine, const uint8_t *buff
     return MBC_STATUS_OK;
 }
 
-bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out)
+bool mbc_engine_take_pdu(mbc_engine_t* engine, mbc_pdu_t* out)
 {
     if (!engine || !out || !engine->pdu_ready) {
         return false;
@@ -320,7 +312,7 @@ bool mbc_engine_take_pdu(mbc_engine_t *engine, mbc_pdu_t *out)
     return true;
 }
 
-bool mbc_engine_last_mbap_header(const mbc_engine_t *engine, mbc_mbap_header_t *out)
+bool mbc_engine_last_mbap_header(const mbc_engine_t* engine, mbc_mbap_header_t* out)
 {
     if (!engine || !out || !engine->last_mbap_valid) {
         return false;
@@ -335,7 +327,7 @@ bool mbc_engine_last_mbap_header(const mbc_engine_t *engine, mbc_mbap_header_t *
  * @param engine Engine instance
  * @param type Event type
  */
-static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type)
+static void emit_event(mbc_engine_t* engine, mbc_engine_event_type_t type)
 {
     if (!engine->event_cb) {
         return;
@@ -354,7 +346,7 @@ static void emit_event(mbc_engine_t *engine, mbc_engine_event_type_t type)
  * @param engine Engine instance
  * @param next New state
  */
-static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next)
+static void enter_state(mbc_engine_t* engine, mbc_engine_state_t next)
 {
     engine->state = next;
     engine->last_activity_ms = mbc_transport_now(&engine->transport);
@@ -372,7 +364,7 @@ static void enter_state(mbc_engine_t *engine, mbc_engine_state_t next)
  *
  * @param engine Engine instance
  */
-static void reset_rx_buffer(mbc_engine_t *engine)
+static void reset_rx_buffer(mbc_engine_t* engine)
 {
     engine->rx_length = 0U;
     engine->expected_length = 0U;
@@ -389,7 +381,7 @@ static void reset_rx_buffer(mbc_engine_t *engine)
  * @return Expected frame length in bytes, 0 if not enough data yet,
  *         MBC_EXPECTED_UNSUPPORTED if unsupported function code
  */
-static size_t determine_expected_length(const mbc_engine_t *engine)
+static size_t determine_expected_length(const mbc_engine_t* engine)
 {
     /* TCP mode uses MBAP framing */
     if (engine->framing == MBC_FRAMING_TCP) {
@@ -433,8 +425,7 @@ static size_t determine_expected_length(const mbc_engine_t *engine)
             return (size_t)(3U + byte_count + 2U);
         }
         return 0U;
-    case 0x06:
-        return 8U;
+    case 0x06: /* FC06 and FC16 have same response length */
     case 0x10:
         return 8U;
     default:

@@ -1,24 +1,23 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
 
 #if defined(__unix__) || defined(__APPLE__)
-#include <pthread.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <time.h>
-#include <sys/time.h>
-
-#include <modbuscore/runtime/builder.h>
+#include <fcntl.h>
 #include <modbuscore/protocol/engine.h>
-#include <modbuscore/protocol/pdu.h>
 #include <modbuscore/protocol/mbap.h>
+#include <modbuscore/protocol/pdu.h>
+#include <modbuscore/runtime/builder.h>
 #include <modbuscore/transport/posix_tcp.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 
 #define TCP_MAX_FRAME 260U
 
@@ -30,9 +29,9 @@ typedef struct {
     size_t response_len;
 } tcp_server_args_t;
 
-static void *tcp_server_thread(void *arg)
+static void* tcp_server_thread(void* arg)
 {
-    tcp_server_args_t *args = arg;
+    tcp_server_args_t* args = arg;
 
     int srv = socket(AF_INET, SOCK_STREAM, 0);
     assert(srv >= 0);
@@ -48,7 +47,7 @@ static void *tcp_server_thread(void *arg)
         .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
         .sin_port = htons(args->port),
     };
-    if (bind(srv, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
         close(srv);
         return NULL;
     }
@@ -65,8 +64,7 @@ static void *tcp_server_thread(void *arg)
 
     size_t total = 0;
     while (total < args->request_len) {
-        ssize_t n = recv(cli, (char *)args->request + total,
-                         (int)(args->request_len - total), 0);
+        ssize_t n = recv(cli, (char*)args->request + total, (int)(args->request_len - total), 0);
         assert(n >= 0);
         if (n == 0) {
             break;
@@ -77,8 +75,8 @@ static void *tcp_server_thread(void *arg)
 
     size_t sent = 0;
     while (sent < args->response_len) {
-        ssize_t n = send(cli, (const char *)args->response + sent,
-                         (int)(args->response_len - sent), 0);
+        ssize_t n =
+            send(cli, (const char*)args->response + sent, (int)(args->response_len - sent), 0);
         assert(n >= 0);
         if (n == 0) {
             break;
@@ -95,8 +93,8 @@ static void *tcp_server_thread(void *arg)
 static void test_tcp_loop(void)
 {
     const uint16_t port = 15020;
-    uint8_t request[] = {0x00,0x01,0x00,0x00,0x00,0x06,0x11,0x03,0x00,0x00,0x00,0x01};
-    uint8_t response[] = {0x00,0x01,0x00,0x00,0x00,0x05,0x11,0x03,0x02,0x00,0x2A};
+    uint8_t request[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x11, 0x03, 0x00, 0x00, 0x00, 0x01};
+    uint8_t response[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x05, 0x11, 0x03, 0x02, 0x00, 0x2A};
 
     tcp_server_args_t args = {
         .port = port,
@@ -119,7 +117,7 @@ static void test_tcp_loop(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_tcp_ctx_t *ctx = NULL;
+    mbc_posix_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_tcp_create(&config, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
         printf("POSIX TCP loop test skipped (connection failed, status=%d)\n", status);
@@ -136,8 +134,7 @@ static void test_tcp_loop(void)
     size_t total = 0;
     while (total < sizeof(response)) {
         io.processed = 0;
-        status = mbc_transport_receive(&iface, rx + total,
-                                       sizeof(response) - total, &io);
+        status = mbc_transport_receive(&iface, rx + total, sizeof(response) - total, &io);
         assert(mbc_status_is_ok(status));
         if (io.processed == 0U) {
             iface.yield(iface.ctx);
@@ -167,12 +164,10 @@ static mbc_status_t make_nonblocking(int fd)
     return MBC_STATUS_OK;
 }
 
-static mbc_status_t socket_transport_send(void *ctx,
-                                          const uint8_t *buffer,
-                                          size_t length,
-                                          mbc_transport_io_t *out)
+static mbc_status_t socket_transport_send(void* ctx, const uint8_t* buffer, size_t length,
+                                          mbc_transport_io_t* out)
 {
-    socket_transport_ctx_t *sock = ctx;
+    socket_transport_ctx_t* sock = ctx;
     if (!sock || (!buffer && length > 0U)) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
@@ -199,12 +194,10 @@ static mbc_status_t socket_transport_send(void *ctx,
     return (total == length) ? MBC_STATUS_OK : MBC_STATUS_IO_ERROR;
 }
 
-static mbc_status_t socket_transport_receive(void *ctx,
-                                             uint8_t *buffer,
-                                             size_t capacity,
-                                             mbc_transport_io_t *out)
+static mbc_status_t socket_transport_receive(void* ctx, uint8_t* buffer, size_t capacity,
+                                             mbc_transport_io_t* out)
 {
-    socket_transport_ctx_t *sock = ctx;
+    socket_transport_ctx_t* sock = ctx;
     if (!sock || !buffer || capacity == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
@@ -226,7 +219,7 @@ static mbc_status_t socket_transport_receive(void *ctx,
     return MBC_STATUS_OK;
 }
 
-static uint64_t socket_transport_now(void *ctx)
+static uint64_t socket_transport_now(void* ctx)
 {
     (void)ctx;
     struct timespec ts;
@@ -240,23 +233,20 @@ static uint64_t socket_transport_now(void *ctx)
     return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)(tv.tv_usec / 1000ULL);
 }
 
-static void socket_transport_yield(void *ctx)
+static void socket_transport_yield(void* ctx)
 {
     (void)ctx;
     usleep(1000);
 }
 
-static mbc_status_t build_fc03_request_frame(mbc_pdu_t *pdu,
-                                             uint8_t *frame,
-                                             size_t capacity,
-                                             size_t *out_length)
+static mbc_status_t build_fc03_request_frame(mbc_pdu_t* pdu, uint8_t* frame, size_t capacity,
+                                             size_t* out_length)
 {
     if (!pdu || !frame || !out_length) {
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
-    mbc_status_t status = mbc_pdu_build_read_holding_request(
-        pdu, 0x11U, 0x0000U, 0x0001U);
+    mbc_status_t status = mbc_pdu_build_read_holding_request(pdu, 0x11U, 0x0000U, 0x0001U);
     if (!mbc_status_is_ok(status)) {
         return status;
     }
@@ -273,29 +263,20 @@ static mbc_status_t build_fc03_request_frame(mbc_pdu_t *pdu,
     };
 
     size_t pdu_length = 1U + pdu->payload_length;
-    return mbc_mbap_encode(&header,
-                           pdu_bytes,
-                           pdu_length,
-                           frame,
-                           capacity,
-                           out_length);
+    return mbc_mbap_encode(&header, pdu_bytes, pdu_length, frame, capacity, out_length);
 }
 
 static void test_tcp_engine_client(void)
 {
     const uint16_t port = 15021;
-    const uint8_t response_frame[] = {
-        0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
-        0x11, 0x03, 0x02, 0x00, 0x2A
-    };
+    const uint8_t response_frame[] = {0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
+                                      0x11, 0x03, 0x02, 0x00, 0x2A};
 
     uint8_t request_frame[TCP_MAX_FRAME] = {0};
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     tcp_server_args_t args = {
         .port = port,
@@ -318,7 +299,7 @@ static void test_tcp_engine_client(void)
     };
 
     mbc_transport_iface_t iface;
-    mbc_posix_tcp_ctx_t *ctx = NULL;
+    mbc_posix_tcp_ctx_t* ctx = NULL;
     mbc_status_t status = mbc_posix_tcp_create(&config, &iface, &ctx);
     if (!mbc_status_is_ok(status)) {
         printf("POSIX TCP engine client test skipped (connection failed, status=%d)\n", status);
@@ -344,9 +325,7 @@ static void test_tcp_engine_client(void)
     assert(mbc_engine_init(&engine, &engine_cfg) == MBC_STATUS_OK);
 
     assert(request_length <= TCP_MAX_FRAME);
-    assert(mbc_engine_submit_request(&engine,
-                                     request_frame,
-                                     request_length) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, request_length) == MBC_STATUS_OK);
 
     mbc_pdu_t response_pdu = {0};
     bool response_ready = false;
@@ -366,11 +345,10 @@ static void test_tcp_engine_client(void)
 
     assert(response_ready);
 
-    const uint8_t *register_data = NULL;
+    const uint8_t* register_data = NULL;
     size_t register_count = 0U;
-    assert(mbc_pdu_parse_read_holding_response(&response_pdu,
-                                               &register_data,
-                                               &register_count) == MBC_STATUS_OK);
+    assert(mbc_pdu_parse_read_holding_response(&response_pdu, &register_data, &register_count) ==
+           MBC_STATUS_OK);
     assert(register_count == 1U);
     assert(register_data[0] == 0x00U && register_data[1] == 0x2AU);
 
@@ -421,10 +399,8 @@ static void test_tcp_engine_server(void)
     uint8_t request_frame[TCP_MAX_FRAME];
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     const uint16_t transaction_id = (uint16_t)((request_frame[0] << 8) | request_frame[1]);
 
@@ -465,11 +441,8 @@ static void test_tcp_engine_server(void)
 
     uint8_t response_frame[TCP_MAX_FRAME];
     size_t response_length = 0U;
-    assert(mbc_mbap_encode(&header,
-                           response_pdu_bytes,
-                           1U + response_pdu.payload_length,
-                           response_frame,
-                           sizeof(response_frame),
+    assert(mbc_mbap_encode(&header, response_pdu_bytes, 1U + response_pdu.payload_length,
+                           response_frame, sizeof(response_frame),
                            &response_length) == MBC_STATUS_OK);
 
     assert(mbc_engine_submit_request(&engine, response_frame, response_length) == MBC_STATUS_OK);
@@ -522,10 +495,8 @@ static void test_tcp_engine_client_timeout(void)
     uint8_t request_frame[TCP_MAX_FRAME] = {0};
     size_t request_length = 0U;
     mbc_pdu_t request_pdu;
-    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu,
-                                                     request_frame,
-                                                     sizeof(request_frame),
-                                                     &request_length)));
+    assert(mbc_status_is_ok(build_fc03_request_frame(&request_pdu, request_frame,
+                                                     sizeof(request_frame), &request_length)));
 
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
@@ -544,9 +515,7 @@ static void test_tcp_engine_client_timeout(void)
     };
     assert(mbc_engine_init(&engine, &cfg) == MBC_STATUS_OK);
 
-    assert(mbc_engine_submit_request(&engine,
-                                     request_frame,
-                                     request_length) == MBC_STATUS_OK);
+    assert(mbc_engine_submit_request(&engine, request_frame, request_length) == MBC_STATUS_OK);
 
     /* Drain request from peer side */
     uint8_t peer_buffer[TCP_MAX_FRAME] = {0};
@@ -592,7 +561,7 @@ static void test_tcp_engine_client_timeout(void)
 static void test_tcp_invalid_inputs(void)
 {
     mbc_transport_iface_t iface;
-    mbc_posix_tcp_ctx_t *ctx = NULL;
+    mbc_posix_tcp_ctx_t* ctx = NULL;
 
     assert(mbc_posix_tcp_create(NULL, &iface, &ctx) == MBC_STATUS_INVALID_ARGUMENT);
 

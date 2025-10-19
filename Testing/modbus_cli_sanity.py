@@ -12,13 +12,18 @@ from pathlib import Path
 
 
 def run_cli(cli_path: Path, args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
-    cmd = [sys.executable, str(cli_path)] if cli_path.suffix in {".py"} else [str(cli_path)]
-    cmd.extend(args)
+    tools_dir = cli_path.parent.parent / "tools"
+    env = os.environ.copy()
+    existing_py_path = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(tools_dir) + (os.pathsep + existing_py_path if existing_py_path else "")
+
+    cmd = [sys.executable, "-m", "modbus_cli.cli", *args]
     result = subprocess.run(
         cmd,
         cwd=cwd,
         capture_output=True,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
         print(f"Command failed: {' '.join(cmd)}", file=sys.stderr)
@@ -58,7 +63,7 @@ def main() -> int:
             return 1
 
     # Doctor should succeed (ignoring output)
-    doctor = subprocess.run([str(cli_script), "doctor"], capture_output=True, text=True)
+    doctor = run_cli(cli_script, ["doctor"])
     if doctor.returncode != 0:
         print("modbus doctor reported errors", file=sys.stderr)
         print(doctor.stdout, file=sys.stderr)

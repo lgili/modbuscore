@@ -15,16 +15,15 @@
  * 3. Execute: ./client
  */
 
+#include <modbuscore/protocol/engine.h>
+#include <modbuscore/protocol/mbap.h>
+#include <modbuscore/protocol/pdu.h>
+#include <modbuscore/runtime/builder.h>
+#include <modbuscore/transport/posix_tcp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <modbuscore/transport/posix_tcp.h>
-#include <modbuscore/runtime/builder.h>
-#include <modbuscore/protocol/engine.h>
-#include <modbuscore/protocol/pdu.h>
-#include <modbuscore/protocol/mbap.h>
 
 #define SERVER_HOST "127.0.0.1"
 #define SERVER_PORT 5502
@@ -32,7 +31,7 @@
 #define START_ADDRESS 0
 #define REGISTER_COUNT 10
 
-static void print_registers(const uint8_t *data, size_t count)
+static void print_registers(const uint8_t* data, size_t count)
 {
     printf("  Registers read:\n");
     for (size_t i = 0; i < count; ++i) {
@@ -58,12 +57,12 @@ int main(void)
     };
 
     mbc_transport_iface_t transport;
-    mbc_posix_tcp_ctx_t *tcp_ctx = NULL;
+    mbc_posix_tcp_ctx_t* tcp_ctx = NULL;
 
     mbc_status_t status = mbc_posix_tcp_create(&tcp_config, &transport, &tcp_ctx);
     if (!mbc_status_is_ok(status)) {
-        fprintf(stderr, "✗ Failed to connect to %s:%u (status=%d)\n",
-                SERVER_HOST, SERVER_PORT, status);
+        fprintf(stderr, "✗ Failed to connect to %s:%u (status=%d)\n", SERVER_HOST, SERVER_PORT,
+                status);
         fprintf(stderr, "  Make sure a Modbus TCP server is running.\n");
         return 1;
     }
@@ -98,10 +97,10 @@ int main(void)
     mbc_engine_config_t engine_config = {
         .runtime = &runtime,
         .role = MBC_ENGINE_ROLE_CLIENT,
-        .framing = MBC_FRAMING_TCP,  /* Use TCP (MBAP) framing */
+        .framing = MBC_FRAMING_TCP, /* Use TCP (MBAP) framing */
         .use_override = false,
         .response_timeout_ms = 3000,
-        .event_cb = NULL,  /* No telemetry in this example */
+        .event_cb = NULL, /* No telemetry in this example */
         .event_ctx = NULL,
     };
 
@@ -118,12 +117,12 @@ int main(void)
     /* ========================================================================
      * Step 4: Build and send FC03 request (Read Holding Registers)
      * ====================================================================== */
-    printf("Step 4: Building FC03 request (unit=%u, addr=%u, count=%u)...\n",
-           UNIT_ID, START_ADDRESS, REGISTER_COUNT);
+    printf("Step 4: Building FC03 request (unit=%u, addr=%u, count=%u)...\n", UNIT_ID,
+           START_ADDRESS, REGISTER_COUNT);
 
     mbc_pdu_t request_pdu;
-    status = mbc_pdu_build_read_holding_request(&request_pdu, UNIT_ID,
-                                                START_ADDRESS, REGISTER_COUNT);
+    status =
+        mbc_pdu_build_read_holding_request(&request_pdu, UNIT_ID, START_ADDRESS, REGISTER_COUNT);
     if (!mbc_status_is_ok(status)) {
         fprintf(stderr, "✗ Failed to build request PDU (status=%d)\n", status);
         goto cleanup;
@@ -136,17 +135,15 @@ int main(void)
     size_t pdu_length = 1 + request_pdu.payload_length;
 
     /* Wrap PDU with MBAP header for Modbus TCP */
-    mbc_mbap_header_t mbap_header = {
-        .transaction_id = 1,      /* Transaction ID (can be incremented) */
-        .protocol_id = 0,         /* Always 0 for Modbus */
-        .length = 0,              /* Will be set by mbc_mbap_encode */
-        .unit_id = UNIT_ID
-    };
+    mbc_mbap_header_t mbap_header = {.transaction_id = 1, /* Transaction ID (can be incremented) */
+                                     .protocol_id = 0,    /* Always 0 for Modbus */
+                                     .length = 0,         /* Will be set by mbc_mbap_encode */
+                                     .unit_id = UNIT_ID};
 
     uint8_t request_buffer[256];
     size_t request_length = 0;
-    status = mbc_mbap_encode(&mbap_header, pdu_buffer, pdu_length,
-                             request_buffer, sizeof(request_buffer), &request_length);
+    status = mbc_mbap_encode(&mbap_header, pdu_buffer, pdu_length, request_buffer,
+                             sizeof(request_buffer), &request_length);
     if (!mbc_status_is_ok(status)) {
         fprintf(stderr, "✗ Failed to encode MBAP frame (status=%d)\n", status);
         goto cleanup;
@@ -171,7 +168,7 @@ int main(void)
     printf("✓ Request submitted\n\n");
 
     /* Give TCP stack time to actually transmit the data */
-    usleep(10000);  /* 10ms delay to ensure send completes */
+    usleep(10000); /* 10ms delay to ensure send completes */
 
     /* ========================================================================
      * Step 5: Poll until complete response is received
@@ -181,7 +178,7 @@ int main(void)
     bool response_received = false;
     size_t total_bytes_received = 0;
     for (int i = 0; i < 100; ++i) {
-        status = mbc_engine_step(&engine, 10);  /* Budget = 10 bytes per iteration */
+        status = mbc_engine_step(&engine, 10); /* Budget = 10 bytes per iteration */
 
         /* Debug: show status every 10 iterations */
         if (i % 10 == 0 || i < 5) {
@@ -190,8 +187,8 @@ int main(void)
 
         /* Debug: check internal state (hack for debugging) */
         if (i == 0) {
-            printf("  Engine initial state: state=%d, rx_length=%zu\n",
-                   engine.state, engine.rx_length);
+            printf("  Engine initial state: state=%d, rx_length=%zu\n", engine.state,
+                   engine.rx_length);
         }
 
         if (status == MBC_STATUS_TIMEOUT) {
@@ -219,12 +216,11 @@ int main(void)
             }
 
             /* Parse FC03 response */
-            const uint8_t *register_data = NULL;
+            const uint8_t* register_data = NULL;
             size_t register_count = 0;
 
-            status = mbc_pdu_parse_read_holding_response(&response_pdu,
-                                                         &register_data,
-                                                         &register_count);
+            status =
+                mbc_pdu_parse_read_holding_response(&response_pdu, &register_data, &register_count);
             if (!mbc_status_is_ok(status)) {
                 fprintf(stderr, "✗ Failed to parse response (status=%d)\n", status);
                 goto cleanup;

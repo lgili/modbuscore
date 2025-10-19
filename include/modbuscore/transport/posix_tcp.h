@@ -14,11 +14,10 @@
  * - Client-only (multi-connection server support comes later)
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #include <modbuscore/common/status.h>
 #include <modbuscore/transport/iface.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,10 +27,11 @@ extern "C" {
  * @brief Configuration for creating a POSIX TCP client.
  */
 typedef struct mbc_posix_tcp_config {
-    const char *host;              /**< Hostname or IP address (e.g., "192.168.1.10" or "localhost"). */
-    uint16_t port;                 /**< TCP port (e.g., 502 for standard Modbus TCP). */
-    uint32_t connect_timeout_ms;   /**< Connection timeout in milliseconds (0 = blocking/unlimited). */
-    uint32_t recv_timeout_ms;      /**< I/O timeout for send/receive polling (0 = no timeout). */
+    const char* host; /**< Hostname or IP address (e.g., "192.168.1.10" or "localhost"). */
+    uint16_t port;    /**< TCP port (e.g., 502 for standard Modbus TCP). */
+    uint32_t
+        connect_timeout_ms;   /**< Connection timeout in milliseconds (0 = blocking/unlimited). */
+    uint32_t recv_timeout_ms; /**< I/O timeout for send/receive polling (0 = no timeout). */
 } mbc_posix_tcp_config_t;
 
 /**
@@ -68,16 +68,15 @@ typedef struct mbc_posix_tcp_ctx mbc_posix_tcp_ctx_t;
  * }
  * @endcode
  */
-mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t *config,
-                                   mbc_transport_iface_t *out_iface,
-                                   mbc_posix_tcp_ctx_t **out_ctx);
+mbc_status_t mbc_posix_tcp_create(const mbc_posix_tcp_config_t* config,
+                                  mbc_transport_iface_t* out_iface, mbc_posix_tcp_ctx_t** out_ctx);
 
 /**
  * @brief Destroy the TCP context and close the socket.
  *
  * @param ctx Context returned by mbc_posix_tcp_create() (can be NULL).
  */
-void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t *ctx);
+void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t* ctx);
 
 /**
  * @brief Check if the TCP connection is still active.
@@ -85,7 +84,7 @@ void mbc_posix_tcp_destroy(mbc_posix_tcp_ctx_t *ctx);
  * @param ctx TCP context.
  * @return true if connected, false otherwise.
  */
-bool mbc_posix_tcp_is_connected(const mbc_posix_tcp_ctx_t *ctx);
+bool mbc_posix_tcp_is_connected(const mbc_posix_tcp_ctx_t* ctx);
 
 #ifdef __cplusplus
 }

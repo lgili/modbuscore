@@ -3,11 +3,10 @@
  * @brief Implementation of runtime builder with default dependencies.
  */
 
-#include <time.h>
+#include <modbuscore/runtime/builder.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <modbuscore/runtime/builder.h>
+#include <time.h>
 
 /**
  * @brief Default clock implementation using monotonic time if available.
@@ -15,11 +14,11 @@
  * @param ctx Context (unused)
  * @return Current time in milliseconds
  */
-static uint64_t default_clock_now(void *ctx)
+static uint64_t default_clock_now(void* ctx)
 {
     (void)ctx;
 
-#if defined(CLOCK_MONOTONIC)
+#ifdef CLOCK_MONOTONIC
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
         return ((uint64_t)ts.tv_sec * 1000ULL) + (uint64_t)(ts.tv_nsec / 1000000ULL);
@@ -40,7 +39,7 @@ static uint64_t default_clock_now(void *ctx)
  * @param size Number of bytes to allocate
  * @return Pointer to allocated memory, or NULL on failure
  */
-static void *default_alloc(void *ctx, size_t size)
+static void* default_alloc(void* ctx, size_t size)
 {
     (void)ctx;
     return malloc(size);
@@ -52,7 +51,7 @@ static void *default_alloc(void *ctx, size_t size)
  * @param ctx Context (unused)
  * @param ptr Pointer to free
  */
-static void default_free(void *ctx, void *ptr)
+static void default_free(void* ctx, void* ptr)
 {
     (void)ctx;
     free(ptr);
@@ -65,7 +64,7 @@ static void default_free(void *ctx, void *ptr)
  * @param category Log category (unused)
  * @param message Log message (unused)
  */
-static void default_logger(void *ctx, const char *category, const char *message)
+static void default_logger(void* ctx, const char* category, const char* message)
 {
     (void)ctx;
     (void)category;
@@ -88,7 +87,7 @@ static const mbc_logger_iface_t default_logger_iface = {
     .write = default_logger,
 };
 
-void mbc_runtime_builder_init(mbc_runtime_builder_t *builder)
+void mbc_runtime_builder_init(mbc_runtime_builder_t* builder)
 {
     if (!builder) {
         return;
@@ -97,8 +96,8 @@ void mbc_runtime_builder_init(mbc_runtime_builder_t *builder)
     *builder = (mbc_runtime_builder_t){0};
 }
 
-mbc_runtime_builder_t *mbc_runtime_builder_with_transport(mbc_runtime_builder_t *builder,
-                                                          const mbc_transport_iface_t *transport)
+mbc_runtime_builder_t* mbc_runtime_builder_with_transport(mbc_runtime_builder_t* builder,
+                                                          const mbc_transport_iface_t* transport)
 {
     if (!builder || !transport) {
         return builder;
@@ -109,8 +108,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_transport(mbc_runtime_builder_t 
     return builder;
 }
 
-mbc_runtime_builder_t *mbc_runtime_builder_with_clock(mbc_runtime_builder_t *builder,
-                                                      const mbc_clock_iface_t *clock)
+mbc_runtime_builder_t* mbc_runtime_builder_with_clock(mbc_runtime_builder_t* builder,
+                                                      const mbc_clock_iface_t* clock)
 {
     if (!builder || !clock) {
         return builder;
@@ -121,8 +120,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_clock(mbc_runtime_builder_t *bui
     return builder;
 }
 
-mbc_runtime_builder_t *mbc_runtime_builder_with_allocator(mbc_runtime_builder_t *builder,
-                                                          const mbc_allocator_iface_t *allocator)
+mbc_runtime_builder_t* mbc_runtime_builder_with_allocator(mbc_runtime_builder_t* builder,
+                                                          const mbc_allocator_iface_t* allocator)
 {
     if (!builder || !allocator) {
         return builder;
@@ -133,8 +132,8 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_allocator(mbc_runtime_builder_t 
     return builder;
 }
 
-mbc_runtime_builder_t *mbc_runtime_builder_with_logger(mbc_runtime_builder_t *builder,
-                                                       const mbc_logger_iface_t *logger)
+mbc_runtime_builder_t* mbc_runtime_builder_with_logger(mbc_runtime_builder_t* builder,
+                                                       const mbc_logger_iface_t* logger)
 {
     if (!builder || !logger) {
         return builder;
@@ -145,7 +144,7 @@ mbc_runtime_builder_t *mbc_runtime_builder_with_logger(mbc_runtime_builder_t *bu
     return builder;
 }
 
-mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t *builder, mbc_runtime_t *runtime)
+mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t* builder, mbc_runtime_t* runtime)
 {
     if (!builder || !runtime) {
         return MBC_STATUS_INVALID_ARGUMENT;

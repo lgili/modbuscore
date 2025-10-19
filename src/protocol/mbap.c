@@ -6,12 +6,9 @@
 #include <modbuscore/protocol/mbap.h>
 #include <string.h>
 
-mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t *header,
-                              const uint8_t *pdu_buffer,
-                              size_t pdu_length,
-                              uint8_t *out_buffer,
-                              size_t out_capacity,
-                              size_t *out_length)
+mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t* header, const uint8_t* pdu_buffer,
+                             size_t pdu_length, uint8_t* out_buffer, size_t out_capacity,
+                             size_t* out_length)
 {
     if (!header || !pdu_buffer || !out_buffer || pdu_length == 0U) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -51,11 +48,9 @@ mbc_status_t mbc_mbap_encode(const mbc_mbap_header_t *header,
     return MBC_STATUS_OK;
 }
 
-mbc_status_t mbc_mbap_decode(const uint8_t *frame_buffer,
-                              size_t frame_length,
-                              mbc_mbap_header_t *out_header,
-                              const uint8_t **out_pdu,
-                              size_t *out_pdu_length)
+mbc_status_t mbc_mbap_decode(const uint8_t* frame_buffer, size_t frame_length,
+                             mbc_mbap_header_t* out_header, const uint8_t** out_pdu,
+                             size_t* out_pdu_length)
 {
     if (!frame_buffer || !out_header || !out_pdu || !out_pdu_length) {
         return MBC_STATUS_INVALID_ARGUMENT;
@@ -84,15 +79,15 @@ mbc_status_t mbc_mbap_decode(const uint8_t *frame_buffer,
 
     /* PDU starts after MBAP header */
     *out_pdu = &frame_buffer[7];
-    *out_pdu_length = out_header->length - 1U;  /* Subtract unit_id byte */
+    *out_pdu_length = out_header->length - 1U; /* Subtract unit_id byte */
 
     return MBC_STATUS_OK;
 }
 
-size_t mbc_mbap_expected_length(const uint8_t *buffer, size_t available)
+size_t mbc_mbap_expected_length(const uint8_t* buffer, size_t available)
 {
     if (!buffer || available < 6U) {
-        return 0U;  /* Need at least 6 bytes to read length field */
+        return 0U; /* Need at least 6 bytes to read length field */
     }
 
     /* Extract length field (bytes 4-5) */
