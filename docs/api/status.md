@@ -8,7 +8,7 @@ nav_order: 1
 # Status Codes API
 {: .no_toc }
 
-Error handling and return values in ModbusCore v3.0
+Error handling and return values in ModbusCore v1.0
 {: .fs-6 .fw-300 }
 
 ## Table of Contents

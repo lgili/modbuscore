@@ -1,0 +1,26 @@
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  hicpp-*,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  -modernize-use-trailing-return-type,
+  -hicpp-signed-bitwise
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(include|src)/'
+AnalyzeTemporaryDtors: false
+FormatStyle: file
+User: modbuscore
+CheckOptions:
+  - key:             readability-identifier-naming.VariableCase
+    value:           lower_case
+  - key:             readability-identifier-naming.MemberCase
+    value:           lower_case
+  - key:             readability-identifier-naming.EnumCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.EnumConstantCase
+    value:           UPPER_CASE

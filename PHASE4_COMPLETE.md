@@ -84,7 +84,7 @@ cd build/tests
 
 Saída esperada:
 ```
-=== ModbusCore v3.0 - TCP Client Example (FC03) ===
+=== ModbusCore v1.0 - TCP Client Example (FC03) ===
 
 Step 1: Creating TCP transport...
 ✓ Connected to 127.0.0.1:5502
@@ -186,7 +186,7 @@ Este script:
 
 ---
 
-## Limitações Conhecidas (v3.0)
+## Limitações Conhecidas (v1.0)
 
 ⚠️ **Sem TLS/SSL** - Planejado para Fase 7
 ⚠️ **Sem reconnect automático** - Pode adicionar depois se necessário
@@ -211,9 +211,9 @@ Este script:
 
 ---
 
-## Comparação: v2.0 vs v3.0
+## Comparação: legado vs v1.0
 
-| Feature | v2.0 | v3.0 (Fase 4A) |
+| Feature | Legado | v1.0 (Fase 4A) |
 |---------|------|----------------|
 | **API** | 3 camadas (mb_simple → mb_host → client_sync) | 2 camadas (app → posix_tcp → engine) |
 | **Testabilidade** | Mock difícil | Mock trivial (DI) |
@@ -236,8 +236,8 @@ Este script:
 - [ ] Documentação Doxygen/Sphinx
 - [ ] CLI `modbus` (opcional)
 
-### Fase 6 (Compatibilidade)
-- [ ] Camada de compatibilidade com v2.0 API
+### Fase 6 (Migração)
+- [ ] Comunicar breaking changes e finalizar limpeza do legado
 - [ ] Guia de migração
 
 ---
@@ -271,4 +271,4 @@ A arquitetura DI provou seu valor: trocar transporte é trivial, testes são fá
 
 **Autor**: ModbusCore Team
 **Data**: 2025-01-17
-**Versão**: 3.0.0-phase4a
+**Versão**: 1.0.0-phase4a

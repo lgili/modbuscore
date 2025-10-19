@@ -43,7 +43,7 @@ static void print_registers(const uint8_t *data, size_t count)
 
 int main(void)
 {
-    printf("=== ModbusCore v3.0 - TCP Client Example (FC03) ===\n\n");
+    printf("=== ModbusCore v1.0 - TCP Client Example (FC03) ===\n\n");
 
     /* ========================================================================
      * Step 1: Create POSIX TCP transport driver

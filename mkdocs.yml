@@ -1,4 +1,4 @@
-site_name: ModbusCore v3.0
+site_name: ModbusCore v1.0
 site_description: Modern, lightweight Modbus protocol stack in pure C17
 site_author: ModbusCore Team
 site_url: https://lgili.github.io/modbuscore

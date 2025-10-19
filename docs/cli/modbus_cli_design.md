@@ -2,7 +2,7 @@
 
 Este documento descreve o desenho inicial da ferramenta de linha de comando `modbus`
 planejada para a Fase 5. O objetivo é oferecer uma experiência rápida de bootstrap
-e diagnóstico para projetos que consumam a ModbusCore 3.0.
+e diagnóstico para projetos que consumam a ModbusCore 1.0.
 
 ## Objetivos
 

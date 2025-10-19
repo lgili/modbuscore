@@ -8,7 +8,7 @@ nav_order: 3
 # Troubleshooting Guide
 {: .no_toc }
 
-Common issues and solutions for ModbusCore v3.0
+Common issues and solutions for ModbusCore v1.0
 {: .fs-6 .fw-300 }
 
 ## Table of Contents

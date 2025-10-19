@@ -3,7 +3,7 @@
 
 /**
  * @file status.h
- * @brief Canonical status codes shared across the ModbusCore v3.0 runtime.
+ * @brief Canonical status codes shared across the ModbusCore v1.0 runtime.
  *
  * All library functions that can fail return a mbc_status_t code.
  * Use mbc_status_is_ok() to check for success.

@@ -7,7 +7,7 @@ nav_order: 3
 # Quick Start Guide
 {: .no_toc }
 
-Get up and running with ModbusCore v3.0 in minutes
+Get up and running with ModbusCore v1.0 in minutes
 {: .fs-6 .fw-300 }
 
 ## Table of Contents

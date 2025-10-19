@@ -7,7 +7,7 @@ nav_order: 2
 # Architecture Overview
 {: .no_toc }
 
-Understanding the ModbusCore v3.0 layered architecture
+Understanding the ModbusCore v1.0 layered architecture
 {: .fs-6 .fw-300 }
 
 ## Table of Contents
@@ -20,7 +20,7 @@ Understanding the ModbusCore v3.0 layered architecture
 
 ## Design Philosophy
 
-ModbusCore v3.0 is built on three core principles:
+ModbusCore v1.0 is built on three core principles:
 
 1. **Separation of Concerns** – Each layer has a single, well-defined responsibility
 2. **Dependency Injection** – Components receive their dependencies, not hardcoded
@@ -323,7 +323,7 @@ if (mbc_engine_take_pdu(&engine, &response)) {
 mb_client_t *client = mb_tcp_connect("192.168.1.10", 502);
 ```
 
-**After (v3.0):**
+**After (v1.0):**
 ```c
 // Injected dependencies
 mbc_transport_iface_t transport = create_tcp_transport(...);

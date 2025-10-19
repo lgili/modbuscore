@@ -4,7 +4,7 @@ title: Home
 nav_order: 1
 ---
 
-# ModbusCore v3.0
+# ModbusCore v1.0
 {: .fs-9 }
 
 Modern, lightweight, dependency-injection-based Modbus protocol stack
@@ -15,9 +15,9 @@ Modern, lightweight, dependency-injection-based Modbus protocol stack
 
 ---
 
-## 🚀 What is ModbusCore v3.0?
+## 🚀 What is ModbusCore v1.0?
 
-**ModbusCore v3.0** is a complete rewrite of the Modbus protocol stack, designed with modern software architecture principles:
+**ModbusCore v1.0** is a complete rewrite of the Modbus protocol stack, designed with modern software architecture principles:
 
 ✅ **Dependency Injection** – Testable, modular, and flexible
 ✅ **Zero Dependencies** – Pure C11, runs anywhere
@@ -84,7 +84,7 @@ Then run the example client:
 
 **Expected Output:**
 ```
-=== ModbusCore v3.0 - TCP Client Example (FC03) ===
+=== ModbusCore v1.0 - TCP Client Example (FC03) ===
 
 Step 1: Creating TCP transport...
 ✓ Connected to 127.0.0.1:5502
@@ -277,7 +277,7 @@ mbc_posix_tcp_destroy(tcp_ctx);
 
 ## 🏗️ Project Status
 
-ModbusCore v3.0 is being developed in phases:
+ModbusCore v1.0 is being developed in phases:
 
 | Phase | Description | Status |
 |-------|-------------|--------|

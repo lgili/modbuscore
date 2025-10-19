@@ -1,4 +1,4 @@
-# ModbusCore 3.0 – Plano de Iterações (Atualizado)
+# ModbusCore 1.0 – Plano de Iterações (Atualizado)
 
 Este arquivo acompanha o progresso incremental da nova implementação.  
 O roadmap completo está em `roadmap.md`; aqui focamos no curto prazo.

@@ -1,4 +1,4 @@
-# ModbusCore v3.0 - Quick Start Guide
+# ModbusCore v1.0 - Quick Start Guide
 
 ## Compilar e Testar (5 minutos)
 
@@ -97,7 +97,7 @@ cd build/tests
 
 Saída esperada:
 ```
-=== ModbusCore v3.0 - TCP Client Example (FC03) ===
+=== ModbusCore v1.0 - TCP Client Example (FC03) ===
 
 Step 1: Creating TCP transport...
 ✓ Connected to 127.0.0.1:5502

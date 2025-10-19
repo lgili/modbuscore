@@ -8,7 +8,7 @@
  * This driver implements the mbc_transport_iface_t interface using POSIX TCP
  * sockets in non-blocking mode. Suitable for desktop/server clients and servers.
  *
- * Current limitations (v3.0):
+ * Current limitations (v1.0):
  * - No TLS/SSL support (to be added in Phase 7)
  * - No automatic reconnection (implement later if needed)
  * - Client-only (multi-connection server support comes later)

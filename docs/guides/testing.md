@@ -8,7 +8,7 @@ nav_order: 1
 # Testing Guide
 {: .no_toc }
 
-How to test ModbusCore v3.0 and your own applications
+How to test ModbusCore v1.0 and your own applications
 {: .fs-6 .fw-300 }
 
 ## Table of Contents
@@ -115,7 +115,7 @@ cd build/tests
 
 **Expected Output:**
 ```
-=== ModbusCore v3.0 - TCP Client Example (FC03) ===
+=== ModbusCore v1.0 - TCP Client Example (FC03) ===
 
 Step 1: Creating TCP transport...
 ✓ Connected to 127.0.0.1:5502
@@ -238,6 +238,23 @@ add_executable(my_fc06_test my_fc06_test.c)
 target_link_libraries(my_fc06_test PRIVATE modbuscore)
 add_test(NAME my_fc06_test COMMAND my_fc06_test)
 ```
+
+---
+
+## Formatting & Static Analysis
+
+Consistência de estilo ajuda a manter o repositório saudável:
+
+```bash
+# Ajuste formatação antes de commitar
+clang-format -i src/transport/posix_tcp.c include/modbuscore/transport/posix_tcp.h
+
+# Rodar clang-tidy (adicione include paths conforme necessário)
+clang-tidy src/protocol/engine.c -- -Iinclude -std=c17
+```
+
+Ambos utilizam `.clang-format` e `.clang-tidy` fornecidos no repositório. Em CI
+executamos as mesmas configurações; rodá-las localmente evita divergências.
 
 ---
 

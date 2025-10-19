@@ -1,4 +1,4 @@
-# ModbusCore v3.0
+# ModbusCore v1.0
 
 <div align="center">
 
@@ -15,9 +15,9 @@
 
 ---
 
-## ✨ What's New in v3.0?
+## ✨ What's New in v1.0?
 
-ModbusCore v3.0 is a **complete rewrite** focused on modern software architecture:
+ModbusCore v1.0 is a **complete rewrite** focused on modern software architecture:
 
 - 🏗️ **Dependency Injection** – Testable, modular, flexible design
 - 🧩 **Layered Architecture** – Clear separation of concerns
@@ -224,6 +224,23 @@ python3 tests/simple_tcp_server.py
 
 ---
 
+## 🧰 Code Style & Lint
+
+Use the provided LLVM-based configuration before committing changes:
+
+```bash
+# format C sources/headers
+clang-format -i src/protocol/engine.c include/modbuscore/protocol/engine.h
+
+# run clang-tidy analysis (add include paths after `--`)
+clang-tidy src/protocol/engine.c -- -Iinclude -std=c17
+```
+
+Ambos usam as configurações de `.clang-format` e `.clang-tidy`. A pipeline de CI
+também consome esses arquivos, então rodar localmente evita divergências.
+
+---
+
 ## 🎓 Examples
 
 ### Included Examples
@@ -332,7 +349,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-ModbusCore v3.0 is built with inspiration from:
+ModbusCore v1.0 is built with inspiration from:
 
 - **Clean Architecture** – Robert C. Martin
 - **Dependency Injection** – Design Patterns

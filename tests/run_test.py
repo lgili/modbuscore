@@ -30,7 +30,7 @@ def main():
     client_path = os.path.join(build_dir, 'tests', 'example_tcp_client_fc03')
     server_path = os.path.join(script_dir, 'simple_tcp_server.py')
 
-    print("=== ModbusCore v3.0 - Integration Test ===\n")
+    print("=== ModbusCore v1.0 - Integration Test ===\n")
 
     # Check if client exists
     if not os.path.exists(client_path):

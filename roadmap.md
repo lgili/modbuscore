@@ -1,4 +1,4 @@
-# ModbusCore 3.0 – Roadmap para Reimplementação do Zero
+# ModbusCore 1.0 – Roadmap para Reimplementação do Zero
 
 Este documento descreve o plano completo para reconstruir a biblioteca ModbusCore do zero, garantindo API unificada, portabilidade total e arquitetura baseada em injeção de dependências. Cada fase possui objetivos, entregáveis obrigatórios e critérios de saída antes de avançar.
 
@@ -128,16 +128,18 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
 
 ---
 
-## Fase 6 – Compatibilidade & Migração
+## Fase 6 – Migração e Limpeza
 
-- **Objetivo**: Garantir caminho de migração da base atual para a 3.0.
+- **Objetivo**: Declarar oficialmente a versão 1.0 (DI) como API suportada e
+  remover artefatos legados.
 - **Entregáveis**:
-  - Camada de compatibilidade (wrappers) com warnings controlados.
-  - Guia de migração detalhado (API antiga → nova API DI).
-  - Ferramenta de lint/análise apontando usos obsoletos.
+  - Documentação “Breaking Changes” explicando a transição para 1.0.
+  - Limpeza completa da pasta `bak/` e de referências à API antiga.
+  - Checklist para quem está adotando a 1.0 do zero (sem compat layer).
 - **Critério de saída**:
-  - Conjunto de projetos reais migrados com sucesso.
-  - CI comparando comportamento das duas versões (paridade funcional).
+  - Repositório sem código 2.x.
+  - README/Quick Start destacam apenas a API moderna.
+  - Roadmap atualizado refletindo o abandono da compat layer.
 
 ---
 
@@ -164,7 +166,7 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
   - Política de versionamento semântico e suporte LTS.
   - Backlog público de features e roadmap pós-lançamento.
 - **Critério de saída**:
-  - Lançamento da versão 3.0 (release notes, changelog, anúncio).
+  - Lançamento da versão 1.0 (release notes, changelog, anúncio).
   - Acordo de suporte com comunidade / equipes internas.
 
 ---

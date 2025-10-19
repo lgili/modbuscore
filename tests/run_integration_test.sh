@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_ROOT/build"
 
-echo "=== ModbusCore v3.0 - Integration Test ==="
+echo "=== ModbusCore v1.0 - Integration Test ==="
 echo ""
 
 # Servidor simples não precisa de pymodbus - usa sockets Python puros

@@ -8,14 +8,14 @@ has_children: true
 # API Reference
 {: .no_toc }
 
-Complete function-level documentation for ModbusCore v3.0
+Complete function-level documentation for ModbusCore v1.0
 {: .fs-6 .fw-300 }
 
 ---
 
 ## Overview
 
-This section provides detailed API documentation for all public functions in ModbusCore v3.0. Each page includes function signatures, parameters, return values, examples, and best practices.
+This section provides detailed API documentation for all public functions in ModbusCore v1.0. Each page includes function signatures, parameters, return values, examples, and best practices.
 
 ---
 

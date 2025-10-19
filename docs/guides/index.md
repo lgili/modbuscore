@@ -8,7 +8,7 @@ has_children: true
 # Guides
 {: .no_toc }
 
-Practical guides for using ModbusCore v3.0
+Practical guides for using ModbusCore v1.0
 {: .fs-6 .fw-300 }
 
 ---

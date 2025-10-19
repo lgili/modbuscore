@@ -1,4 +1,4 @@
-# ModbusCore v3.0 - Deployment Guide
+# ModbusCore v1.0 - Deployment Guide
 
 ## Documentation Website Deployment
 
@@ -305,7 +305,7 @@ If you encounter issues:
 
 **Documentation Complete!** 🎉
 
-Your ModbusCore v3.0 project now has:
+Your ModbusCore v1.0 project now has:
 - Professional documentation website
 - Automated CI/CD pipeline
 - Multi-platform testing

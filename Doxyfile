@@ -1,11 +1,11 @@
-# Doxyfile for ModbusCore v3.0
+# Doxyfile for ModbusCore v1.0
 
 #---------------------------------------------------------------------------
 # Project related configuration options
 #---------------------------------------------------------------------------
 
 PROJECT_NAME           = "ModbusCore"
-PROJECT_NUMBER         = "v3.0"
+PROJECT_NUMBER         = "v1.0"
 PROJECT_BRIEF          = "Modern, lightweight Modbus protocol stack in pure C17"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = docs/api-reference
