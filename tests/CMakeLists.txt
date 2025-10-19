@@ -97,6 +97,18 @@ target_include_directories(engine_resilience_smoke PRIVATE
 
 add_test(NAME engine_resilience_smoke COMMAND engine_resilience_smoke)
 
+add_executable(engine_diagnostics_smoke
+  test_engine_diagnostics.c
+)
+
+target_link_libraries(engine_diagnostics_smoke PRIVATE ModbusCore::modbuscore)
+target_include_directories(engine_diagnostics_smoke PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+add_test(NAME engine_diagnostics_smoke COMMAND engine_diagnostics_smoke)
+
 add_executable(protocol_engine_smoke
   test_protocol_engine.c
 )

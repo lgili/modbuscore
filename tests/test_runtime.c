@@ -13,6 +13,14 @@ typedef struct {
     char last_message[64];
 } log_capture_t;
 
+typedef struct {
+    int count;
+    mbc_diag_severity_t last_severity;
+    char last_component[32];
+    char last_message[64];
+    uint32_t last_code;
+} diag_capture_t;
+
 static uint64_t fake_now(void* ctx)
 {
     uint64_t* counter = (uint64_t*)ctx;
@@ -45,12 +53,29 @@ static void fake_free(void* ctx, void* ptr)
     free(ptr);
 }
 
+static void fake_diag_emit(void* ctx, const mbc_diag_event_t* event)
+{
+    diag_capture_t* capture = (diag_capture_t*)ctx;
+    capture->count++;
+    capture->last_severity = event ? event->severity : MBC_DIAG_SEVERITY_TRACE;
+    capture->last_code = event ? event->code : 0U;
+    if (event && event->component) {
+        strncpy(capture->last_component, event->component, sizeof(capture->last_component) - 1U);
+        capture->last_component[sizeof(capture->last_component) - 1U] = '\0';
+    }
+    if (event && event->message) {
+        strncpy(capture->last_message, event->message, sizeof(capture->last_message) - 1U);
+        capture->last_message[sizeof(capture->last_message) - 1U] = '\0';
+    }
+}
+
 static void test_runtime_init_direct(void)
 {
     printf("[test_runtime_init_direct] START\n");
     mbc_runtime_t runtime = {0};
     uint64_t counter = 0U;
     log_capture_t logs = {0};
+    diag_capture_t diag = {0};
     mbc_transport_iface_t transport = {0};
     mbc_mock_transport_t* mock = NULL;
     printf("[test_runtime_init_direct] Creating mock transport...\n");
@@ -63,6 +88,7 @@ static void test_runtime_init_direct(void)
         .clock = {.ctx = &counter, .now_ms = fake_now},
         .allocator = {.ctx = NULL, .alloc = fake_alloc, .free = fake_free},
         .logger = {.ctx = &logs, .write = fake_logger},
+        .diag = {.ctx = &diag, .emit = fake_diag_emit},
     };
     printf("[test_runtime_init_direct] Config built, transport.ctx = %p\n", transport.ctx);
 
@@ -90,6 +116,19 @@ static void test_runtime_init_direct(void)
 
     printf("[test_runtime_init_direct] Testing double init...\n");
     assert(mbc_runtime_init(&runtime, &config) == MBC_STATUS_ALREADY_INITIALISED);
+    mbc_diag_event_t diag_event = {
+        .severity = MBC_DIAG_SEVERITY_INFO,
+        .component = "runtime",
+        .message = "initialised",
+        .fields = NULL,
+        .field_count = 0U,
+        .code = 0U,
+        .timestamp_ms = 0U,
+    };
+    deps->diag.emit(deps->diag.ctx, &diag_event);
+    assert(diag.count == 1);
+    assert(strcmp(diag.last_component, "runtime") == 0);
+    assert(strcmp(diag.last_message, "initialised") == 0);
     printf("[test_runtime_init_direct] Shutting down...\n");
     mbc_runtime_shutdown(&runtime);
     printf("[test_runtime_init_direct] Destroying mock...\n");
@@ -123,6 +162,16 @@ static void test_runtime_builder_with_defaults(void)
     assert(second >= first);
 
     deps->logger.write(deps->logger.ctx, "default", "noop");
+    mbc_diag_event_t evt = {
+        .severity = MBC_DIAG_SEVERITY_TRACE,
+        .component = "default",
+        .message = "noop",
+        .fields = NULL,
+        .field_count = 0U,
+        .code = 0U,
+        .timestamp_ms = 0U,
+    };
+    deps->diag.emit(deps->diag.ctx, &evt);
 
     mbc_runtime_shutdown(&runtime);
     mbc_mock_transport_destroy(mock);
@@ -142,11 +191,14 @@ static void test_runtime_builder_with_custom_components(void)
     log_capture_t logs = {0};
     mbc_logger_iface_t logger = {.ctx = &logs, .write = fake_logger};
     mbc_allocator_iface_t allocator = {.ctx = NULL, .alloc = fake_alloc, .free = fake_free};
+    diag_capture_t diag = {0};
+    mbc_diag_sink_iface_t diag_sink = {.ctx = &diag, .emit = fake_diag_emit};
 
     mbc_runtime_builder_with_transport(&builder, &transport);
     mbc_runtime_builder_with_clock(&builder, &clock);
     mbc_runtime_builder_with_logger(&builder, &logger);
     mbc_runtime_builder_with_allocator(&builder, &allocator);
+    mbc_runtime_builder_with_diag(&builder, &diag_sink);
 
     mbc_runtime_t runtime = {0};
     assert(mbc_runtime_builder_build(&builder, &runtime) == MBC_STATUS_OK);
@@ -159,6 +211,21 @@ static void test_runtime_builder_with_custom_components(void)
     assert(logs.count == 1);
     assert(strcmp(logs.last_category, "io") == 0);
     assert(strcmp(logs.last_message, "ready") == 0);
+    mbc_diag_event_t diag_evt = {
+        .severity = MBC_DIAG_SEVERITY_WARNING,
+        .component = "io",
+        .message = "ready",
+        .fields = NULL,
+        .field_count = 0U,
+        .code = 7U,
+        .timestamp_ms = 123U,
+    };
+    deps->diag.emit(deps->diag.ctx, &diag_evt);
+    assert(diag.count == 1);
+    assert(diag.last_severity == MBC_DIAG_SEVERITY_WARNING);
+    assert(diag.last_code == 7U);
+    assert(strcmp(diag.last_component, "io") == 0);
+    assert(strcmp(diag.last_message, "ready") == 0);
 
     mbc_runtime_shutdown(&runtime);
     mbc_mock_transport_destroy(mock);

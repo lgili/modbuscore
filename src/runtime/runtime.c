@@ -33,6 +33,10 @@ static mbc_status_t validate_config(const mbc_runtime_config_t* config)
         return MBC_STATUS_INVALID_ARGUMENT;
     }
 
+    if (!config->diag.emit) {
+        return MBC_STATUS_INVALID_ARGUMENT;
+    }
+
     return MBC_STATUS_OK;
 }
 

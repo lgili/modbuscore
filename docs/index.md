@@ -158,7 +158,7 @@ mbc_runtime_builder_t builder;
 mbc_runtime_builder_init(&builder);
 mbc_runtime_builder_with_transport(&builder, &transport);
 
-// Build runtime (auto-fills clock, allocator, logger with defaults)
+// Build runtime (auto-fills clock, allocator, logger, diagnostics with defaults)
 mbc_runtime_t runtime;
 status = mbc_runtime_builder_build(&builder, &runtime);
 ```
@@ -176,6 +176,17 @@ mbc_engine_config_t engine_config = {
 
 status = mbc_engine_init(&engine, &engine_config);
 ```
+
+### Step 5b: Stream Diagnostics Telemetry
+
+For a concrete walkthrough of structured telemetry (Phase 7), compile and run:
+
+```bash
+cmake --build build --target modbus_tcp_diagnostics
+./build/examples/modbus_tcp_diagnostics 127.0.0.1 1502
+```
+
+The program attempts a simple FC03 request and prints every diagnostics event emitted by the runtime and engine (state transitions, transport issues, timeouts, etc.). Point it at a live server to observe success traces or leave the port closed to see how failures surface with structured metadata.
 
 ### Step 5: Build and Send Request
 

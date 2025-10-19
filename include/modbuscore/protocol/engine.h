@@ -79,6 +79,7 @@ typedef struct mbc_engine {
     mbc_framing_mode_t framing;         /**< Framing mode */
     const mbc_runtime_t* runtime;       /**< Runtime reference */
     mbc_transport_iface_t transport;    /**< Transport interface */
+    mbc_diag_sink_iface_t diag;         /**< Diagnostics sink */
     bool initialised;                   /**< Initialization flag */
     mbc_engine_event_fn event_cb;       /**< Event callback */
     void* event_ctx;                    /**< Event callback context */

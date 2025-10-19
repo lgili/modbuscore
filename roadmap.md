@@ -151,6 +151,7 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
     - TLS / DTLS (quando aplicável).
     - Modo “managed auto-heal” (retries, debouncing, circuit-breaker).
     - Diagnósticos avançados (Eventos, logs estruturados, tracing).
+      - ⚙️ `mbc_diag_sink` integrado ao runtime; engine já emite eventos estruturados.
   - Testes de fuzzing e fault-injection integrados.
 - **Critério de saída**:
   - Cobertura de fuzz nos parsers > 1B execs sem falha.

@@ -29,3 +29,11 @@ target_link_libraries(modbus_rtu_client PRIVATE ModbusCore::modbuscore)
 target_include_directories(modbus_rtu_client PRIVATE
   ${PROJECT_SOURCE_DIR}/include
 )
+
+add_executable(modbus_tcp_diagnostics
+  tcp_diagnostics.c
+)
+target_link_libraries(modbus_tcp_diagnostics PRIVATE ModbusCore::modbuscore)
+target_include_directories(modbus_tcp_diagnostics PRIVATE
+  ${PROJECT_SOURCE_DIR}/include
+)

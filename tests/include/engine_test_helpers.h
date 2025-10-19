@@ -20,8 +20,9 @@ typedef struct engine_test_env {
     mbc_engine_event_type_t last_event;
 } engine_test_env_t;
 
-static inline void engine_test_env_init(engine_test_env_t* env,
-                                        const mbc_mock_transport_config_t* config)
+static inline void engine_test_env_init_with_diag(engine_test_env_t* env,
+                                                  const mbc_mock_transport_config_t* config,
+                                                  const mbc_diag_sink_iface_t* diag_sink)
 {
     *env = (engine_test_env_t){0};
 
@@ -36,8 +37,17 @@ static inline void engine_test_env_init(engine_test_env_t* env,
     mbc_runtime_builder_t builder;
     mbc_runtime_builder_init(&builder);
     mbc_runtime_builder_with_transport(&builder, &env->transport);
+    if (diag_sink) {
+        mbc_runtime_builder_with_diag(&builder, diag_sink);
+    }
     status = mbc_runtime_builder_build(&builder, &env->runtime);
     assert(mbc_status_is_ok(status));
+}
+
+static inline void engine_test_env_init(engine_test_env_t* env,
+                                        const mbc_mock_transport_config_t* config)
+{
+    engine_test_env_init_with_diag(env, config, NULL);
 }
 
 static inline void engine_test_env_shutdown(engine_test_env_t* env)

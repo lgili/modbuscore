@@ -61,7 +61,7 @@ ModbusCore v1.0 is built on three core principles:
 │                 Runtime Layer                        │
 │  • Dependency container (DI)                        │
 │  • Transport interface                              │
-│  • Clock, allocator, logger interfaces             │
+│  • Clock, allocator, logger, diagnostics interfaces│
 └─────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────┐
@@ -115,7 +115,7 @@ typedef struct mbc_transport_iface {
 mbc_runtime_builder_t builder;
 mbc_runtime_builder_init(&builder);
 mbc_runtime_builder_with_transport(&builder, &transport);  // Required
-// Clock, allocator, logger auto-filled with defaults
+// Clock, allocator, logger, diagnostics auto-filled with defaults
 
 mbc_runtime_t runtime;
 mbc_runtime_builder_build(&builder, &runtime);
@@ -126,6 +126,7 @@ mbc_runtime_builder_build(&builder, &runtime);
 - **Clock** (optional, defaults to system time)
 - **Allocator** (optional, defaults to malloc/free)
 - **Logger** (optional, defaults to no-op)
+- **Diagnostics sink** (optional, defaults to no-op trace)
 
 ---
 
