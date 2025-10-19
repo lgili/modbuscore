@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+"""Wrapper script for the ModbusCore CLI."""
+
+import os
+import sys
+from pathlib import Path
+
+
+def _bootstrap() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    tools_dir = repo_root / "tools"
+    if str(tools_dir) not in sys.path:
+        sys.path.insert(0, str(tools_dir))
+
+
+def main() -> int:
+    _bootstrap()
+    from modbus_cli.cli import main as cli_main
+
+    return cli_main()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

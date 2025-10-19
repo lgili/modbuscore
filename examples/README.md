@@ -26,6 +26,9 @@ cmake --build build --target modbus_tcp_server modbus_tcp_client modbus_rtu_serv
 
 Executables are emitted under `build/examples/`.
 
+> 💡 **CLI alternativa:** você pode usar `./scripts/modbus new app ...` para
+> gerar rapidamente um projeto customizado (ver [docs/cli/modbus_cli_design.md](../docs/cli/modbus_cli_design.md)).
+
 ## TCP Examples
 
 1. Start the server (default port 15020, unit 0x11):

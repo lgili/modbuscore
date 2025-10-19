@@ -26,7 +26,31 @@ Get up and running with ModbusCore v3.0 in minutes
 - **CMake** 3.15 or higher
 - **Python 3** (optional, for running test servers)
 
-### Method 1: Clone and Build
+### Method 1: Scaffold with the CLI (novo)
+
+Use a CLI gerada na Fase 5 para criar um projeto completo em segundos. O script
+está em `scripts/modbus` e roda direto pelo Python:
+
+```bash
+git clone https://github.com/lgili/modbuscore.git
+cd modbuscore
+
+# gera um cliente TCP básico em ./my_modbus_app
+./scripts/modbus new app my_modbus_app --transport tcp --unit 17
+
+cd my_modbus_app
+cmake -S . -B build
+cmake --build build
+```
+
+Troque `--transport tcp` por `--transport rtu` se quiser um esqueleto Modbus RTU.
+O código gerado inicializa runtime + engine e deixa comentários indicando onde
+enviar PDUs; é um ótimo ponto de partida para integrações rápidas.
+
+> Dica: execute `./scripts/modbus doctor` na raiz do repositório para validar se
+> `cmake`, compilador e demais dependências estão disponíveis antes de compilar.
+
+### Method 2: Clone and Build Manual
 
 ```bash
 # Clone the repository
@@ -46,7 +70,7 @@ make
 ctest --output-on-failure
 ```
 
-### Method 2: Add as CMake Submodule
+### Method 3: Add as CMake Submodule
 
 ```bash
 # In your project directory
@@ -61,7 +85,7 @@ add_subdirectory(external/modbuscore)
 target_link_libraries(your_app PRIVATE modbuscore)
 ```
 
-### Method 3: CMake FetchContent
+### Method 4: CMake FetchContent
 
 ```cmake
 include(FetchContent)

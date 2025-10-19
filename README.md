@@ -9,7 +9,7 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%7C%20Embedded-blue)](docs/quick-start.md)
 [![Documentation](https://img.shields.io/badge/docs-github.io-green.svg)](https://lgili.github.io/modbuscore)
 
-[Quick Start](docs/quick-start.md) • [Documentation](https://lgili.github.io/modbuscore) • [Examples](tests/example_tcp_client_fc03.c) • [API Reference](docs/api/)
+[Quick Start](docs/quick-start.md) • [Documentation](https://lgili.github.io/modbuscore) • [Examples](tests/example_tcp_client_fc03.c) • [CLI](docs/cli/modbus_cli_design.md) • [API Reference](docs/api/)
 
 </div>
 

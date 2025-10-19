@@ -1,3 +1,5 @@
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 add_executable(runtime_smoke
   test_runtime.c
 )
@@ -118,6 +120,10 @@ target_include_directories(pdu_smoke PRIVATE
 )
 
 add_test(NAME pdu_smoke COMMAND pdu_smoke)
+
+add_test(NAME modbus_cli_sanity
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Testing/modbus_cli_sanity.py
+)
 
 # Example: End-to-end TCP client with FC03 (POSIX only - uses unistd.h and usleep)
 if(NOT WIN32)
