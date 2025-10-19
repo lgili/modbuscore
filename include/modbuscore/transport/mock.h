@@ -3,13 +3,12 @@
 
 /**
  * @file mock.h
- * @brief Transporte mock determinístico para testes da ModbusCore.
+ * @brief Deterministic mock transport for ModbusCore testing.
  *
- * O objetivo deste driver é permitir simulações de rede 100% controladas,
- * incluindo latências configuráveis para envio/recebimento e avanço manual
- * do relógio monotônico. Nenhuma chamada bloqueia; todos os dados são
- * armazenados em filas internas e podem ser inspecionados ou entregues sob
- * demanda pelos testes.
+ * The goal of this driver is to enable 100% controlled network simulations,
+ * including configurable latencies for send/receive and manual advancement
+ * of the monotonic clock. No calls block; all data is stored in internal
+ * queues and can be inspected or delivered on demand by tests.
  */
 
 #include <modbuscore/common/status.h>
@@ -23,120 +22,120 @@ extern "C" {
 #endif
 
 /**
- * @brief Configuração opcional para o mock de transporte.
+ * @brief Optional configuration for the mock transport.
  *
- * Todos os campos são opcionais e default para 0 caso @p config seja NULL
- * em mbc_mock_transport_create().
+ * All fields are optional and default to 0 if @p config is NULL
+ * in mbc_mock_transport_create().
  */
 typedef struct mbc_mock_transport_config {
-    uint32_t initial_now_ms;   /**< Timestamp inicial do relógio interno (default 0). */
-    uint32_t send_latency_ms;  /**< Latência aplicada a cada envio antes de ficar disponível aos
-                                  testes. */
-    uint32_t recv_latency_ms;  /**< Latência base aplicada a frames enfileirados via schedule
+    uint32_t initial_now_ms;   /**< Initial timestamp of internal clock (default 0). */
+    uint32_t send_latency_ms;  /**< Latency applied to each send before becoming available to
+                                  tests. */
+    uint32_t recv_latency_ms;  /**< Base latency applied to frames enqueued via schedule
                                   (default 0). */
-    uint32_t yield_advance_ms; /**< Incremento de tempo aplicado ao chamar yield (default 0 = não
-                                  avança). */
+    uint32_t yield_advance_ms; /**< Time increment applied when calling yield (default 0 = no
+                                  advance). */
 } mbc_mock_transport_config_t;
 
 /**
- * @brief Contexto opaco do mock (definido internamente).
+ * @brief Opaque mock context (defined internally).
  */
 typedef struct mbc_mock_transport mbc_mock_transport_t;
 
 /**
- * @brief Instancia o transporte mock e preenche uma interface ModbusCore.
+ * @brief Instantiate the mock transport and fill a ModbusCore interface.
  *
- * @param config Configuração opcional (NULL usa defaults).
- * @param out_iface Interface de transporte preenchida na saída.
- * @param out_ctx Contexto interno alocado (use destroy ao final).
+ * @param config Optional configuration (NULL uses defaults).
+ * @param out_iface Transport interface filled on output.
+ * @param out_ctx Allocated internal context (use destroy when done).
  *
- * @return MBC_STATUS_OK em sucesso ou código de erro correspondente.
+ * @return MBC_STATUS_OK on success or corresponding error code.
  */
 mbc_status_t mbc_mock_transport_create(const mbc_mock_transport_config_t* config,
                                        mbc_transport_iface_t* out_iface,
                                        mbc_mock_transport_t** out_ctx);
 
 /**
- * @brief Destrói o mock liberando todos os recursos alocados.
+ * @brief Destroy the mock, releasing all allocated resources.
  */
 void mbc_mock_transport_destroy(mbc_mock_transport_t* ctx);
 
 /**
- * @brief Reinicia o mock para o estado inicial, descartando filas e
- *        voltando o relógio para @ref mbc_mock_transport_config::initial_now_ms.
+ * @brief Reset the mock to initial state, discarding queues and
+ *        returning clock to @ref mbc_mock_transport_config::initial_now_ms.
  */
 void mbc_mock_transport_reset(mbc_mock_transport_t* ctx);
 
 /**
- * @brief Avança o relógio interno em @p delta_ms milissegundos.
+ * @brief Advance the internal clock by @p delta_ms milliseconds.
  */
 void mbc_mock_transport_advance(mbc_mock_transport_t* ctx, uint32_t delta_ms);
 
 /**
- * @brief Agenda dados para serem recebidos pelo próximo mbc_transport_receive().
+ * @brief Schedule data to be received by the next mbc_transport_receive().
  *
- * Os bytes serão disponibilizados após `config->recv_latency_ms + delay_ms`.
+ * Bytes will be available after `config->recv_latency_ms + delay_ms`.
  *
- * @param ctx Mock previamente criado.
- * @param data Buffer de dados a ser copiado para a fila.
- * @param length Quantidade de bytes (deve ser > 0).
- * @param delay_ms Latência adicional antes dos dados ficarem prontos.
+ * @param ctx Previously created mock.
+ * @param data Data buffer to be copied to the queue.
+ * @param length Number of bytes (must be > 0).
+ * @param delay_ms Additional latency before data becomes ready.
  *
- * @return MBC_STATUS_OK em sucesso, MBC_STATUS_NO_RESOURCES se memória esgotar,
- *         ou MBC_STATUS_INVALID_ARGUMENT se parâmetros forem inválidos.
+ * @return MBC_STATUS_OK on success, MBC_STATUS_NO_RESOURCES if memory exhausted,
+ *         or MBC_STATUS_INVALID_ARGUMENT if parameters are invalid.
  */
 mbc_status_t mbc_mock_transport_schedule_rx(mbc_mock_transport_t* ctx, const uint8_t* data,
                                             size_t length, uint32_t delay_ms);
 
 /**
- * @brief Recupera o próximo frame transmitido, se já estiver disponível.
+ * @brief Retrieve the next transmitted frame, if already available.
  *
- * @param ctx Mock previamente criado.
- * @param buffer Buffer destino para cópia (não pode ser NULL).
- * @param capacity Capacidade do buffer destino.
- * @param out_length Número de bytes copiados. Definido como 0 se nada pronto.
+ * @param ctx Previously created mock.
+ * @param buffer Destination buffer for copy (must not be NULL).
+ * @param capacity Destination buffer capacity.
+ * @param out_length Number of bytes copied. Set to 0 if nothing ready.
  *
- * @return MBC_STATUS_OK em sucesso,
- *         MBC_STATUS_NO_RESOURCES se @p capacity for insuficiente,
- *         MBC_STATUS_INVALID_ARGUMENT para parâmetros inválidos.
+ * @return MBC_STATUS_OK on success,
+ *         MBC_STATUS_NO_RESOURCES if @p capacity is insufficient,
+ *         MBC_STATUS_INVALID_ARGUMENT for invalid parameters.
  */
 mbc_status_t mbc_mock_transport_fetch_tx(mbc_mock_transport_t* ctx, uint8_t* buffer,
                                          size_t capacity, size_t* out_length);
 
 /**
- * @brief Informa quantos frames aguardam entrega no RX.
+ * @brief Report how many frames are waiting for RX delivery.
  */
 size_t mbc_mock_transport_pending_rx(const mbc_mock_transport_t* ctx);
 
 /**
- * @brief Informa quantos frames transmitidos aguardam coleta pelos testes.
+ * @brief Report how many transmitted frames are waiting to be collected by tests.
  */
 size_t mbc_mock_transport_pending_tx(const mbc_mock_transport_t* ctx);
 
 /**
- * @brief Ajusta o estado de conexão do mock (true = conectado).
+ * @brief Set the connection state of the mock (true = connected).
  *
- * Quando desconectado, operações de send/receive retornam MBC_STATUS_IO_ERROR.
+ * When disconnected, send/receive operations return MBC_STATUS_IO_ERROR.
  */
 void mbc_mock_transport_set_connected(mbc_mock_transport_t* ctx, bool connected);
 
 /**
- * @brief Faz com que a próxima chamada a send retorne @p status sem enfileirar dados.
+ * @brief Make the next send call return @p status without enqueuing data.
  */
 void mbc_mock_transport_fail_next_send(mbc_mock_transport_t* ctx, mbc_status_t status);
 
 /**
- * @brief Faz com que a próxima chamada a receive retorne @p status.
+ * @brief Make the next receive call return @p status.
  */
 void mbc_mock_transport_fail_next_receive(mbc_mock_transport_t* ctx, mbc_status_t status);
 
 /**
- * @brief Descarta o próximo frame pendente de RX (independente de estar pronto).
+ * @brief Discard the next pending RX frame (regardless of ready state).
  */
 mbc_status_t mbc_mock_transport_drop_next_rx(mbc_mock_transport_t* ctx);
 
 /**
- * @brief Descarta o próximo frame pendente de TX (antes de fetch).
+ * @brief Discard the next pending TX frame (before fetch).
  */
 mbc_status_t mbc_mock_transport_drop_next_tx(mbc_mock_transport_t* ctx);
 

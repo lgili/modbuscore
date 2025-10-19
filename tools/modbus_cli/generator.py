@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from textwrap import dedent
+from textwrap import dedent, indent
 from typing import Dict, Optional
 
 
@@ -22,6 +22,15 @@ class AppConfig:
     overwrite: bool
     template_overrides: Optional[Dict[str, object]] = None
     extra_readme: Optional[str] = None
+    autoheal: Optional["AutoHealOptions"] = None
+
+
+@dataclass(frozen=True)
+class AutoHealOptions:
+    max_retries: int = 3
+    initial_backoff_ms: int = 100
+    max_backoff_ms: int = 1000
+    cooldown_ms: int = 5000
 
 
 TCP_MAIN_TEMPLATE = """\
@@ -33,6 +42,7 @@ TCP_MAIN_TEMPLATE = """\
 #include <modbuscore/transport/posix_tcp.h>
 #endif
 
+{autoheal_includes}
 #include <stdio.h>
 
 #define MODBUS_HOST "{host}"
@@ -103,6 +113,7 @@ int main(void)
         return 1;
     }}
 
+{autoheal_section}
     printf("TODO: submit Modbus/TCP requests here (unit %u).\\n", (unsigned)MODBUS_UNIT);
 
     mbc_engine_shutdown(&engine);
@@ -126,6 +137,7 @@ RTU_MAIN_TEMPLATE = """\
 #include <modbuscore/transport/posix_rtu.h>
 #endif
 
+{autoheal_includes}
 #include <stdio.h>
 
 #define MODBUS_UNIT {unit}
@@ -209,6 +221,7 @@ int main(void)
         return 1;
     }}
 
+{autoheal_section}
     printf("TODO: submit Modbus/RTU requests here (unit %u).\\n", (unsigned)MODBUS_UNIT);
 
     mbc_engine_shutdown(&engine);
@@ -264,6 +277,7 @@ Edite `src/main.c` para ajustar host/porta (TCP) ou dispositivo/bps (RTU) e incl
 o fluxo de envio de requisições. O código gerado inicializa `mbc_runtime_builder`
 e `mbc_engine`, deixa preparado para você enviar PDUs com `mbc_engine_submit_request`
 e processar respostas com `mbc_engine_step`.
+{autoheal_note}
 """
 
 
@@ -280,6 +294,7 @@ class ProfileDefinition:
     template_overrides: Dict[str, object]
     extra_readme: str
     unit: int = 17
+    autoheal: Optional[AutoHealOptions] = None
 
 
 PROFILE_DEFINITIONS: Dict[str, ProfileDefinition] = {
@@ -300,6 +315,7 @@ PROFILE_DEFINITIONS: Dict[str, ProfileDefinition] = {
             """
         ).strip(),
         unit=17,
+        autoheal=AutoHealOptions(),
     ),
     "rtu-loopback": ProfileDefinition(
         default_name="modbus_rtu_loopback",
@@ -326,8 +342,70 @@ PROFILE_DEFINITIONS: Dict[str, ProfileDefinition] = {
             """
         ).strip(),
         unit=17,
+        autoheal=AutoHealOptions(
+            max_retries=5,
+            initial_backoff_ms=200,
+            max_backoff_ms=2000,
+            cooldown_ms=8000,
+        ),
     ),
 }
+
+
+def _autoheal_snippets(options: Optional[AutoHealOptions]) -> Dict[str, str]:
+    if not options:
+        return {
+            "autoheal_includes": "",
+            "autoheal_section": "",
+            "autoheal_note": "",
+        }
+
+    includes = "#include <modbuscore/runtime/autoheal.h>\n\n"
+
+    section_body = dedent(
+        """
+        mbc_autoheal_config_t autoheal_cfg = {{
+            .runtime = &runtime,
+            .max_retries = {max_retries},
+            .initial_backoff_ms = {initial_backoff_ms},
+            .max_backoff_ms = {max_backoff_ms},
+            .cooldown_ms = {cooldown_ms},
+        }};
+
+        mbc_autoheal_supervisor_t autoheal;
+        status = mbc_autoheal_init(&autoheal, &autoheal_cfg, &engine);
+        if (!mbc_status_is_ok(status)) {{
+            fprintf(stderr, "Failed to initialise auto-heal (status=%d)\\n", status);
+        }} else {{
+            /* TODO: preparar frame e chamar mbc_autoheal_submit/step/take_pdu */
+            mbc_autoheal_shutdown(&autoheal);
+        }}
+        """
+    ).format(
+        max_retries=options.max_retries,
+        initial_backoff_ms=options.initial_backoff_ms,
+        max_backoff_ms=options.max_backoff_ms,
+        cooldown_ms=options.cooldown_ms,
+    )
+    section = indent(section_body.strip() + "\n", "    ")
+
+    note_text = dedent(
+        f"""
+        ## Auto-heal
+
+        Este projeto foi gerado com auto-heal habilitado (max_retries={options.max_retries},
+        initial_backoff_ms={options.initial_backoff_ms} ms, max_backoff_ms={options.max_backoff_ms} ms,
+        cooldown_ms={options.cooldown_ms} ms). Ajuste o bloco `mbc_autoheal_*` em `src/main.c`
+        para enviar seus frames usando o supervisor e iterar com `mbc_autoheal_step`/`mbc_autoheal_take_pdu`.
+        """
+    ).strip()
+    note = "\n" + note_text + "\n"
+
+    return {
+        "autoheal_includes": includes,
+        "autoheal_section": section,
+        "autoheal_note": note,
+    }
 
 
 def create_app_project(config: AppConfig) -> Path:
@@ -361,6 +439,8 @@ def create_app_project(config: AppConfig) -> Path:
                 "baud": 9600,
             }
         )
+    snippets = _autoheal_snippets(config.autoheal)
+    substitutions.update(snippets)
     if config.template_overrides:
         substitutions.update(config.template_overrides)
 
@@ -406,6 +486,7 @@ def create_profile_project(
     name: Optional[str],
     out_dir: Optional[Path],
     overwrite: bool,
+    autoheal: Optional[AutoHealOptions] = None,
 ) -> Path:
     definition = PROFILE_DEFINITIONS.get(profile_name)
     if not definition:
@@ -416,6 +497,8 @@ def create_profile_project(
     project_name = name or definition.default_name
     destination = out_dir or Path(project_name)
 
+    autoheal_cfg = autoheal if autoheal is not None else definition.autoheal
+
     return create_app_project(
         AppConfig(
             name=project_name,
@@ -425,5 +508,6 @@ def create_profile_project(
             overwrite=overwrite,
             template_overrides=definition.template_overrides,
             extra_readme=definition.extra_readme,
+            autoheal=autoheal_cfg,
         )
     )

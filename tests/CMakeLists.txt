@@ -109,6 +109,18 @@ target_include_directories(engine_diagnostics_smoke PRIVATE
 
 add_test(NAME engine_diagnostics_smoke COMMAND engine_diagnostics_smoke)
 
+add_executable(autoheal_smoke
+  test_autoheal.c
+)
+
+target_link_libraries(autoheal_smoke PRIVATE ModbusCore::modbuscore)
+target_include_directories(autoheal_smoke PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+add_test(NAME autoheal_smoke COMMAND autoheal_smoke)
+
 add_executable(protocol_engine_smoke
   test_protocol_engine.c
 )
@@ -149,3 +161,9 @@ if(NOT WIN32)
     ${CMAKE_CURRENT_SOURCE_DIR}/include
   )
 endif()
+
+add_test(NAME modbus_cli_scaffold
+  COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/modbus_cli/tests/test_scaffold.py
+    --repo-root ${PROJECT_SOURCE_DIR}
+    --build-root ${PROJECT_BINARY_DIR}
+)

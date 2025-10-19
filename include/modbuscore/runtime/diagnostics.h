@@ -45,20 +45,20 @@ typedef struct mbc_diag_kv {
  * @brief Structured diagnostics event.
  */
 typedef struct mbc_diag_event {
-    mbc_diag_severity_t severity;      /**< Event severity */
-    const char* component;             /**< Component or subsystem identifier */
-    const char* message;               /**< Human-readable message */
-    const mbc_diag_kv_t* fields;       /**< Optional metadata array */
-    size_t field_count;                /**< Number of metadata entries */
-    uint32_t code;                     /**< Optional numeric code (0 = none) */
-    uint64_t timestamp_ms;             /**< Event timestamp (milliseconds) */
+    mbc_diag_severity_t severity; /**< Event severity */
+    const char* component;        /**< Component or subsystem identifier */
+    const char* message;          /**< Human-readable message */
+    const mbc_diag_kv_t* fields;  /**< Optional metadata array */
+    size_t field_count;           /**< Number of metadata entries */
+    uint32_t code;                /**< Optional numeric code (0 = none) */
+    uint64_t timestamp_ms;        /**< Event timestamp (milliseconds) */
 } mbc_diag_event_t;
 
 /**
  * @brief Diagnostics sink interface.
  */
 typedef struct mbc_diag_sink_iface {
-    void* ctx; /**< User context passed to emit */
+    void* ctx;                                              /**< User context passed to emit */
     void (*emit)(void* ctx, const mbc_diag_event_t* event); /**< Emit diagnostics event */
 } mbc_diag_sink_iface_t;
 

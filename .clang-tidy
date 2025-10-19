@@ -10,7 +10,8 @@ Checks: >
   -readability-math-missing-parentheses,
   -bugprone-easily-swappable-parameters,
   -modernize-macro-to-enum,
-  -readability-function-cognitive-complexity
+  -readability-function-cognitive-complexity,
+  -readability-non-const-parameter
 WarningsAsErrors: ''
 HeaderFilterRegex: '^(include|src)/'
 FormatStyle: file

@@ -1,6 +1,6 @@
 /**
  * @file mock.c
- * @brief Implementação do transporte mock determinístico.
+ * @brief Implementation of deterministic mock transport.
  */
 
 #include <modbuscore/transport/mock.h>

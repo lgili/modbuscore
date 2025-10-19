@@ -12,10 +12,9 @@
  */
 
 #include <modbuscore/common/status.h>
+#include <modbuscore/runtime/diagnostics.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include <modbuscore/runtime/diagnostics.h>
 
 #ifdef __cplusplus
 extern "C" {

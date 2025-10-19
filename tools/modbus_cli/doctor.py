@@ -52,29 +52,29 @@ def check_python() -> CheckResult:
     major, minor, *_ = (int(part) for part in version.split("."))
     if major >= 3 and minor >= 8:
         return CheckResult("python", True, f"Python {version} (OK)")
-    return CheckResult("python", False, f"Python {version} (esperado >= 3.8)")
+    return CheckResult("python", False, f"Python {version} (expected >= 3.8)")
 
 
 def check_command(name: str, command: Optional[List[str]], hint: str) -> CheckResult:
     if not command:
-        return CheckResult(name, False, f"{hint} não encontrado no PATH")
+        return CheckResult(name, False, f"{hint} not found in PATH")
     try:
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
     except FileNotFoundError:
-        return CheckResult(name, False, f"{hint} não encontrado no PATH")
+        return CheckResult(name, False, f"{hint} not found in PATH")
 
     if completed.returncode != 0:
         return CheckResult(
             name,
             False,
-            f"Falha ao executar {' '.join(command)}",
+            f"Failed to execute {' '.join(command)}",
             detail=completed.stderr.strip(),
         )
 
     return CheckResult(
         name,
         True,
-        completed.stdout.splitlines()[0] if completed.stdout else f"{hint} encontrado",
+        completed.stdout.splitlines()[0] if completed.stdout else f"{hint} found",
     )
 
 
@@ -95,27 +95,28 @@ def check_platform_specific() -> List[CheckResult]:
     if sys.platform.startswith("win"):
         # Winsock TCP example requires Visual Studio Build Tools (cl)
         if shutil.which("cl"):
-            results.append(CheckResult("msvc", True, "cl (Visual Studio) disponível"))
+            results.append(CheckResult("msvc", True, "cl (Visual Studio) available"))
         else:
             results.append(
                 CheckResult(
                     "msvc",
                     False,
-                    "cl (Visual Studio) não encontrado",
-                    detail="Instale Visual Studio Build Tools ou use MinGW/gcc",
+                    "cl (Visual Studio) not found",
+                    detail="Optional, install Visual Studio Build Tools or use MinGW/clang",
+                    optional=True,
                 )
             )
     else:
-        # POSIX: checar presença do socat (útil para RTU loopback)
+        # POSIX: check for socat (useful for RTU loopback testing)
         if shutil.which("socat"):
-            results.append(CheckResult("socat", True, "socat disponível (útil para RTU loopback)"))
+            results.append(CheckResult("socat", True, "socat available (useful for RTU loopback)"))
         else:
             results.append(
                 CheckResult(
                     "socat",
                     False,
-                    "socat não encontrado",
-                    detail="Opcional, mas recomendado para testes RTU em loopback",
+                    "socat not found",
+                    detail="Optional, but recommended for RTU loopback testing",
                     optional=True,
                 )
             )

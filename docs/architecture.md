@@ -62,6 +62,7 @@ ModbusCore v1.0 is built on three core principles:
 │  • Dependency container (DI)                        │
 │  • Transport interface                              │
 │  • Clock, allocator, logger, diagnostics interfaces│
+│  • Auto-heal supervisor (retries/circuit breaker)  │
 └─────────────────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────┐
@@ -127,6 +128,38 @@ mbc_runtime_builder_build(&builder, &runtime);
 - **Allocator** (optional, defaults to malloc/free)
 - **Logger** (optional, defaults to no-op)
 - **Diagnostics sink** (optional, defaults to no-op trace)
+
+#### Auto-heal Supervisor
+
+O supervisor `mbc_autoheal_supervisor_t` fica acoplado ao runtime para monitorar um engine
+cliente. Ele reaplica requests que falham (timeouts, `MBC_STATUS_IO_ERROR`, busy) usando backoff
+exponencial e abre um circuito de proteção quando o limite de retries é atingido. Toda a
+telemetria segue para o `mbc_diag_sink` configurado, permitindo correlacionar tentativas,
+aberturas de circuito e respostas bem-sucedidas.
+
+```c
+mbc_autoheal_config_t heal_cfg = {
+    .runtime = &runtime,
+    .max_retries = 3,
+    .initial_backoff_ms = 50,
+    .max_backoff_ms = 500,
+    .cooldown_ms = 2000,
+};
+
+mbc_autoheal_supervisor_t supervisor;
+mbc_autoheal_init(&supervisor, &heal_cfg, &engine);
+mbc_autoheal_submit(&supervisor, request_frame, request_len);
+
+while (running) {
+    mbc_autoheal_step(&supervisor, 256);
+    if (mbc_autoheal_take_pdu(&supervisor, &pdu)) {
+        handle_response(&pdu);
+    }
+}
+```
+
+Além de expor o estado (`mbc_autoheal_state`) e eventos via `observer`, o módulo reaproveita o
+clock e o allocator do runtime para armazenar o último frame submetido, evitando cópias externas.
 
 ---
 

@@ -1,8 +1,14 @@
+/**
+ * @file winsock_tcp.c
+ * @brief Implementation of Winsock TCP transport driver for Windows.
+ */
+
 #include <modbuscore/transport/winsock_tcp.h>
 
 #ifdef _WIN32
 
 #include <stdio.h> /* For _snprintf */
+#include <stdlib.h>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -10,9 +16,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <windows.h>
 
 #pragma comment(lib, "ws2_32.lib")
 

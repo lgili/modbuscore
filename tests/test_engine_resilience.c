@@ -192,7 +192,7 @@ static void test_receive_error_then_success(void)
     mbc_mock_transport_fail_next_receive(env.mock, MBC_STATUS_IO_ERROR);
     engine_test_env_clear_events(&env);
     assert(mbc_engine_step(&engine, 4U) == MBC_STATUS_IO_ERROR);
-    assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
+    assert(engine.state == MBC_ENGINE_STATE_IDLE);
 
     uint16_t regs_err[] = {0xAABB, 0xCCDD};
     uint8_t frame[256];

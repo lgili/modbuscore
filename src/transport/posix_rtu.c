@@ -1,3 +1,8 @@
+/**
+ * @file posix_rtu.c
+ * @brief Implementation of POSIX RTU serial transport driver.
+ */
+
 /* Enable POSIX extensions for cfmakeraw, clock_gettime, nanosleep */
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L

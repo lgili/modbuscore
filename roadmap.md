@@ -150,6 +150,7 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
   - Módulos opcionais:
     - TLS / DTLS (quando aplicável).
     - Modo “managed auto-heal” (retries, debouncing, circuit-breaker).
+      - ✅ Supervisor `mbc_autoheal_supervisor_t` com backoff exponencial e circuit breaker.
     - Diagnósticos avançados (Eventos, logs estruturados, tracing).
       - ⚙️ `mbc_diag_sink` integrado ao runtime; engine já emite eventos estruturados.
   - Testes de fuzzing e fault-injection integrados.

@@ -18,7 +18,7 @@
 #include <string.h>
 
 #define MBC_EXPECTED_UNSUPPORTED ((size_t)-1)
-static const char* const ENGINE_DIAG_COMPONENT = "protocol.engine";
+#define ENGINE_DIAG_COMPONENT "protocol.engine"
 
 /* Forward declarations of private functions */
 static void emit_event(mbc_engine_t* engine, mbc_engine_event_type_t type);
@@ -253,6 +253,7 @@ mbc_status_t mbc_engine_step(mbc_engine_t* engine, size_t budget)
 
     if (!mbc_status_is_ok(status)) {
         emit_diag_status(engine, MBC_DIAG_SEVERITY_ERROR, "step_receive_failed", status);
+        enter_state(engine, MBC_ENGINE_STATE_IDLE);
         return status;
     }
 

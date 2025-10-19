@@ -292,7 +292,7 @@ static void test_engine_receive_failure(void)
     engine_test_env_clear_events(&env);
     mbc_status_t status = mbc_engine_step(&engine, frame_expected_len);
     assert(status == MBC_STATUS_IO_ERROR);
-    assert(engine.state == MBC_ENGINE_STATE_WAIT_RESPONSE);
+    assert(engine.state == MBC_ENGINE_STATE_IDLE);
     assert(env.events_total >= 1U); /* STEP_BEGIN/END still emitted */
 
     mbc_engine_shutdown(&engine);

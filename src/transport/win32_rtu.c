@@ -1,3 +1,8 @@
+/**
+ * @file win32_rtu.c
+ * @brief Implementation of Win32 RTU serial transport driver.
+ */
+
 #include <modbuscore/transport/rtu_uart.h>
 #include <modbuscore/transport/win32_rtu.h>
 

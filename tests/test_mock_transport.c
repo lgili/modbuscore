@@ -63,7 +63,7 @@ static void test_tx_flow(void)
     uint8_t out[4];
     size_t out_len = 0U;
     assert(mbc_mock_transport_fetch_tx(mock, out, sizeof(out), &out_len) == MBC_STATUS_OK);
-    assert(out_len == 0U); /* Ainda aguardando latência */
+    assert(out_len == 0U); /* Still waiting for latency */
 
     mbc_mock_transport_advance(mock, 7U);
     assert(mbc_mock_transport_fetch_tx(mock, out, sizeof(out), &out_len) == MBC_STATUS_OK);

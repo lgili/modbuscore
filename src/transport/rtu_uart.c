@@ -1,3 +1,8 @@
+/**
+ * @file rtu_uart.c
+ * @brief Implementation of RTU UART transport with hardware abstraction.
+ */
+
 #include <modbuscore/transport/rtu_uart.h>
 #include <stdlib.h>
 #include <string.h>

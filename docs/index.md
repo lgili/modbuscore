@@ -163,6 +163,16 @@ mbc_runtime_t runtime;
 status = mbc_runtime_builder_build(&builder, &runtime);
 ```
 
+### Optional: Install the CMake Package
+
+```bash
+cmake --build build
+cmake --install build --prefix <installdir>
+```
+
+Isso instala `ModbusCoreConfig.cmake` e os headers em `<installdir>`, permitindo que
+projetos externos (incluindo `modbus new ...`) encontrem o pacote via `CMAKE_PREFIX_PATH`.
+
 ### Step 4: Initialize Protocol Engine
 
 ```c
@@ -177,7 +187,7 @@ mbc_engine_config_t engine_config = {
 status = mbc_engine_init(&engine, &engine_config);
 ```
 
-### Step 5b: Stream Diagnostics Telemetry
+### Optional: Stream Diagnostics Telemetry
 
 For a concrete walkthrough of structured telemetry (Phase 7), compile and run:
 
@@ -187,6 +197,31 @@ cmake --build build --target modbus_tcp_diagnostics
 ```
 
 The program attempts a simple FC03 request and prints every diagnostics event emitted by the runtime and engine (state transitions, transport issues, timeouts, etc.). Point it at a live server to observe success traces or leave the port closed to see how failures surface with structured metadata.
+
+### Optional: Habilite o Auto-Heal
+
+```c
+mbc_autoheal_config_t heal_cfg = {
+    .runtime = &runtime,
+    .max_retries = 3,
+    .initial_backoff_ms = 100,
+    .max_backoff_ms = 1000,
+    .cooldown_ms = 5000,
+};
+
+mbc_autoheal_supervisor_t supervisor;
+mbc_autoheal_init(&supervisor, &heal_cfg, &engine);
+mbc_autoheal_submit(&supervisor, request_buffer, request_length);
+
+while (true) {
+    mbc_autoheal_step(&supervisor, 256);
+    if (mbc_autoheal_take_pdu(&supervisor, &response_pdu)) {
+        // Processa resposta...
+    }
+}
+```
+
+O supervisor reutiliza o `mbc_diag_sink`, registrando tentativas, backoffs e abertura/fechamento do circuito automaticamente.
 
 ### Step 5: Build and Send Request
 

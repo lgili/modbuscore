@@ -143,6 +143,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install clang tooling
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang clang-format clang-tidy
+
+    - name: Clang-format check
+      run: |
+        git ls-files '*.c' '*.h' | xargs clang-format --dry-run --Werror
+
+    - name: Clang-tidy
+      run: |
+        mkdir build-clangtidy
+        cd build-clangtidy
+        cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=OFF -DCMAKE_C_CLANG_TIDY="clang-tidy;-warnings-as-errors=*" ..
+        cmake --build . --target modbuscore
+
     - name: Check for Portuguese text in code
       run: |
         echo "Checking for Portuguese keywords in source files..."
@@ -181,6 +197,8 @@ jobs:
           printf '  - %s\n' "${missing_docs[@]}"
           exit 1
         fi
+
+        rm -rf build-clangtidy
 
   build-summary:
     name: Build Summary
