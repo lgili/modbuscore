@@ -16,6 +16,7 @@ class CheckResult:
     ok: bool
     message: str
     detail: Optional[str] = None
+    optional: bool = False
 
 
 def run_doctor(json_output: bool = False) -> int:
@@ -26,10 +27,15 @@ def run_doctor(json_output: bool = False) -> int:
     checks.append(check_command("c compiler", _detect_c_compiler(), "C compiler (gcc/clang/msvc)"))
     checks.extend(check_platform_specific())
 
-    has_errors = any(not c.ok for c in checks)
+    has_errors = any(not c.ok and not c.optional for c in checks)
 
     for check in checks:
-        status = "OK" if check.ok else "FAIL"
+        if check.ok:
+            status = "OK"
+        elif check.optional:
+            status = "WARN"
+        else:
+            status = "FAIL"
         print(f"[{status}] {check.name} - {check.message}")
         if check.detail:
             print(f"       {check.detail}")
@@ -110,6 +116,7 @@ def check_platform_specific() -> List[CheckResult]:
                     False,
                     "socat não encontrado",
                     detail="Opcional, mas recomendado para testes RTU em loopback",
+                    optional=True,
                 )
             )
     return results

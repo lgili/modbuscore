@@ -15,6 +15,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <modbuscore/runtime/diagnostics.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

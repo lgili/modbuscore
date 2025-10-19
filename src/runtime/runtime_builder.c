@@ -71,6 +71,18 @@ static void default_logger(void* ctx, const char* category, const char* message)
     (void)message;
 }
 
+/**
+ * @brief Default diagnostics sink (no-op implementation).
+ *
+ * @param ctx Context (unused)
+ * @param event Diagnostics event (unused)
+ */
+static void default_diag_emit(void* ctx, const mbc_diag_event_t* event)
+{
+    (void)ctx;
+    (void)event;
+}
+
 static const mbc_clock_iface_t default_clock_iface = {
     .ctx = NULL,
     .now_ms = default_clock_now,
@@ -85,6 +97,11 @@ static const mbc_allocator_iface_t default_allocator_iface = {
 static const mbc_logger_iface_t default_logger_iface = {
     .ctx = NULL,
     .write = default_logger,
+};
+
+static const mbc_diag_sink_iface_t default_diag_sink_iface = {
+    .ctx = NULL,
+    .emit = default_diag_emit,
 };
 
 void mbc_runtime_builder_init(mbc_runtime_builder_t* builder)
@@ -144,6 +161,18 @@ mbc_runtime_builder_t* mbc_runtime_builder_with_logger(mbc_runtime_builder_t* bu
     return builder;
 }
 
+mbc_runtime_builder_t* mbc_runtime_builder_with_diag(mbc_runtime_builder_t* builder,
+                                                     const mbc_diag_sink_iface_t* diag)
+{
+    if (!builder || !diag) {
+        return builder;
+    }
+
+    builder->config.diag = *diag;
+    builder->diag_set = true;
+    return builder;
+}
+
 mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t* builder, mbc_runtime_t* runtime)
 {
     if (!builder || !runtime) {
@@ -167,6 +196,11 @@ mbc_status_t mbc_runtime_builder_build(mbc_runtime_builder_t* builder, mbc_runti
     if (!builder->logger_set) {
         builder->config.logger = default_logger_iface;
         builder->logger_set = true;
+    }
+
+    if (!builder->diag_set) {
+        builder->config.diag = default_diag_sink_iface;
+        builder->diag_set = true;
     }
 
     memset(runtime, 0, sizeof(*runtime));

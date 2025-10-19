@@ -9,7 +9,8 @@
  * - Transport layer (send/receive)
  * - Clock (timestamps)
  * - Allocator (memory management)
- * - Logger (diagnostics)
+ * - Logger (legacy text diagnostics)
+ * - Structured diagnostics sink
  */
 
 #include <modbuscore/common/status.h>
@@ -29,6 +30,7 @@ typedef struct mbc_runtime_config {
     mbc_clock_iface_t clock;         /**< Clock interface for timestamps */
     mbc_allocator_iface_t allocator; /**< Memory allocator interface */
     mbc_logger_iface_t logger;       /**< Logger interface */
+    mbc_diag_sink_iface_t diag;      /**< Structured diagnostics sink */
 } mbc_runtime_config_t;
 
 /**

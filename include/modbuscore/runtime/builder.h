@@ -29,6 +29,7 @@ typedef struct mbc_runtime_builder {
     bool clock_set;              /**< True if clock has been set */
     bool allocator_set;          /**< True if allocator has been set */
     bool logger_set;             /**< True if logger has been set */
+    bool diag_set;               /**< True if diagnostics sink has been set */
 } mbc_runtime_builder_t;
 
 /**
@@ -77,6 +78,16 @@ mbc_runtime_builder_t* mbc_runtime_builder_with_allocator(mbc_runtime_builder_t*
  */
 mbc_runtime_builder_t* mbc_runtime_builder_with_logger(mbc_runtime_builder_t* builder,
                                                        const mbc_logger_iface_t* logger);
+
+/**
+ * @brief Set diagnostics sink interface (optional, defaults to no-op).
+ *
+ * @param builder Pointer to builder structure
+ * @param diag Diagnostics sink interface
+ * @return Builder pointer for chaining
+ */
+mbc_runtime_builder_t* mbc_runtime_builder_with_diag(mbc_runtime_builder_t* builder,
+                                                     const mbc_diag_sink_iface_t* diag);
 
 /**
  * @brief Build runtime from builder configuration.
