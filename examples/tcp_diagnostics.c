@@ -1,3 +1,12 @@
+#if !defined(_WIN32)
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/mbap.h>
 #include <modbuscore/protocol/pdu.h>
@@ -5,10 +14,30 @@
 #include <modbuscore/runtime/diagnostics.h>
 #include <modbuscore/runtime/runtime.h>
 #include <modbuscore/transport/posix_tcp.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+
+static void sleep_us(unsigned int usec)
+{
+#if defined(_WIN32)
+    Sleep((DWORD)((usec + 999U) / 1000U));
+#else
+    struct timespec ts = {
+        .tv_sec = usec / 1000000U,
+        .tv_nsec = (long)(usec % 1000000U) * 1000L,
+    };
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+        /* retry */
+    }
+#endif
+}
 
 static const char* severity_to_string(mbc_diag_severity_t severity)
 {
@@ -176,7 +205,7 @@ int main(int argc, char** argv)
         }
 
         mbc_transport_yield(&transport);
-        usleep(100000); /* Allow some time for I/O */
+        sleep_us(100000U); /* Allow some time for I/O */
     }
 
     if (mbc_posix_tcp_is_connected(tcp_ctx)) {

@@ -1,3 +1,12 @@
+#if !(defined(_WIN32) || defined(_WIN64))
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
 #include <assert.h>
 #include <modbuscore/protocol/crc.h>
 #include <modbuscore/protocol/engine.h>
@@ -13,7 +22,19 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
+
+static void sleep_us(unsigned int usec)
+{
+    struct timespec ts = {
+        .tv_sec = usec / 1000000U,
+        .tv_nsec = (long)(usec % 1000000U) * 1000L,
+    };
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+        /* retry */
+    }
+}
 
 static void test_posix_rtu_loop(void)
 {
@@ -84,7 +105,7 @@ static bool read_exact(int fd, uint8_t* buffer, size_t length)
         ssize_t n = read(fd, buffer + total, length - total);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                usleep(1000);
+                sleep_us(1000U);
                 continue;
             }
             return false;
@@ -188,7 +209,7 @@ static void test_posix_rtu_engine_client(void)
         response_ready = mbc_engine_take_pdu(&engine, &response_pdu);
         if (!response_ready) {
             mbc_transport_yield(&iface);
-            usleep(1000);
+            sleep_us(1000U);
         }
     }
     assert(response_ready);
@@ -289,7 +310,7 @@ static void test_posix_rtu_engine_client_crc_error(void)
         }
         assert(status == MBC_STATUS_OK);
         mbc_transport_yield(&iface);
-        usleep(1000);
+        sleep_us(1000U);
     }
 
     assert(saw_error);
@@ -374,7 +395,7 @@ static void test_posix_rtu_engine_server(void)
         assert(status == MBC_STATUS_OK);
         has_request = mbc_engine_take_pdu(&engine, &decoded_request);
         if (!has_request) {
-            usleep(1000);
+            sleep_us(1000U);
         }
     }
     assert(has_request);
@@ -473,7 +494,7 @@ static void test_posix_rtu_engine_server_crc_error(void)
             break;
         }
         assert(status == MBC_STATUS_OK);
-        usleep(1000);
+        sleep_us(1000U);
     }
 
     assert(saw_error);

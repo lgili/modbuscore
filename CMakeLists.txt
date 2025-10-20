@@ -11,6 +11,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 option(BUILD_TESTING "Enable building tests" ON)
+option(ENABLE_FUZZING "Enable fuzzing targets (requires Clang)" OFF)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -116,6 +117,9 @@ install(
 
 if(BUILD_TESTING)
   include(CTest)
+  add_subdirectory(tests)
+elseif(ENABLE_FUZZING)
+  # Allow fuzzing even without regular tests
   add_subdirectory(tests)
 endif()
 

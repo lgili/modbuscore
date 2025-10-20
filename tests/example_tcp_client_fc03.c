@@ -15,15 +15,44 @@
  * 3. Execute: ./client
  */
 
+#if !defined(_WIN32)
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/mbap.h>
 #include <modbuscore/protocol/pdu.h>
 #include <modbuscore/runtime/builder.h>
 #include <modbuscore/transport/posix_tcp.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+
+static void sleep_us(unsigned int usec)
+{
+#if defined(_WIN32)
+    Sleep((DWORD)((usec + 999U) / 1000U));
+#else
+    struct timespec ts = {
+        .tv_sec = usec / 1000000U,
+        .tv_nsec = (long)(usec % 1000000U) * 1000L,
+    };
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+        /* retry */
+    }
+#endif
+}
 
 #define SERVER_HOST "127.0.0.1"
 #define SERVER_PORT 5502
@@ -168,7 +197,7 @@ int main(void)
     printf("✓ Request submitted\n\n");
 
     /* Give TCP stack time to actually transmit the data */
-    usleep(10000); /* 10ms delay to ensure send completes */
+    sleep_us(10000U); /* 10ms delay to ensure send completes */
 
     /* ========================================================================
      * Step 5: Poll until complete response is received

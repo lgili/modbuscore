@@ -167,3 +167,8 @@ add_test(NAME modbus_cli_scaffold
     --repo-root ${PROJECT_SOURCE_DIR}
     --build-root ${PROJECT_BINARY_DIR}
 )
+
+# Fuzzing targets
+if(ENABLE_FUZZING)
+  add_subdirectory(fuzz)
+endif()

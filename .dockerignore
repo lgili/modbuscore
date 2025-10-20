@@ -1,0 +1,56 @@
+# Docker ignore file - reduce context size for faster builds
+
+# Build artifacts
+build/
+build-*/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Documentation build
+docs/_build/
+site/
+
+# Fuzzing results
+fuzz_results*/
+fuzz_logs/
+crash-*
+leak-*
+timeout-*
+oom-*
+
+# Test artifacts
+Testing/
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

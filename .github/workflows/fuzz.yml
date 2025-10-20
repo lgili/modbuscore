@@ -1,0 +1,207 @@
+name: Fuzzing
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'src/protocol/**'
+      - 'include/modbuscore/protocol/**'
+      - 'tests/fuzz/**'
+      - '.github/workflows/fuzz.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/protocol/**'
+      - 'include/modbuscore/protocol/**'
+      - 'tests/fuzz/**'
+  schedule:
+    # Run weekly fuzzing on main branch (Sundays at 2 AM UTC)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: 'Fuzzing duration per target (seconds)'
+        required: false
+        default: '300'
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_mbap_decoder
+          - fuzz_rtu_crc
+          - fuzz_pdu_parser
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake python3
+
+      - name: Configure CMake with fuzzing enabled
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DENABLE_FUZZING=ON \
+            -DBUILD_TESTING=OFF
+
+      - name: Build fuzzing targets
+        run: cmake --build build --target ${{ matrix.target }}
+
+      - name: Generate seed corpus
+        run: |
+          cd build/tests/fuzz
+          cmake --build . --target generate_corpus
+          ./generate_corpus
+          mkdir -p corpus
+          mv *.bin corpus/ 2>/dev/null || true
+          mkdir -p ../../tests/fuzz/corpus
+          cp corpus/*.bin ../../tests/fuzz/corpus/ 2>/dev/null || true
+          ls -lh corpus/
+
+      - name: Run fuzzer (short duration for CI)
+        run: |
+          cd build/tests/fuzz
+          DURATION=${{ github.event.inputs.duration_seconds || '60' }}
+
+          # Run fuzzer with timeout
+          timeout ${DURATION}s ./${{ matrix.target }} \
+            -max_total_time=${DURATION} \
+            -print_final_stats=1 \
+            -print_corpus_stats=1 \
+            -timeout=10 \
+            -rss_limit_mb=2048 \
+            corpus/ || true
+
+          echo "Fuzzer completed (or timed out as expected)"
+
+      - name: Check for crashes
+        run: |
+          cd build/tests/fuzz
+
+          # Check for crash files (crash-*, leak-*, timeout-*, oom-*)
+          if ls crash-* leak-* timeout-* oom-* 2>/dev/null; then
+            echo "❌ Fuzzer found issues:"
+            ls -lh crash-* leak-* timeout-* oom-* 2>/dev/null || true
+            exit 1
+          else
+            echo "✅ No crashes detected"
+          fi
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: |
+            build/tests/fuzz/crash-*
+            build/tests/fuzz/leak-*
+            build/tests/fuzz/timeout-*
+            build/tests/fuzz/oom-*
+          retention-days: 30
+
+  fuzz-long:
+    name: Extended Fuzzing (1B executions target)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_mbap_decoder
+          - fuzz_rtu_crc
+          - fuzz_pdu_parser
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake python3
+
+      - name: Configure and build
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang \
+            -DENABLE_FUZZING=ON \
+            -DBUILD_TESTING=OFF
+          cmake --build build --target ${{ matrix.target }}
+
+      - name: Generate seed corpus
+        run: |
+          cd build/tests/fuzz
+          cmake --build . --target generate_corpus
+          ./generate_corpus
+          mkdir -p corpus
+          mv *.bin corpus/ 2>/dev/null || true
+          mkdir -p ../../tests/fuzz/corpus
+          cp corpus/*.bin ../../tests/fuzz/corpus/ 2>/dev/null || true
+          ls -lh corpus/
+
+      - name: Run extended fuzzing (6 hours)
+        run: |
+          cd build/tests/fuzz
+
+          # Run for 6 hours (21600 seconds)
+          timeout 21600s ./${{ matrix.target }} \
+            -max_total_time=21600 \
+            -print_final_stats=1 \
+            -print_corpus_stats=1 \
+            -timeout=10 \
+            -rss_limit_mb=2048 \
+            -report_slow_units=30 \
+            corpus/ || true
+
+      - name: Report statistics
+        if: always()
+        run: |
+          cd build/tests/fuzz
+          echo "=== Fuzzing Statistics ==="
+          echo "Target: ${{ matrix.target }}"
+          echo "Corpus size:"
+          find corpus/ -type f | wc -l
+          echo "Total corpus bytes:"
+          du -sh corpus/
+
+      - name: Check for crashes
+        run: |
+          cd build/tests/fuzz
+          if ls crash-* leak-* timeout-* oom-* 2>/dev/null; then
+            echo "❌ Extended fuzzing found issues"
+            exit 1
+          fi
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-extended-crashes-${{ matrix.target }}
+          path: |
+            build/tests/fuzz/crash-*
+            build/tests/fuzz/leak-*
+            build/tests/fuzz/timeout-*
+            build/tests/fuzz/oom-*
+          retention-days: 90
+
+      - name: Upload expanded corpus
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-${{ matrix.target }}
+          path: build/tests/fuzz/corpus/
+          retention-days: 30

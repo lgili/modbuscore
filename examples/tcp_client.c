@@ -1,3 +1,12 @@
+#if !defined(_WIN32)
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
 #include <modbuscore/protocol/engine.h>
 #include <modbuscore/protocol/mbap.h>
 #include <modbuscore/protocol/pdu.h>

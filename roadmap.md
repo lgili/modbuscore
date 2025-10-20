@@ -154,6 +154,10 @@ Este documento descreve o plano completo para reconstruir a biblioteca ModbusCor
     - Diagnósticos avançados (Eventos, logs estruturados, tracing).
       - ⚙️ `mbc_diag_sink` integrado ao runtime; engine já emite eventos estruturados.
   - Testes de fuzzing e fault-injection integrados.
+    - ✅ LibFuzzer harnesses implementados: `fuzz_mbap_decoder`, `fuzz_rtu_crc`, `fuzz_pdu_parser`.
+    - ✅ Seed corpus com 15 frames Modbus válidos (MBAP, RTU, PDU).
+    - ✅ CI/CD com fuzzing automático (PR: 60s, Semanal: 6h).
+    - ⏳ Campanha de 1B execuções em andamento (ver `FUZZING.md`).
 - **Critério de saída**:
   - Cobertura de fuzz nos parsers > 1B execs sem falha.
   - Certificação interna de resiliência (latência, ruído, drop > 30%).

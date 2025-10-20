@@ -1,3 +1,12 @@
+#if !(defined(_WIN32) || defined(_WIN64))
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if !defined(_XOPEN_SOURCE)
+#define _XOPEN_SOURCE 700
+#endif
+#endif
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,6 +27,17 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+
+static void sleep_us(unsigned int usec)
+{
+    struct timespec ts = {
+        .tv_sec = usec / 1000000U,
+        .tv_nsec = (long)(usec % 1000000U) * 1000L,
+    };
+    while (nanosleep(&ts, &ts) == -1 && errno == EINTR) {
+        /* retry */
+    }
+}
 
 #define TCP_MAX_FRAME 260U
 
@@ -107,7 +127,7 @@ static void test_tcp_loop(void)
     assert(pthread_create(&server, NULL, tcp_server_thread, &args) == 0);
 
     /* Give server time to bind and listen */
-    usleep(100000); /* 100ms */
+    sleep_us(100000U); /* 100ms */
 
     mbc_posix_tcp_config_t config = {
         .host = "127.0.0.1",
@@ -236,7 +256,7 @@ static uint64_t socket_transport_now(void* ctx)
 static void socket_transport_yield(void* ctx)
 {
     (void)ctx;
-    usleep(1000);
+    sleep_us(1000U);
 }
 
 static mbc_status_t build_fc03_request_frame(mbc_pdu_t* pdu, uint8_t* frame, size_t capacity,
@@ -289,7 +309,7 @@ static void test_tcp_engine_client(void)
     assert(pthread_create(&server, NULL, tcp_server_thread, &args) == 0);
 
     /* Give server time to bind and listen */
-    usleep(100000); /* 100ms */
+    sleep_us(100000U); /* 100ms */
 
     mbc_posix_tcp_config_t config = {
         .host = "127.0.0.1",
@@ -340,7 +360,7 @@ static void test_tcp_engine_client(void)
             break;
         }
         mbc_transport_yield(&iface);
-        usleep(1000);
+        sleep_us(1000U);
     }
 
     assert(response_ready);
@@ -459,7 +479,7 @@ static void test_tcp_engine_server(void)
             break;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            usleep(1000);
+            sleep_us(1000U);
             continue;
         }
         assert(false && "recv failed");
@@ -530,7 +550,7 @@ static void test_tcp_engine_client_timeout(void)
             break;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            usleep(1000);
+            sleep_us(1000U);
             continue;
         }
         assert(false && "recv failed while draining client request");
@@ -547,7 +567,7 @@ static void test_tcp_engine_client_timeout(void)
         }
         assert(status == MBC_STATUS_OK);
         mbc_transport_yield(&transport);
-        usleep(1000);
+        sleep_us(1000U);
     }
     assert(timed_out);
     assert(engine.state == MBC_ENGINE_STATE_IDLE);
