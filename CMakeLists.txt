@@ -115,6 +115,26 @@ install(
   DESTINATION ${MODBUSCORE_CONFIG_INSTALL_DIR}
 )
 
+# Configure pkg-config file
+set(GITHUB_OWNER "lgili")
+set(GITHUB_REPO "modbuscore")
+if(WIN32)
+  set(MODBUSCORE_PC_LIBS_PRIVATE "-lws2_32")
+else()
+  set(MODBUSCORE_PC_LIBS_PRIVATE "")
+endif()
+
+configure_file(
+  ${PROJECT_SOURCE_DIR}/cmake/modbuscore.pc.in
+  ${CMAKE_CURRENT_BINARY_DIR}/modbuscore.pc
+  @ONLY
+)
+
+install(
+  FILES ${CMAKE_CURRENT_BINARY_DIR}/modbuscore.pc
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
+
 if(BUILD_TESTING)
   include(CTest)
   add_subdirectory(tests)

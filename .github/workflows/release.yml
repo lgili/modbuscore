@@ -1,0 +1,233 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          
+          # Extract section for this version from CHANGELOG.md
+          sed -n "/## \[${VERSION}\]/,/## \[/p" CHANGELOG.md | \
+            sed '$d' > release_notes.md
+          
+          # Fallback if no section found
+          if [ ! -s release_notes.md ]; then
+            echo "See CHANGELOG.md for details" > release_notes.md
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          release_name: ModbusCore v${{ steps.get_version.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
+
+  build-linux:
+    name: Build Linux
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        build_type: [Release, Debug]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          cmake --install build --prefix install
+          tar -czf modbuscore-${{ needs.create-release.outputs.version }}-linux-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz \
+            -C install .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./modbuscore-${{ needs.create-release.outputs.version }}-linux-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz
+          asset_name: modbuscore-${{ needs.create-release.outputs.version }}-linux-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz
+          asset_content_type: application/gzip
+
+  build-macos:
+    name: Build macOS
+    needs: create-release
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        build_type: [Release, Debug]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }} \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        if: matrix.arch == 'x64' || runner.arch == 'ARM64'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: |
+          cmake --install build --prefix install
+          tar -czf modbuscore-${{ needs.create-release.outputs.version }}-macos-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz \
+            -C install .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./modbuscore-${{ needs.create-release.outputs.version }}-macos-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz
+          asset_name: modbuscore-${{ needs.create-release.outputs.version }}-macos-${{ matrix.arch }}-${{ matrix.build_type }}.tar.gz
+          asset_content_type: application/gzip
+
+  build-windows:
+    name: Build Windows
+    needs: create-release
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, x86]
+        build_type: [Release, Debug]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -A ${{ matrix.arch == 'x64' && 'x64' || 'Win32' }} `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Run tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: Package
+        run: |
+          cmake --install build --prefix install --config ${{ matrix.build_type }}
+          Compress-Archive -Path install\* `
+            -DestinationPath modbuscore-${{ needs.create-release.outputs.version }}-windows-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./modbuscore-${{ needs.create-release.outputs.version }}-windows-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+          asset_name: modbuscore-${{ needs.create-release.outputs.version }}-windows-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+          asset_content_type: application/zip
+
+  publish-packages:
+    name: Publish Packages
+    needs: [create-release, build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Conan
+        run: pip install conan
+
+      - name: Create Conan package
+        run: |
+          conan create . --version=${{ needs.create-release.outputs.version }}
+
+      - name: Publish to Conan Center (Manual step)
+        run: |
+          echo "📦 Conan package created locally"
+          echo "To publish to Conan Center:"
+          echo "1. Fork https://github.com/conan-io/conan-center-index"
+          echo "2. Add recipe to recipes/modbuscore"
+          echo "3. Submit PR"
+
+      - name: Publish to vcpkg (Manual step)
+        run: |
+          echo "📦 vcpkg port available at ports/modbuscore"
+          echo "To publish to vcpkg:"
+          echo "1. Fork https://github.com/microsoft/vcpkg"
+          echo "2. Copy ports/modbuscore to ports/"
+          echo "3. Update versions/baseline.json"
+          echo "4. Submit PR"

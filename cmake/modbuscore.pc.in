@@ -1,0 +1,12 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: ModbusCore
+Description: @PROJECT_DESCRIPTION@
+URL: https://github.com/@GITHUB_OWNER@/@GITHUB_REPO@
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lmodbuscore
+Libs.private: @MODBUSCORE_PC_LIBS_PRIVATE@

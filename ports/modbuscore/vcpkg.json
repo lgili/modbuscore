@@ -1,0 +1,25 @@
+{
+  "name": "modbuscore",
+  "version": "1.0.0",
+  "description": "Next-generation Modbus runtime with dependency injection",
+  "homepage": "https://github.com/lgili/modbuscore",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "testing": {
+      "description": "Build with testing support"
+    },
+    "fuzzing": {
+      "description": "Build fuzzing targets (requires Clang)"
+    }
+  }
+}
