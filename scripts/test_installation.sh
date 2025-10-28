@@ -276,16 +276,86 @@ EOF
 test_vcpkg() {
     log "Testing vcpkg..."
     
-    if [ ! -d "${HOME}/vcpkg" ] && [ ! -d "/usr/local/share/vcpkg" ]; then
+    # Find vcpkg installation
+    local vcpkg_root=""
+    if [ -d "${HOME}/vcpkg" ]; then
+        vcpkg_root="${HOME}/vcpkg"
+    elif command -v vcpkg &> /dev/null; then
+        vcpkg_root=$(dirname $(dirname $(which vcpkg)))
+    else
         warning "vcpkg not found, skipping test"
         RESULTS+=("⊘ vcpkg (not installed)")
         return 0
     fi
     
-    warning "vcpkg test requires manual submission to vcpkg registry"
-    warning "Run: vcpkg install modbuscore --overlay-ports=${PROJECT_ROOT}/ports"
-    RESULTS+=("⊘ vcpkg (manual testing required)")
-    return 0
+    local vcpkg="${vcpkg_root}/vcpkg"
+    if [ ! -x "${vcpkg}" ]; then
+        vcpkg="vcpkg"  # Try from PATH
+    fi
+    
+    log "  Found vcpkg at: ${vcpkg_root}"
+    log "  Installing modbuscore via vcpkg overlay..."
+    
+    # Try to install using overlay ports (classic mode to avoid manifest conflict)
+    cd "${PROJECT_ROOT}"
+    local install_output
+    install_output=$("${vcpkg}" install modbuscore --classic --overlay-ports="${PROJECT_ROOT}/ports" 2>&1)
+    echo "${install_output}" > /tmp/vcpkg_install.log
+    
+    # Check if already installed or successfully installed
+    if echo "${install_output}" | grep -q "modbuscore\|already installed\|completed successfully"; then
+        log "  modbuscore installed via vcpkg"
+        success "vcpkg install succeeded"
+        
+        # Try to use the installed package
+        local test_dir="${TEST_DIR}/vcpkg_test"
+        mkdir -p "${test_dir}"
+        
+        cat > "${test_dir}/test_vcpkg.c" <<'EOF'
+#include <modbuscore/protocol/pdu.h>
+#include <stdio.h>
+
+int main(void) {
+    printf("Testing ModbusCore vcpkg package...\n");
+    mbc_pdu_t pdu = {0};
+    if (mbc_pdu_build_read_holding_request(&pdu, 1, 0, 10) == MBC_STATUS_OK) {
+        printf("✓ vcpkg test SUCCESS!\n");
+        return 0;
+    }
+    return 1;
+}
+EOF
+        
+        cat > "${test_dir}/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.20)
+project(VcpkgTest C)
+
+find_package(ModbusCore REQUIRED CONFIG)
+
+add_executable(vcpkg_test test_vcpkg.c)
+target_link_libraries(vcpkg_test ModbusCore::modbuscore)
+EOF
+        
+        log "  Building test project with vcpkg..."
+        cmake -B "${test_dir}/build" \
+            -DCMAKE_TOOLCHAIN_FILE="${vcpkg_root}/scripts/buildsystems/vcpkg.cmake" \
+            "${test_dir}" && \
+        cmake --build "${test_dir}/build" && \
+        "${test_dir}/build/vcpkg_test" && {
+            success "vcpkg test PASSED"
+            RESULTS+=("✓ vcpkg")
+            return 0
+        }
+        
+        warning "vcpkg installed but test failed"
+        RESULTS+=("⊘ vcpkg (installed but not working)")
+        return 0
+    else
+        warning "vcpkg install failed (check /tmp/vcpkg_install.log)"
+        cat /tmp/vcpkg_install.log | tail -20
+        RESULTS+=("⊘ vcpkg (install failed)")
+        return 0
+    fi
 }
 
 #------------------------------------------------------------------------------

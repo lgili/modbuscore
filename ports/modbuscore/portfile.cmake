@@ -1,10 +1,14 @@
-vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO lgili/modbuscore
-    REF v${VERSION}
-    SHA512 0
-    HEAD_REF main
-)
+# For testing locally before release
+set(SOURCE_PATH "${CMAKE_CURRENT_LIST_DIR}/../..")
+
+# After release, uncomment this and remove above:
+# vcpkg_from_github(
+#     OUT_SOURCE_PATH SOURCE_PATH
+#     REPO lgili/modbuscore
+#     REF v${VERSION}
+#     SHA512 0
+#     HEAD_REF main
+# )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
