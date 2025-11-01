@@ -64,7 +64,7 @@ static void* tcp_server_thread(void* arg)
 
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
-        .sin_addr.s_addr = htonl(INADDR_LOOPBACK),
+        .sin_addr.s_addr = htonl(0x7F000001),  /* 127.0.0.1 */
         .sin_port = htons(args->port),
     };
     if (bind(srv, (struct sockaddr*)&addr, sizeof(addr)) != 0) {

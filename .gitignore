@@ -18,3 +18,4 @@ coverage/
 site/
 .cache/
 docs/api-reference/
+oldmodbus/
